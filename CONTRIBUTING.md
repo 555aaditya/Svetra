@@ -12,7 +12,7 @@ Thanks for your interest. Svetra is early, and the rules are simple.
 
 - One logical change per commit. Keep commits small.
 - The commit subject is one imperative line, under 72 characters. For example: `Add validate command`.
-- One topic per PR. PRs are squash-merged, so the PR title becomes the commit subject. Write it the same way.
+- One topic per PR. PRs are usually squash-merged, so the PR title becomes the commit subject. Write it the same way. PRs whose commits are already small and clean may be rebase-merged instead.
 - Only the maintainer (@555aaditya) reviews and merges PRs.
 
 ## Before you start
