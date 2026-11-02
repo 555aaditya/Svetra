@@ -1,0 +1,57 @@
+# Applied by the Settings app (github.com/apps/settings) from the default branch.
+# Rulesets support in the app is experimental: https://github.com/repository-settings/app/issues/732
+
+repository:
+  default_branch: develop
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: false
+  delete_branch_on_merge: true
+  squash_merge_commit_title: PR_TITLE
+  squash_merge_commit_message: COMMIT_MESSAGES
+
+rulesets:
+  - name: protect-main
+    target: branch
+    enforcement: active
+    conditions:
+      ref_name:
+        include: ["refs/heads/main"]
+        exclude: []
+    bypass_actors:
+      - actor_id: 5 # Repository admin (the owner)
+        actor_type: RepositoryRole
+        bypass_mode: always
+    rules:
+      - type: deletion
+      - type: non_fast_forward
+      - type: update # only bypass actors can push to main
+      - type: pull_request
+        parameters:
+          required_approving_review_count: 1
+          require_code_owner_review: true
+          dismiss_stale_reviews_on_push: false
+          require_last_push_approval: false
+          required_review_thread_resolution: false
+
+  - name: protect-develop
+    target: branch
+    enforcement: active
+    conditions:
+      ref_name:
+        include: ["refs/heads/develop"]
+        exclude: []
+    bypass_actors:
+      - actor_id: 5 # Repository admin (the owner)
+        actor_type: RepositoryRole
+        bypass_mode: always
+    rules:
+      - type: deletion
+      - type: non_fast_forward
+      - type: pull_request
+        parameters:
+          required_approving_review_count: 1
+          require_code_owner_review: true
+          dismiss_stale_reviews_on_push: false
+          require_last_push_approval: false
+          required_review_thread_resolution: false
