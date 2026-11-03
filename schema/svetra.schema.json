@@ -1,0 +1,443 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json",
+  "title": "svetra.yaml, format 0.1",
+  "description": "Entities, policies and holes of a Svetra project. See docs/format.md. This schema gives editors autocomplete; `svetra validate` is the authority and checks much more.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "svetra",
+    "system",
+    "entities"
+  ],
+  "properties": {
+    "svetra": {
+      "description": "Format version, as a quoted string.",
+      "const": "0.1"
+    },
+    "system": {
+      "description": "The application's name.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*$"
+    },
+    "entities": {
+      "description": "The data model.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[A-Z][A-Za-z0-9]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/entity"
+      }
+    },
+    "policies": {
+      "description": "Who may read or write which rows.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/policy"
+      }
+    },
+    "holes": {
+      "description": "Places where custom code is allowed.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/hole"
+      }
+    }
+  },
+  "$defs": {
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fields"
+      ],
+      "properties": {
+        "fields": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/field"
+          }
+        },
+        "constraints": {
+          "description": "Named row checks, as expressions.",
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "unique": {
+          "description": "Field lists that must be unique together.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldList"
+          }
+        },
+        "indexes": {
+          "description": "Field lists to index, in column order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fieldList"
+          }
+        },
+        "private": {
+          "description": "Keep this entity out of the generated API.",
+          "type": "boolean"
+        }
+      }
+    },
+    "fieldList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "minItems": 1
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "decimal",
+                  "money"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "precision",
+              "scale"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "enum"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "values"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "ref"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "entity"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "text",
+            "int",
+            "float",
+            "bool",
+            "uuid",
+            "timestamp",
+            "date",
+            "decimal",
+            "money",
+            "enum",
+            "json",
+            "ref",
+            "user"
+          ]
+        },
+        "required": {
+          "description": "The column is not null.",
+          "type": "boolean"
+        },
+        "primary": {
+          "description": "The primary key. Implies required.",
+          "type": "boolean"
+        },
+        "unique": {
+          "description": "A single-column unique constraint.",
+          "type": "boolean"
+        },
+        "default": {
+          "description": "A literal default value.",
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "auto": {
+          "description": "Filled in by the database on insert. Timestamp and date only.",
+          "const": "now"
+        },
+        "values": {
+          "description": "Enum values, each listed once.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "precision": {
+          "description": "Total digits for decimal and money.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 38
+        },
+        "scale": {
+          "description": "Digits after the point for decimal and money.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 38
+        },
+        "entity": {
+          "description": "The entity a ref points to.",
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "on",
+        "allow",
+        "when"
+      ],
+      "properties": {
+        "on": {
+          "description": "The entity this policy protects.",
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        },
+        "allow": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "select",
+              "insert",
+              "update",
+              "delete"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "when": {
+          "description": "A boolean expression each row must satisfy.",
+          "type": "string"
+        },
+        "as": {
+          "description": "Who the policy applies to. Default: authenticated.",
+          "enum": [
+            "authenticated",
+            "anon"
+          ]
+        }
+      }
+    },
+    "hole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "function"
+        },
+        "input": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/paramType"
+          }
+        },
+        "output": {
+          "$ref": "#/$defs/paramType"
+        },
+        "reads": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          }
+        },
+        "writes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          }
+        }
+      }
+    },
+    "paramType": {
+      "description": "Entity.field, a bare type name, an entity name (outputs only), or a full spec.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/paramSpec"
+        }
+      ]
+    },
+    "paramSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "decimal",
+                  "money"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "precision",
+              "scale"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "enum"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "values"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "ref"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "entity"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "text",
+            "int",
+            "float",
+            "bool",
+            "uuid",
+            "timestamp",
+            "date",
+            "decimal",
+            "money",
+            "enum",
+            "json",
+            "ref",
+            "user"
+          ]
+        },
+        "values": {
+          "description": "Enum values, each listed once.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "precision": {
+          "description": "Total digits for decimal and money.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 38
+        },
+        "scale": {
+          "description": "Digits after the point for decimal and money.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 38
+        },
+        "entity": {
+          "description": "The entity a ref points to.",
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        }
+      }
+    }
+  }
+}
