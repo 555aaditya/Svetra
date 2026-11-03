@@ -25,9 +25,11 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 | `src/typeck.rs` | Expression typing (SVT003) |
 | `src/check.rs` | Whole-document rules: names, duplicates, references, access, money, indexes |
 | `src/report.rs` | `validate()`, plus human and JSON output |
+| `src/compile/` | `svetra compile`: names and quoting (`names.rs`), expressions to SQL (`expr.rs`), the SQL schema (`sql.rs`), TypeScript and Zod (`ts.rs`), plus the entry point with header and revision (`mod.rs`) |
 | `src/main.rs` | The CLI |
 | `schema/svetra.schema.json` | The JSON Schema for editors. Hand-written; `tests/schema.rs` fails if it drifts from the loader |
-| `tests/` | Integration tests. `tests/fixtures/` holds example `svetra.yaml` files |
+| `tests/` | Integration tests. `tests/fixtures/` holds example `svetra.yaml` files, and `tests/golden/` holds their expected compiler output, compared byte for byte |
+| `tests/pg/`, `scripts/pg-check.sh` | Compiles the fixtures, applies the SQL to PostgreSQL 16 with a Supabase stand-in, and asserts behaviour: who sees which rows, and what's rejected |
 
 ## Commands
 
@@ -38,6 +40,7 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo +1.88 check --all-targets      # the minimum supported Rust version
 cargo run -- validate tests/fixtures/finledger.yaml [--json]
+scripts/pg-check.sh                  # needs Docker: real-Postgres behaviour checks
 ```
 
 CI runs all of these. A PR is ready when they pass locally.
@@ -53,7 +56,7 @@ CI runs all of these. A PR is ready when they pass locally.
 - **Keep the JSON Schema in sync.** A new key or type goes into the loader's constants and the schema together. `tests/schema.rs` enforces this.
 - **Dependencies:** at most one runtime crate per real need. Dev-only crates are fine for tests.
 - **No `unsafe`, and no `unwrap` or `expect` outside tests.**
-- **Generated output must be readable and stable.** It's reviewed in diffs.
+- **Generated output must be readable and stable.** It's reviewed in diffs. A change to compiler output updates the golden files, and must still pass `scripts/pg-check.sh`.
 
 ## Tests
 

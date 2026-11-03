@@ -6,7 +6,7 @@ People now build apps by talking to AI agents, and most of them can't read the c
 
 Svetra moves those decisions out of the code and into one small, typed file, `svetra.yaml`. Your agent writes and edits it while you design the app together. Svetra checks every change, and will compile it into the database schema, security policies, types and validators, deterministically, the same way every time. You review a short file and a plain-English explanation instead of thousands of generated lines, and your agent spends fewer tokens because it stops rewriting boilerplate.
 
-> **Status: early.** Version 0.1 of the format and the validator work today. The compiler is next. See the [roadmap](#roadmap).
+> **Status: early.** Version 0.1 of the format, the validator and the compiler work today. See the [roadmap](#roadmap).
 
 ## What it looks like
 
@@ -57,6 +57,20 @@ svetra.yaml:7:7: error SVT005: `total` looks like money but uses float, which lo
 
 There are 17 checks. They cover tables with no access policy, money stored as `float`, references to things that don't exist, policy and constraint expressions that don't type-check, enum typos, and more. The exit code is `0` for valid, `1` for errors and `2` for a usage error.
 
+## What works today: `svetra compile`
+
+```sh
+svetra compile svetra.yaml          # writes the files below, next to svetra.yaml
+svetra compile svetra.yaml --check  # writes nothing; fails if they are stale or hand-edited
+```
+
+| File | What's in it |
+|---|---|
+| `supabase/schemas/svetra.sql` | Tables, constraints, foreign keys and indexes; row-level security on every table; one policy per action. Supabase's `supabase db diff` turns it into migrations |
+| `src/svetra.gen.ts` | One Zod validator and TypeScript type per entity. Money stays exact: it's a string, never a float |
+
+It validates first and writes nothing if there are errors. The output is byte-identical for the same input. Every PR applies the generated SQL to a real PostgreSQL 16 and checks that each constraint and policy behaves as declared: who can see which rows, and what gets rejected. The full output is specified in [`docs/compiler.md`](docs/compiler.md).
+
 **Editor support:** add this as the first line of `svetra.yaml` for autocomplete in VS Code, Zed or Neovim:
 
 ```yaml
@@ -76,7 +90,7 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 | Step | What | Status |
 |---|---|---|
 | Format and validator | `svetra.yaml` v0.1, 17 checks, JSON output, JSON Schema | **Done** |
-| Compiler | PostgreSQL tables, row-level security, TypeScript types and Zod validators for Supabase and React | Next |
+| Compiler | PostgreSQL tables, row-level security, TypeScript types and Zod validators for Supabase and React | **Done** |
 | Understand | `svetra explain` (your app in plain English), `svetra graph` (a diagram), `svetra context` (compact context for agents) | Planned |
 | Agents | The Svetra skill for Claude Code, Cursor and Codex; an MCP server; hole files and recipes | Planned |
 | Automations | Scheduled jobs, triggers when data changes, and incoming webhooks | Planned |
