@@ -122,7 +122,8 @@ This prints one Mermaid `flowchart LR`:
 - **Entity nodes** list their fields, with `name: type`, and `!` marking required fields.
 - **Reference edges** go from the entity holding the field to its target, labelled with the field name. Edges to signed-in people go to a single `👤 Signed-in person` node.
 - **Access edges** are dotted, and run from `👤 Signed-in person` and from `🌐 Anyone` (anonymous) to each entity. The label lists the allowed actions, such as `sees`, `creates` and `changes`, joined with commas.
-- **Hole nodes** are rounded. Dashed edges labelled `reads` or `changes` run to entities.
+- **Hole nodes** are rounded (`⚙️ transfer`). A dotted `reads` edge or a thick `changes` edge runs to each entity they touch.
+- **Node ids** are prefixed (`e_`, `h_`), so names like `end` can't clash with Mermaid keywords. Reference fields show as `→ Target`.
 - **Private entities** are drawn with a lock: `🔒 AuditLog`.
 
 The output can be pasted into GitHub, which renders Mermaid in Markdown, or into any Mermaid viewer.
@@ -143,7 +144,14 @@ policy owner_reads_own_transactions: Transaction select authenticated when sourc
 hole transfer: (source Account.id, destination Account.id, amount Transaction.amount) -> Transaction; reads Account; writes Account, Transaction
 ```
 
-**The size target:** `context` should be no larger than `svetra.yaml` itself, and much smaller than the generated code. Sizes for the fixtures are measured in the implementing PR and recorded there.
+**The size target:** `context` should be no larger than `svetra.yaml` itself, and much smaller than the generated code. Measured on the fixtures:
+
+| Fixture | `svetra.yaml` | `context` | Generated code (SQL + TS) |
+|---|---|---|---|
+| finledger | 1,612 chars | 918 chars (57% of the yaml) | 3,848 chars (`context` is 24% of this) |
+| posts | 537 chars | 288 chars (54% of the yaml) | 1,816 chars (`context` is 16% of this) |
+
+At roughly 4 characters per token, that's about 230 tokens instead of about 960 for the ledger's generated code. That's an estimate, not a tokenizer count; P3 measures real token use.
 
 ## Not in version 0.1
 
