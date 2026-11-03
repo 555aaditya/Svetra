@@ -26,13 +26,14 @@ Version 0.1 covers one target: Supabase (PostgreSQL with row-level security and 
 | `entities` | yes | map of entity name to entity | The data model. At least one entity |
 | `policies` | no | map of policy name to policy | Who may read or write which rows |
 | `holes` | no | map of hole name to hole | Places where custom code is allowed |
+| `roles` | no | map of role name to role | Roles people can hold, such as `admin`, or `staff` at one location |
 
 ## Names
 
 | Thing | Pattern | Example |
 |---|---|---|
 | System, entity | PascalCase: `^[A-Z][A-Za-z0-9]*$` | `Account`, `LedgerEntry` |
-| Field, constraint, policy, hole | snake_case: `^[a-z][a-z0-9_]*$` | `created_at`, `owner_reads_own` |
+| Field, constraint, policy, hole, role | snake_case: `^[a-z][a-z0-9_]*$` | `created_at`, `owner_reads_own`, `admin` |
 
 - A name that breaks its pattern is `SVT021`.
 - Names must be unique within their map. Policy, hole and constraint names must also be unique across the whole file, because they become database object names (`SVT024`).
@@ -96,7 +97,8 @@ op    := "==" | "!=" | "<" | "<=" | ">" | ">="
 sum   := term (("+" | "-") term)*
 term  := unary (("*" | "/") unary)*
 unary := "-" unary | atom
-atom  := number | string | "true" | "false" | "null" | path | "(" expr ")"
+atom  := number | string | "true" | "false" | "null" | call | path | "(" expr ")"
+call  := "has_role" "(" string ("," path)? ")"
 path  := name ("." name)?
 ```
 
@@ -113,10 +115,10 @@ path  := name ("." name)?
 
 Where each path form is allowed:
 
-| | Own fields | `ref.field` (one hop) | `auth.user` |
-|---|---|---|---|
-| Entity constraint | yes | no: a SQL `check` can't read other tables | no |
-| Policy `when` | yes | yes | yes |
+| | Own fields | `ref.field` (one hop) | `auth.user` | `has_role(...)` |
+|---|---|---|---|---|
+| Entity constraint | yes | no: a SQL `check` can't read other tables | no | no |
+| Policy `when` | yes | yes | yes | yes |
 
 Using a form where it isn't allowed is `SVT003`.
 
@@ -135,8 +137,68 @@ Using a form where it isn't allowed is `SVT003`.
   - `insert` uses it as the `with check` clause.
   - `update` uses it as both.
 - **`auth.user` compiles to `(select auth.uid())`**, the form Supabase recommends for performance.
-- **A one-hop path compiles to an `exists` subquery** on the referenced table.
+- **A one-hop path compiles to a scalar subquery** on the referenced row's primary key (see `compiler.md`).
 - **A policy on a private entity does nothing**, so it's a warning (`SVT027`).
+
+## Roles
+
+Roles say who can do more than an ordinary signed-in person. A role is either **global**, such as `admin`, or **scoped** to rows of one entity: `staff` at a particular `Location`, or `member` of a particular `Org`. Scoped roles are how Svetra expresses teams and multi-tenancy.
+
+| Key | Required | Meaning |
+|---|---|---|
+| `description` | no | Plain words, used by `svetra explain` |
+| `scope` | no | An entity. If set, the role is held *for one row* of that entity. Its primary key must be a `uuid` (`SVT006`) |
+
+### `has_role` in policies
+
+| Call | True when the signed-in person... |
+|---|---|
+| `has_role('admin')` | holds the global role `admin` |
+| `has_role('staff', location)` | holds `staff` scoped to the row that this row's `location` field points to |
+| `has_role('member', id)` | holds `member` scoped to *this* row. Used in policies on the scope entity itself, such as `Org` |
+
+Rules, all reported as `SVT006`:
+- The role must be declared under `roles`.
+- A global role takes no second argument.
+- A scoped role needs one.
+- The second argument must be either a `ref` to the role's scope entity, or `id` when the policy is on the scope entity itself.
+
+`has_role` is allowed only in policy conditions, never in constraints (`SVT003`).
+
+### Example: bookings with customers, staff and admins
+
+```yaml
+roles:
+  admin: { description: "Runs the business" }
+  staff: { description: "Works at one location", scope: Location }
+
+entities:
+  Location:
+    fields:
+      id:   { type: uuid, primary: true }
+      name: { type: text, required: true }
+  Booking:
+    fields:
+      id:       { type: uuid, primary: true }
+      customer: { type: user, required: true }
+      location: { type: ref, entity: Location, required: true }
+      starts:   { type: timestamp, required: true }
+
+policies:
+  customers_see_own:  { on: Booking, allow: [select, insert], when: "customer == auth.user" }
+  staff_manage_local: { on: Booking, allow: [select, update], when: "has_role('staff', location)" }
+  admins_manage_all:  { on: Booking, allow: [select, update, delete], when: "has_role('admin')" }
+  staff_see_location: { on: Location, allow: [select], when: "has_role('staff', id)" }
+  admins_see_locations: { on: Location, allow: [select, insert, update], when: "has_role('admin')" }
+```
+
+**Granting roles** happens in the database. Run, as the service role or in the Supabase SQL editor:
+
+```sql
+insert into svetra.role_grants (user_id, role, scope_id) values ('<user id>', 'staff', '<location id>');
+```
+
+A generated, admin-only way to grant roles from the app comes with the agent tools (M4). Until then, granting is deliberately not possible from the client.
 
 ## Holes
 
@@ -179,6 +241,7 @@ Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002
 | `SVT003` | error | Expression has a type error, or uses a path form not allowed where it appears | `fix_expression` |
 | `SVT004` | warning | Entity has no write path: no policy allows `insert` or `update`, and no hole lists it in `writes` | `add_write_path` |
 | `SVT005` | error | Field whose name suggests money (`amount`, `price`, `balance`, `cost`, `total`, `fee`) uses `float` | `use_money` |
+| `SVT006` | error | `has_role` names an undeclared role, has the wrong number of arguments, or its scope argument doesn't point at the role's scope entity; or a role's `scope` entity doesn't have a `uuid` primary key | `fix_role` |
 | `SVT010` | info | A `ref` or `user` field is not the leading column of any index or unique constraint. The compiler adds an index, because these are the columns joins and policies filter on | none |
 
 Codes are stable. A code is never reused for a different rule.
@@ -204,7 +267,7 @@ With `--json`, each diagnostic has this shape:
 
 - **The JSON output** wraps the diagnostics with the file name and an overall verdict: `{"file": "svetra.yaml", "valid": false, "diagnostics": [ ... ]}`. Diagnostics are sorted by position.
 - **`line` and `column`** are both 1-based, as in editors.
-- **`category`** is one of `syntax`, `naming`, `type`, `reference`, `expression`, `policy`, `money`, `index` and `version`.
+- **`category`** is one of `syntax`, `naming`, `type`, `reference`, `expression`, `policy`, `role`, `money`, `index` and `version`.
 - **`retryable` is always `false`** for validation, because repeating the same call with the same file gives the same result. Fix the file instead.
 - **Exit codes:**
   - `0`: the file is valid. Warnings and info are allowed.
