@@ -28,6 +28,21 @@ pub const FIELD_KEYS: &[&str] = &[
 ];
 pub const POLICY_KEYS: &[&str] = &["on", "allow", "when", "as"];
 pub const HOLE_KEYS: &[&str] = &["kind", "input", "output", "reads", "writes"];
+pub const TYPE_NAMES: &[&str] = &[
+    "text",
+    "int",
+    "float",
+    "bool",
+    "uuid",
+    "timestamp",
+    "date",
+    "decimal",
+    "money",
+    "enum",
+    "json",
+    "ref",
+    "user",
+];
 pub const PARAM_SPEC_KEYS: &[&str] = &["type", "values", "precision", "scale", "entity"];
 
 type Entries = [(Node, Node)];
