@@ -6,6 +6,7 @@ use crate::model::*;
 use crate::yaml::{self, Node, Value};
 use std::collections::HashMap;
 
+mod access;
 mod field;
 
 pub const FORMAT_VERSION: &str = "0.1";
@@ -218,6 +219,16 @@ impl Cx {
             if let Some(es) = self.map(v, "entities") {
                 doc.entities = es.iter().filter_map(|(n, e)| self.entity(n, e)).collect();
             }
+        }
+        if let Some(v) = k.get("policies")
+            && let Some(ps) = self.map(v, "policies")
+        {
+            doc.policies = ps.iter().filter_map(|(n, p)| self.policy(n, p)).collect();
+        }
+        if let Some(v) = k.get("holes")
+            && let Some(hs) = self.map(v, "holes")
+        {
+            doc.holes = hs.iter().filter_map(|(n, h)| self.hole(n, h)).collect();
         }
         doc
     }
