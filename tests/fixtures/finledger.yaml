@@ -1,0 +1,52 @@
+svetra: "0.1"
+system: FinLedger
+
+entities:
+  Account:
+    fields:
+      id:         { type: uuid, primary: true }
+      owner:      { type: user, required: true }
+      currency:   { type: enum, values: [USD, EUR, GBP, INR], required: true }
+      balance:    { type: money, precision: 18, scale: 6, required: true }
+      status:     { type: enum, values: [active, frozen, closed], default: active }
+      created_at: { type: timestamp, auto: now }
+    constraints:
+      balance_non_negative: "balance >= 0"
+    unique:
+      - [owner, currency]
+
+  Transaction:
+    fields:
+      id:          { type: uuid, primary: true }
+      source:      { type: ref, entity: Account, required: true }
+      destination: { type: ref, entity: Account, required: true }
+      amount:      { type: money, precision: 18, scale: 6, required: true }
+      status:      { type: enum, values: [pending, committed, failed, reversed] }
+      created_at:  { type: timestamp, auto: now }
+    constraints:
+      amount_positive: "amount > 0"
+      different_accounts: "source != destination"
+    indexes:
+      - [source, created_at]
+      - [destination, created_at]
+
+policies:
+  owner_reads_own_accounts:
+    on: Account
+    allow: [select]
+    when: "owner == auth.user"
+  owner_reads_own_transactions:
+    on: Transaction
+    allow: [select]
+    when: "source.owner == auth.user or destination.owner == auth.user"
+
+holes:
+  transfer:
+    kind: function
+    input:
+      source: Account.id
+      destination: Account.id
+      amount: Transaction.amount
+    output: Transaction
+    reads: [Account]
+    writes: [Account, Transaction]
