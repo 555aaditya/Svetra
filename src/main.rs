@@ -6,6 +6,8 @@ const HELP: &str = "svetra: design the system with the AI, compile it to the low
 Usage:
   svetra validate [FILE] [--json]   Check a svetra.yaml file (default: ./svetra.yaml)
   svetra explain [FILE]             Describe the app in plain English: data, rules, who can see what
+  svetra graph [FILE]               Draw the app as a Mermaid diagram
+  svetra context [FILE]             Print the whole app compactly, for agents
   svetra compile [FILE] [--check]   Write the SQL schema and TypeScript types next to FILE;
                                     --check writes nothing and fails if they are out of date
   svetra --version                  Print the version
@@ -29,7 +31,15 @@ fn main() -> ExitCode {
         }
         Some("validate") => validate(&args[1..]),
         Some("compile") => compile(&args[1..]),
-        Some("explain") => explain(&args[1..]),
+        Some("explain") => view("explain", &args[1..], |doc, diags| {
+            svetra::understand::explain::explain(doc, diags)
+        }),
+        Some("graph") => view("graph", &args[1..], |doc, _| {
+            svetra::understand::graph::graph(doc)
+        }),
+        Some("context") => view("context", &args[1..], |doc, _| {
+            svetra::understand::context::context(doc)
+        }),
         Some(other) => usage(&format!("unknown argument '{other}'")),
     }
 }
@@ -80,8 +90,13 @@ fn validate(args: &[String]) -> ExitCode {
     }
 }
 
-fn explain(args: &[String]) -> ExitCode {
-    let (file, _) = match file_and_flag("explain", args, "--no-such-flag") {
+/// A read-only view of a valid file: validate first, then print `render`'s output.
+fn view(
+    command: &str,
+    args: &[String],
+    render: impl Fn(&svetra::model::Document, &[svetra::diag::Diagnostic]) -> String,
+) -> ExitCode {
+    let (file, _) = match file_and_flag(command, args, "--no-such-flag") {
         Ok(v) => v,
         Err(e) => return usage(&e),
     };
@@ -95,7 +110,7 @@ fn explain(args: &[String]) -> ExitCode {
         return ExitCode::from(1);
     }
     let (doc, _) = svetra::load::load(&src);
-    print!("{}", svetra::understand::explain::explain(&doc, &diags));
+    print!("{}", render(&doc, &diags));
     ExitCode::SUCCESS
 }
 
