@@ -25,3 +25,12 @@ jobs:
       - uses: actions/checkout@v5
       - run: rustup toolchain install 1.88 --profile minimal
       - run: cargo +1.88 check --all-targets
+
+  postgres:
+    # Compile the fixtures, apply the SQL to PostgreSQL 16 with a Supabase stand-in,
+    # and check that constraints and row-level security behave as declared.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: cargo build
+      - run: scripts/pg-check.sh
