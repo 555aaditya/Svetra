@@ -74,3 +74,78 @@ Each entity has exactly one field with `primary: true` (`SVT022`).
 | `json` | `jsonb` | `unknown` | `z.unknown()` | Escape hatch. Not checked |
 | `ref` | `uuid` with `references` | `string` | `z.string().uuid()` | Foreign key to the referenced entity's primary field, which must be a `uuid` |
 | `user` | `uuid references auth.users (id)` | `string` | `z.string().uuid()` | The authenticated user who owns or touches the row |
+
+## Expressions
+
+Constraints and policy conditions are written in a small expression language, inside a YAML string.
+
+```
+expr  := or
+or    := and ("or" and)*
+and   := not ("and" not)*
+not   := "not" not | cmp
+cmp   := sum (op sum)? | sum "in" "[" literal ("," literal)* "]"
+op    := "==" | "!=" | "<" | "<=" | ">" | ">="
+sum   := term (("+" | "-") term)*
+term  := unary (("*" | "/") unary)*
+unary := "-" unary | atom
+atom  := number | string | "true" | "false" | "null" | path | "(" expr ")"
+path  := name ("." name)?
+```
+
+- **Strings** use single quotes: `status == 'active'`.
+- **Paths** are a field of the entity (`balance`), a field one reference away (`source.owner`), or `auth.user`, the authenticated user.
+- **Types must match.**
+  - `int`, `float`, `decimal` and `money` compare and combine with each other.
+  - `user` fields compare with `auth.user`.
+  - `== null` and `!= null` work on any field.
+  - `and`, `or` and `not` need booleans.
+  - The whole expression must be boolean.
+  - A type error is `SVT003`.
+- **Null behaves as in SQL.** A constraint over an empty optional field passes. Write `required: true`, or add `x != null`, when empty must fail. The generated validator does the same, so both sides agree.
+
+Where each path form is allowed:
+
+| | Own fields | `ref.field` (one hop) | `auth.user` |
+|---|---|---|---|
+| Entity constraint | yes | no: a SQL `check` can't read other tables | no |
+| Policy `when` | yes | yes | yes |
+
+Using a form where it isn't allowed is `SVT003`.
+
+## Policies
+
+| Key | Required | Meaning |
+|---|---|---|
+| `on` | yes | The entity the policy protects (`SVT002` if unknown) |
+| `allow` | yes | Non-empty list of `select`, `insert`, `update`, `delete` |
+| `when` | yes | Boolean expression a row must satisfy |
+| `as` | no | `authenticated` (default) or `anon` |
+
+- **Row-level security is on for every table.** That holds whether or not a policy exists, so access is denied by default.
+- **Each action becomes one PostgreSQL policy**, named `<policy>_<action>` when the policy allows more than one action:
+  - `select` and `delete` use `when` as the `using` clause.
+  - `insert` uses it as the `with check` clause.
+  - `update` uses it as both.
+- **`auth.user` compiles to `(select auth.uid())`**, the form Supabase recommends for performance.
+- **A one-hop path compiles to an `exists` subquery** on the referenced table.
+- **A policy on a private entity does nothing**, so it's a warning (`SVT027`).
+
+## Holes
+
+A hole is a place where custom code is allowed, usually written by the user's agent. The compiler generates the signature, types and validation, so only the logic is written by hand.
+
+| Key | Required | Meaning |
+|---|---|---|
+| `kind` | yes | `function`, the only kind in 0.1 |
+| `input` | no | Map of parameter name to type. See below |
+| `output` | no | An entity name, an `Entity.field`, or a type. Omit it for no return value |
+| `reads` | no | Entities the hole may read |
+| `writes` | no | Entities the hole may write |
+
+A parameter or output type is one of three things:
+- `Entity.field`, which gives the same type as that field. This is preferred, because the two can't drift apart.
+- A bare type name, for types without options: `text`, `int`, `float`, `bool`, `uuid`, `timestamp`, `date`, `json`.
+- A full field spec, such as `{ type: money, precision: 18, scale: 6 }`.
+
+Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002`). The code a hole runs gets access only to the entities it declares.
