@@ -9,6 +9,13 @@ Version 0.1 covers one target: Supabase (PostgreSQL with row-level security and 
 - One file, `svetra.yaml`, at the project root.
 - YAML 1.2. Keys are case-sensitive.
 - Unknown keys are errors, not warnings (`SVT020`). A typo should never silently do nothing.
+- **Editor support:** `schema/svetra.schema.json` gives autocomplete and inline checks in editors that use the YAML language server (VS Code, Zed, Neovim). Add this as the first line of `svetra.yaml`:
+
+  ```yaml
+  # yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+  ```
+
+  The schema covers keys, types and names. `svetra validate` remains the authority and checks much more: references, policies, expressions and money.
 
 ## Top level
 
