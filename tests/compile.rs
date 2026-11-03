@@ -97,3 +97,44 @@ fn defaults_and_non_uuid_primary_keys() {
     assert!(sql.contains("\"active\" boolean default true,"));
     assert!(sql.contains("\"note\" text default 'it''s'"));
 }
+
+fn types(src: &str) -> String {
+    let (doc, diags) = load(src);
+    assert!(diags.is_empty(), "{diags:#?}");
+    svetra::compile::ts::types(&doc)
+}
+
+/// Checked with `tsc --strict` and run against Zod 3.25 and Zod 4.6: bad enums, uuids and decimal
+/// shapes are rejected, numbers from Supabase become exact strings, and numbers JavaScript has
+/// already rounded are rejected.
+#[test]
+fn ledger_types_match_golden_file() {
+    assert_eq!(
+        types(include_str!("fixtures/finledger.yaml")),
+        include_str!("golden/finledger.ts")
+    );
+}
+
+#[test]
+fn posts_types_match_golden_file_and_skip_the_decimal_helper() {
+    let ts = types(include_str!("fixtures/posts.yaml"));
+    assert_eq!(ts, include_str!("golden/posts.ts"));
+    assert!(
+        !ts.contains("const decimal"),
+        "no decimal fields, so no helper"
+    );
+}
+
+#[test]
+fn optional_fields_are_nullable_and_types_map_as_specified() {
+    let ts = types(&format!(
+        "{HEAD}entities:\n  T:\n    fields:\n      id: {{ type: uuid, primary: true }}\n      n: {{ type: int, required: true }}\n      f: {{ type: float }}\n      d: {{ type: date }}\n      j: {{ type: json }}\n      ok: {{ type: bool, required: true }}\n      price: {{ type: decimal, precision: 10, scale: 0 }}\n"
+    ));
+    assert!(ts.contains("  n: z.number().int(),"));
+    assert!(ts.contains("  f: z.number().nullable(),"));
+    assert!(ts.contains("  d: z.string().date().nullable(),"));
+    assert!(ts.contains("  j: z.unknown().nullable(),"));
+    assert!(ts.contains("  ok: z.boolean(),"));
+    assert!(ts.contains("  price: decimal(10, 0).nullable(),"));
+    assert!(ts.contains("export type T = z.infer<typeof T>;"));
+}
