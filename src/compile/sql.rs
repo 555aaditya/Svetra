@@ -7,7 +7,7 @@ use crate::expr;
 use crate::model::*;
 use std::collections::HashMap;
 
-/// Tables, foreign keys and indexes for a validated document.
+/// The full schema for a validated document: tables, foreign keys, indexes, access and policies.
 pub fn schema(doc: &Document) -> String {
     let entities: HashMap<&str, &Entity> =
         doc.entities.iter().map(|e| (e.name.as_str(), e)).collect();
@@ -29,7 +29,76 @@ pub fn schema(doc: &Document) -> String {
     if !idx.is_empty() {
         out += &format!("\n-- Indexes\n{}\n", idx.join("\n"));
     }
+    out += &format!(
+        "\n-- Access\n{}\n",
+        doc.entities
+            .iter()
+            .flat_map(access)
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    let policies: Vec<String> = doc
+        .policies
+        .iter()
+        .flat_map(|p| policy(p, &entities))
+        .collect();
+    if !policies.is_empty() {
+        out += &format!("\n-- Policies\n{}\n", policies.join("\n\n"));
+    }
     out
+}
+
+/// Row-level security on every table, so a table with no policy denies everyone.
+/// Private entities also lose every grant, so the generated API can't reach them at all.
+fn access(e: &Entity) -> Vec<String> {
+    let mut out = vec![format!(
+        "alter table {} enable row level security;",
+        table(&e.name)
+    )];
+    if e.private {
+        out.push(format!(
+            "revoke all on table {} from anon, authenticated;",
+            table(&e.name)
+        ));
+    }
+    out
+}
+
+/// One `create policy` per action (docs/compiler.md, Policies).
+fn policy(p: &Policy, entities: &HashMap<&str, &Entity>) -> Vec<String> {
+    let e = entities
+        .get(p.on.name.as_str())
+        .expect("validated policy target");
+    let cx = Ctx {
+        entity: e,
+        entities,
+    };
+    let cond = expr_sql(&expr::parse(&p.when).expect("validated expression"), &cx);
+    let role = match p.role {
+        Role::Authenticated => "authenticated",
+        Role::Anon => "anon",
+    };
+    p.allow
+        .iter()
+        .map(|a| {
+            let (action, clauses) = match a {
+                Action::Select => ("select", format!("using ({cond})")),
+                Action::Delete => ("delete", format!("using ({cond})")),
+                Action::Insert => ("insert", format!("with check ({cond})")),
+                Action::Update => ("update", format!("using ({cond})\n  with check ({cond})")),
+            };
+            let name = if p.allow.len() == 1 {
+                p.name.clone()
+            } else {
+                format!("{}_{action}", p.name)
+            };
+            format!(
+                "create policy {} on {}\n  for {action} to {role}\n  {clauses};",
+                q(&name),
+                table(&e.name)
+            )
+        })
+        .collect()
 }
 
 fn column_type(t: &FieldType) -> String {
