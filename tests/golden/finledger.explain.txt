@@ -1,0 +1,37 @@
+FinLedger
+
+What your app stores
+  Accounts
+    - the signed-in person who owns it (required)
+    - currency: one of USD, EUR, GBP or INR (required)
+    - balance: an amount of money, up to 12 digits before the point and 6 after (required)
+    - status: one of active, frozen or closed (starts as active)
+    - created at: a date and time, set automatically when created
+  Transactions
+    - source: a linked account (required)
+    - destination: a linked account (required)
+    - amount: an amount of money, up to 12 digits before the point and 6 after (required)
+    - status: one of pending, committed, failed or reversed
+    - created at: a date and time, set automatically when created
+
+Rules that always hold
+  - An account's balance is at least 0.
+  - No two accounts have the same owner and currency.
+  - A transaction's amount is more than 0.
+  - A transaction's source and destination are different.
+
+Who can see and change what
+  Accounts
+    - Signed-in people can see an account when its owner is them.
+    - Nobody can see accounts any other way.
+    - Nobody can create, change or delete accounts directly. Only custom code can change them: transfer.
+  Transactions
+    - Signed-in people can see a transaction when the owner of its source is them, or the owner of its destination is them.
+    - Nobody can see transactions any other way.
+    - Nobody can create, change or delete transactions directly. Only custom code can change them: transfer.
+
+Custom code
+  transfer
+    - takes: source (an account), destination (an account), amount (an amount of money, up to 12 digits before the point and 6 after)
+    - returns: a transaction
+    - can read: accounts. Can change: accounts, transactions.
