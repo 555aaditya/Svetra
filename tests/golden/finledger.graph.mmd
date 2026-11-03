@@ -1,0 +1,13 @@
+flowchart LR
+  person(("👤 Signed-in person"))
+  e_Account["Account<br/>owner: user!<br/>currency: enum!<br/>balance: money!<br/>status: enum<br/>created_at: timestamp"]
+  e_Transaction["Transaction<br/>source: → Account!<br/>destination: → Account!<br/>amount: money!<br/>status: enum<br/>created_at: timestamp"]
+  h_transfer(["⚙️ transfer"])
+  e_Account -- owner --> person
+  e_Transaction -- source --> e_Account
+  e_Transaction -- destination --> e_Account
+  person -. "sees" .-> e_Account
+  person -. "sees" .-> e_Transaction
+  h_transfer -. reads .-> e_Account
+  h_transfer == changes ==> e_Account
+  h_transfer == changes ==> e_Transaction
