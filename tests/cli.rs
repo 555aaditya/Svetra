@@ -163,3 +163,29 @@ fn explain_refuses_invalid_files() {
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stdout).contains("SVT001"));
 }
+
+#[test]
+fn graph_and_context_match_golden_files() {
+    for name in ["finledger", "posts"] {
+        for (cmd, ext) in [("graph", "graph.mmd"), ("context", "context.txt")] {
+            let out = svetra(&[cmd, &format!("tests/fixtures/{name}.yaml")]);
+            assert_eq!(out.status.code(), Some(0));
+            let want = std::fs::read_to_string(format!("tests/golden/{name}.{ext}")).unwrap();
+            assert_eq!(String::from_utf8_lossy(&out.stdout), want, "{name} {cmd}");
+        }
+    }
+}
+
+#[test]
+fn context_is_smaller_than_the_yaml() {
+    for name in ["finledger", "posts"] {
+        let yaml = std::fs::read_to_string(format!("tests/fixtures/{name}.yaml")).unwrap();
+        let out = svetra(&["context", &format!("tests/fixtures/{name}.yaml")]);
+        assert!(
+            out.stdout.len() < yaml.len(),
+            "{name}: context {} >= yaml {}",
+            out.stdout.len(),
+            yaml.len()
+        );
+    }
+}

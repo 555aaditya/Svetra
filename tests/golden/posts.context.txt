@@ -1,0 +1,6 @@
+App (svetra 0.1)
+private AuditLog: id uuid pk; note text
+Post: id uuid pk; author user!; body text
+policy posts_by_author: Post select,insert,update,delete authenticated when author == auth.user
+policy public_read: Post select anon when true
+hole write_audit: () -> none; writes AuditLog

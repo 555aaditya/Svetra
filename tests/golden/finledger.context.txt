@@ -1,0 +1,6 @@
+FinLedger (svetra 0.1)
+Account: id uuid pk; owner user!; currency enum(USD|EUR|GBP|INR)!; balance money(18,6)!; status enum(active|frozen|closed)=active; created_at timestamp=now | check balance_non_negative: balance >= 0 | unique (owner, currency)
+Transaction: id uuid pk; source ref(Account)!; destination ref(Account)!; amount money(18,6)!; status enum(pending|committed|failed|reversed); created_at timestamp=now | check amount_positive: amount > 0; different_accounts: source != destination | index (source, created_at); (destination, created_at)
+policy owner_reads_own_accounts: Account select authenticated when owner == auth.user
+policy owner_reads_own_transactions: Transaction select authenticated when source.owner == auth.user or destination.owner == auth.user
+hole transfer: (source Account.id, destination Account.id, amount Transaction.amount) -> Transaction; reads Account; writes Account, Transaction
