@@ -31,6 +31,7 @@ rulesets:
           required_status_checks:
             - context: check
             - context: msrv
+            - context: postgres
       - type: update # only bypass actors can push to main
       - type: pull_request
         parameters:
@@ -60,6 +61,7 @@ rulesets:
           required_status_checks:
             - context: check
             - context: msrv
+            - context: postgres
       - type: pull_request
         parameters:
           required_approving_review_count: 1
