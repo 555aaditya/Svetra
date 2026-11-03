@@ -210,15 +210,15 @@ impl Cx {
         if let Some(v) = self.need(&k, "svetra", "", root) {
             self.version(v, &mut doc);
         }
-        if let Some(v) = self.need(&k, "system", "", root) {
-            if let Some(name) = self.string(v, "system") {
-                doc.system = NameRef { name, pos: pos(v) };
-            }
+        if let Some(v) = self.need(&k, "system", "", root)
+            && let Some(name) = self.string(v, "system")
+        {
+            doc.system = NameRef { name, pos: pos(v) };
         }
-        if let Some(v) = self.need(&k, "entities", "", root) {
-            if let Some(es) = self.map(v, "entities") {
-                doc.entities = es.iter().filter_map(|(n, e)| self.entity(n, e)).collect();
-            }
+        if let Some(v) = self.need(&k, "entities", "", root)
+            && let Some(es) = self.map(v, "entities")
+        {
+            doc.entities = es.iter().filter_map(|(n, e)| self.entity(n, e)).collect();
         }
         if let Some(v) = k.get("policies")
             && let Some(ps) = self.map(v, "policies")
