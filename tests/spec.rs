@@ -9,6 +9,7 @@ const ALL: &[Code] = &[
     Code::Svt003,
     Code::Svt004,
     Code::Svt005,
+    Code::Svt006,
     Code::Svt010,
     Code::Svt019,
     Code::Svt020,
@@ -73,6 +74,7 @@ fn all_is_exhaustive(c: Code) {
         | Code::Svt003
         | Code::Svt004
         | Code::Svt005
+        | Code::Svt006
         | Code::Svt010
         | Code::Svt019
         | Code::Svt020

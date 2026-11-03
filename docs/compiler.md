@@ -67,6 +67,33 @@ The same `svetra.yaml` and the same compiler version always produce byte-identic
    - For `private` entities, also `revoke all ... from anon, authenticated`, so the generated API can't reach them at all.
 5. **Policies.** One `create policy` for each policy and action.
 
+When the file declares `roles`, a **Roles** section comes before Access:
+
+```sql
+create schema if not exists "svetra";
+create table "svetra"."role_grants" (
+  "user_id" uuid not null references "auth"."users" ("id") on delete cascade,
+  "role" text not null check ("role" in ('admin', 'staff')),
+  "scope_id" uuid,
+  constraint "role_grants_key" unique nulls not distinct ("user_id", "role", "scope_id")
+);
+alter table "svetra"."role_grants" enable row level security;
+
+create function "svetra"."has_role"(p_role text, p_scope uuid default null)
+  returns boolean language sql stable security definer set search_path = ''
+  as $$ select exists (
+    select 1 from "svetra"."role_grants" g
+    where g."user_id" = (select auth.uid()) and g."role" = p_role and g."scope_id" is not distinct from p_scope
+  ) $$;
+revoke all on function "svetra"."has_role"(text, uuid) from public;
+grant usage on schema "svetra" to anon, authenticated;
+grant execute on function "svetra"."has_role"(text, uuid) to anon, authenticated;
+```
+
+- **`role_grants` is unreachable from the API.** The `svetra` schema isn't exposed by Supabase, the table has no grants for `anon` or `authenticated`, and it has row-level security with no policies.
+- **`has_role` is `security definer`:** it reads `role_grants` as its owner. A policy calling it never runs another table's policies, which avoids the recursion problem that policies referencing each other can cause. `search_path` is fixed to `''`, so it can't be hijacked.
+- `unique nulls not distinct` needs PostgreSQL 15 or later, which Supabase uses.
+
 ### Columns
 
 | Field | Column |
@@ -97,6 +124,8 @@ Constraints and policy conditions translate like this:
 | `'it''s'` | `'it''s'`; single quotes are escaped by doubling |
 | A field `f` | `"f"` |
 | `auth.user` | `(select auth.uid())`, the form Supabase recommends, which Postgres evaluates once per query instead of once per row |
+| `has_role('admin')` | `(select "svetra"."has_role"('admin'))`, evaluated once per query |
+| `has_role('staff', location)` | `"svetra"."has_role"('staff', "location")`, evaluated per row |
 | `ref.field` (policies only) | `(select t."field" from "public"."<target>" t where t."<pk>" = "<table>"."ref")`, a scalar subquery on the referenced row's primary key |
 
 ### Policies

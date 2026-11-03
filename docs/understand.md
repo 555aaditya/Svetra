@@ -69,9 +69,19 @@ Constraints and policy conditions use the same translation:
 | `p and q`, `p or q`, `not p` | "p and q", "p, or q", "not (p)" |
 | `auth.user` | "them" (the signed-in person) |
 | `ref.field` | "the field of its ref", for example `source.owner` becomes "the owner of its source" |
+| `has_role('admin')` | "they have the admin role" |
+| `has_role('staff', location)` | "they have the staff role for its location" |
+| `has_role('member', id)` | "they have the member role for it" |
 | `true` | "always" |
 
 Anything that doesn't fit a pattern falls back to the expression itself in quotes. That's still accurate, just less friendly.
+
+### Roles
+
+- **A "Roles" section comes after "What your app stores".** It lists each role with its description, and says whether it's held for one row (for example, "staff: works at one location, held for one location at a time").
+- **When a policy's whole condition is a single `has_role`,** the sentence starts with the role instead of "Signed-in people": "People with the admin role can see, change and delete bookings." "People with the staff role for its location can see and change a booking."
+- `graph` draws each role as a `🎭 role` node, with access edges from it for those policies.
+- `context` adds one line: `roles admin; staff(Location)`.
 
 ### Access, stated completely
 
