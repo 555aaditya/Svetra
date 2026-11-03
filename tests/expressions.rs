@@ -3,10 +3,10 @@ use svetra::report::validate;
 /// Validate a one-entity file with `extra` appended, returning (code, message) pairs.
 fn run(constraint: &str, policy_when: &str) -> Vec<(String, String)> {
     let src = format!(
-        "svetra: \"0.1\"\nsystem: App\nentities:\n  Org:\n    fields:\n      id: {{ type: uuid, primary: true }}\n      admin: {{ type: user, required: true }}\n\
+        "svetra: \"0.1\"\nsystem: App\nentities:\n  Org:\n    fields:\n      id: {{ type: uuid, primary: true }}\n      admin: {{ type: user, required: true }}\n    indexes:\n      - [admin]\n\
          \n  Doc:\n    fields:\n      id: {{ type: uuid, primary: true }}\n      org: {{ type: ref, entity: Org, required: true }}\n      owner: {{ type: user }}\n\
          \x20     status: {{ type: enum, values: [draft, live] }}\n      size: {{ type: int }}\n      created_at: {{ type: timestamp, auto: now }}\n\
-         \x20   constraints:\n      c: \"{constraint}\"\n    indexes:\n      - [org]\n\
+         \x20   constraints:\n      c: \"{constraint}\"\n    indexes:\n      - [org]\n      - [owner]\n\
          policies:\n  org_rw:\n    on: Org\n    allow: [select, insert]\n    when: \"admin == auth.user\"\n\
          \x20 doc_rw:\n    on: Doc\n    allow: [select, insert]\n    when: \"{policy_when}\"\n"
     );
