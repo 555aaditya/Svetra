@@ -42,8 +42,8 @@ The reader may never have written code, so:
 | Field | Described as |
 |---|---|
 | `uuid` primary | Not shown: every record has an id |
-| `user` | "the signed-in person who owns it" if the field is named `owner`, `author`, `user` or `created_by`; otherwise "a signed-in person (`<field>`)" |
-| `ref` to `E` | "the `<e>` it belongs to" if the field name matches the entity (`account` to `Account`); otherwise "a linked `<e>` (`<field>`)" |
+| `user` | "the signed-in person who owns it" if the field is named `owner`, `author`, `user` or `created_by`; otherwise "`<field>`: a signed-in person" |
+| `ref` to `E` | "the `<e>` it belongs to" if the field name matches the entity (`account` to `Account`); otherwise "`<field>`: a linked `<e>`" |
 | `text` | "text" |
 | `int`, `float` | "a whole number", "a number" |
 | `money` | "an amount of money (up to N digits before the point and S after)" |
@@ -78,7 +78,7 @@ Anything that doesn't fit a pattern falls back to the expression itself in quote
 For each entity, `explain` lists every allowed action. Then it says plainly what isn't allowed, which is where AI-built apps usually go wrong:
 - **"Nobody can see accounts any other way."** This is always stated, because access is denied by default.
 - **"Nobody can create, change or delete accounts directly."** This appears when no policy allows those actions. If holes write the entity, it adds "Only custom code can change them: `transfer`."
-- **"Audit logs are private: the app can't reach them at all; only custom code can."** This is for private entities.
+- **"Audit logs are private: the app can't reach them at all; only custom code can."** This is for private entities. If holes write them, it ends instead with "Only custom code can change them: `write_audit`."
 - **"Anyone, even without signing in, can see posts."** Anonymous access is always called out, as its own line.
 
 ### Example (the ledger)
@@ -96,7 +96,7 @@ What your app stores
 
 Rules that always hold
   - An account's balance is at least 0.
-  - Each person has at most one account per currency.
+  - No two accounts have the same owner and currency.
   - A transaction's amount is more than 0.
   - A transaction's source and destination are different.
 
