@@ -1,8 +1,9 @@
 //! Rules that need the whole document: names, duplicates, primary keys, references,
-//! access, money and indexes. Expressions (SVT003) are checked separately.
+//! access, money, indexes and expressions.
 
 use crate::diag::{Code, Diagnostic};
 use crate::model::*;
+use crate::typeck;
 use std::collections::{HashMap, HashSet};
 
 /// Words that mark a field as money for SVT005.
@@ -21,6 +22,7 @@ pub fn check(doc: &Document) -> Vec<Diagnostic> {
     ck.policies(doc);
     ck.holes(doc);
     ck.access(doc);
+    ck.expressions(doc);
     ck.out
 }
 
@@ -287,6 +289,48 @@ impl<'a> Checker<'a> {
                     }
                     ParamType::Type(_) => {}
                 }
+            }
+        }
+    }
+
+    /// SVT003: constraints and policy conditions must type-check as booleans in their scope.
+    fn expressions(&mut self, doc: &Document) {
+        let entities = self.entities.clone();
+        for e in &doc.entities {
+            let scope = typeck::Scope {
+                entity: e,
+                entities: &entities,
+                policy: false,
+            };
+            for c in &e.constraints {
+                if let Err(msg) = typeck::check(&c.expr, &scope) {
+                    self.d(
+                        Code::Svt003,
+                        format!("entities.{}.constraints.{}", e.name, c.name),
+                        c.pos,
+                        msg,
+                        "Fix the expression; see Expressions in docs/format.md.",
+                    );
+                }
+            }
+        }
+        for p in &doc.policies {
+            let Some(e) = entities.get(p.on.name.as_str()) else {
+                continue;
+            };
+            let scope = typeck::Scope {
+                entity: e,
+                entities: &entities,
+                policy: true,
+            };
+            if let Err(msg) = typeck::check(&p.when, &scope) {
+                self.d(
+                    Code::Svt003,
+                    format!("policies.{}.when", p.name),
+                    p.pos,
+                    msg,
+                    "Fix the expression; see Expressions in docs/format.md.",
+                );
             }
         }
     }
