@@ -5,25 +5,12 @@ use crate::diag::Code;
 use crate::model::*;
 use crate::yaml::{Node, Value};
 
-const FIELD_KEYS: &[&str] = &[
-    "type",
-    "required",
-    "primary",
-    "unique",
-    "default",
-    "auto",
-    "values",
-    "precision",
-    "scale",
-    "entity",
-];
-
 impl Cx {
     pub(super) fn field(&mut self, name: &Node, body: &Node, parent: &str) -> Option<Field> {
         let fname = self.string(name, parent)?;
         let path = format!("{parent}.{fname}");
         let entries = self.map(body, &path)?;
-        let k = self.keys(entries, &path, FIELD_KEYS);
+        let k = self.keys(entries, &path, super::FIELD_KEYS);
         let ty = self.field_type(&k, &path, name)?;
         let flag = |cx: &mut Cx, key: &str| {
             k.get(key)
