@@ -22,7 +22,7 @@ impl Cx {
         let pname = self.string(name, "policies")?;
         let path = format!("policies.{pname}");
         let entries = self.map(body, &path)?;
-        let k = self.keys(entries, &path, &["on", "allow", "when", "as"]);
+        let k = self.keys(entries, &path, super::POLICY_KEYS);
         let on = self.need(&k, "on", &path, name);
         let allow = self.need(&k, "allow", &path, name);
         let when = self.need(&k, "when", &path, name);
@@ -105,11 +105,7 @@ impl Cx {
         let hname = self.string(name, "holes")?;
         let path = format!("holes.{hname}");
         let entries = self.map(body, &path)?;
-        let k = self.keys(
-            entries,
-            &path,
-            &["kind", "input", "output", "reads", "writes"],
-        );
+        let k = self.keys(entries, &path, super::HOLE_KEYS);
         let kind = self.need(&k, "kind", &path, name)?;
         if self.string(kind, &format!("{path}.kind"))? != "function" {
             self.report(
@@ -179,11 +175,7 @@ impl Cx {
                 self.bare_type(s, path, node).map(ParamType::Type)
             }
             Value::Map(entries) => {
-                let k = self.keys(
-                    entries,
-                    path,
-                    &["type", "values", "precision", "scale", "entity"],
-                );
+                let k = self.keys(entries, path, super::PARAM_SPEC_KEYS);
                 self.field_type(&k, path, node).map(ParamType::Type)
             }
             _ => {

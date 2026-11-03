@@ -11,6 +11,25 @@ mod field;
 
 pub const FORMAT_VERSION: &str = "0.1";
 
+// The keys each part of the format accepts. The JSON Schema is tested against these.
+pub const TOP_KEYS: &[&str] = &["svetra", "system", "entities", "policies", "holes"];
+pub const ENTITY_KEYS: &[&str] = &["fields", "constraints", "unique", "indexes", "private"];
+pub const FIELD_KEYS: &[&str] = &[
+    "type",
+    "required",
+    "primary",
+    "unique",
+    "default",
+    "auto",
+    "values",
+    "precision",
+    "scale",
+    "entity",
+];
+pub const POLICY_KEYS: &[&str] = &["on", "allow", "when", "as"];
+pub const HOLE_KEYS: &[&str] = &["kind", "input", "output", "reads", "writes"];
+pub const PARAM_SPEC_KEYS: &[&str] = &["type", "values", "precision", "scale", "entity"];
+
 type Entries = [(Node, Node)];
 
 /// Load `src`. The document is best effort: parts with errors are skipped or defaulted,
@@ -202,11 +221,7 @@ impl Cx {
         let Some(entries) = self.map(root, "") else {
             return doc;
         };
-        let k = self.keys(
-            entries,
-            "",
-            &["svetra", "system", "entities", "policies", "holes"],
-        );
+        let k = self.keys(entries, "", TOP_KEYS);
         if let Some(v) = self.need(&k, "svetra", "", root) {
             self.version(v, &mut doc);
         }
@@ -258,11 +273,7 @@ impl Cx {
         let ename = self.string(name, "entities")?;
         let path = format!("entities.{ename}");
         let entries = self.map(body, &path)?;
-        let k = self.keys(
-            entries,
-            &path,
-            &["fields", "constraints", "unique", "indexes", "private"],
-        );
+        let k = self.keys(entries, &path, ENTITY_KEYS);
         let mut entity = Entity {
             name: ename,
             pos: pos(name),
