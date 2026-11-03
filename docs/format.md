@@ -156,6 +156,7 @@ Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002
 
 | Code | Severity | Rule | Remediation action |
 |---|---|---|---|
+| `SVT019` | error | The file is not valid YAML | `fix_syntax` |
 | `SVT020` | error | Unknown key | `remove_key` |
 | `SVT021` | error | Name breaks its naming pattern | `rename` |
 | `SVT022` | error | Entity has no primary field, or more than one | `set_primary` |
@@ -164,6 +165,8 @@ Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002
 | `SVT025` | error | Unsupported format version | `set_version` |
 | `SVT026` | error | `unique` or `indexes` names a field the entity doesn't have | `fix_field` |
 | `SVT027` | warning | Policy on a private entity has no effect | `remove_policy` |
+| `SVT028` | error | A required key is missing | `add_key` |
+| `SVT029` | error | A value has the wrong kind, such as a string where a list or bool is expected | `fix_value` |
 | `SVT001` | error | Entity exposed through the API has no policy. Mark it `private: true` or add a policy | `add_policy` |
 | `SVT002` | error | Reference to an entity or field that doesn't exist | `fix_reference` |
 | `SVT003` | error | Expression has a type error, or uses a path form not allowed where it appears | `fix_expression` |
