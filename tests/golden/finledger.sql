@@ -32,3 +32,16 @@ alter table "public"."transaction" add constraint "transaction_destination_fkey"
 -- Indexes
 create index "transaction_source_created_at_idx" on "public"."transaction" ("source", "created_at");
 create index "transaction_destination_created_at_idx" on "public"."transaction" ("destination", "created_at");
+
+-- Access
+alter table "public"."account" enable row level security;
+alter table "public"."transaction" enable row level security;
+
+-- Policies
+create policy "owner_reads_own_accounts" on "public"."account"
+  for select to authenticated
+  using ("owner" = (select auth.uid()));
+
+create policy "owner_reads_own_transactions" on "public"."transaction"
+  for select to authenticated
+  using ((select t."owner" from "public"."account" t where t."id" = "transaction"."source") = (select auth.uid()) or (select t."owner" from "public"."account" t where t."id" = "transaction"."destination") = (select auth.uid()));

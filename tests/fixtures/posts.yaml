@@ -1,0 +1,27 @@
+svetra: "0.1"
+system: App
+entities:
+  AuditLog:
+    private: true
+    fields:
+      id: { type: uuid, primary: true }
+      note: { type: text }
+  Post:
+    fields:
+      id: { type: uuid, primary: true }
+      author: { type: user, required: true }
+      body: { type: text }
+policies:
+  posts_by_author:
+    on: Post
+    allow: [select, insert, update, delete]
+    when: "author == auth.user"
+  public_read:
+    on: Post
+    allow: [select]
+    when: "true"
+    as: anon
+holes:
+  write_audit:
+    kind: function
+    writes: [AuditLog]
