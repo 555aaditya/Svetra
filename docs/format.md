@@ -149,3 +149,123 @@ A parameter or output type is one of three things:
 - A full field spec, such as `{ type: money, precision: 18, scale: 6 }`.
 
 Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002`). The code a hole runs gets access only to the entities it declares.
+
+## Diagnostics
+
+`svetra validate` checks a file in two stages. Structural checks run first. Graph rules run only on a structurally valid file.
+
+| Code | Severity | Rule | Remediation action |
+|---|---|---|---|
+| `SVT020` | error | Unknown key | `remove_key` |
+| `SVT021` | error | Name breaks its naming pattern | `rename` |
+| `SVT022` | error | Entity has no primary field, or more than one | `set_primary` |
+| `SVT023` | error | Unknown type, or a missing or invalid type option | `fix_type` |
+| `SVT024` | error | Duplicate name | `rename` |
+| `SVT025` | error | Unsupported format version | `set_version` |
+| `SVT026` | error | `unique` or `indexes` names a field the entity doesn't have | `fix_field` |
+| `SVT027` | warning | Policy on a private entity has no effect | `remove_policy` |
+| `SVT001` | error | Entity exposed through the API has no policy. Mark it `private: true` or add a policy | `add_policy` |
+| `SVT002` | error | Reference to an entity or field that doesn't exist | `fix_reference` |
+| `SVT003` | error | Expression has a type error, or uses a path form not allowed where it appears | `fix_expression` |
+| `SVT004` | warning | Entity has no write path: no policy allows `insert` or `update`, and no hole lists it in `writes` | `add_write_path` |
+| `SVT005` | error | Field whose name suggests money (`amount`, `price`, `balance`, `cost`, `total`, `fee`) uses `float` | `use_money` |
+| `SVT010` | info | Reference field is not the leading column of any index or unique constraint. The compiler adds an index | none |
+
+Codes are stable. A code is never reused for a different rule.
+
+With `--json`, each diagnostic has this shape:
+
+```json
+{
+  "code": "SVT001",
+  "category": "policy",
+  "severity": "error",
+  "path": "entities.Transaction",
+  "line": 18,
+  "column": 3,
+  "message": "Transaction is exposed through the API but has no policy.",
+  "retryable": false,
+  "remediation": {
+    "action": "add_policy",
+    "hint": "Add a policy on Transaction, or mark it private: true."
+  }
+}
+```
+
+- **`category`** is one of `syntax`, `naming`, `type`, `reference`, `expression`, `policy`, `money`, `index` and `version`.
+- **`retryable` is always `false`** for validation, because repeating the same call with the same file gives the same result. Fix the file instead.
+- **Exit codes:**
+  - `0`: the file is valid. Warnings and info are allowed.
+  - `1`: at least one error.
+  - `2`: usage error.
+
+## Full example
+
+```yaml
+svetra: "0.1"
+system: FinLedger
+
+entities:
+  Account:
+    fields:
+      id:         { type: uuid, primary: true }
+      owner:      { type: user, required: true }
+      currency:   { type: enum, values: [USD, EUR, GBP, INR], required: true }
+      balance:    { type: money, precision: 18, scale: 6, required: true }
+      status:     { type: enum, values: [active, frozen, closed], default: active }
+      created_at: { type: timestamp, auto: now }
+    constraints:
+      balance_non_negative: "balance >= 0"
+    unique:
+      - [owner, currency]
+
+  Transaction:
+    fields:
+      id:          { type: uuid, primary: true }
+      source:      { type: ref, entity: Account, required: true }
+      destination: { type: ref, entity: Account, required: true }
+      amount:      { type: money, precision: 18, scale: 6, required: true }
+      status:      { type: enum, values: [pending, committed, failed, reversed] }
+      created_at:  { type: timestamp, auto: now }
+    constraints:
+      amount_positive: "amount > 0"
+      different_accounts: "source != destination"
+    indexes:
+      - [source, created_at]
+      - [destination, created_at]
+
+policies:
+  owner_reads_own_accounts:
+    on: Account
+    allow: [select]
+    when: "owner == auth.user"
+  owner_reads_own_transactions:
+    on: Transaction
+    allow: [select]
+    when: "source.owner == auth.user or destination.owner == auth.user"
+
+holes:
+  transfer:
+    kind: function
+    input:
+      source: Account.id
+      destination: Account.id
+      amount: Transaction.amount
+    output: Transaction
+    reads: [Account]
+    writes: [Account, Transaction]
+```
+
+This file is valid and produces no diagnostics:
+- `Account.owner` needs no extra index, because the unique constraint on `[owner, currency]` already leads with it (`SVT010`).
+- `Transaction.source` and `Transaction.destination` lead the two declared indexes.
+- Both entities have a write path through `transfer` (`SVT004`).
+
+## Not in version 0.1
+
+These come later, if real use asks for them:
+- Services, connectors, infrastructure and UI nodes
+- Storage-engine selection
+- Migrations between graph revisions (planned for `svetra diff` and `patch`)
+- Multiple files and imports
+- Hole kinds other than `function`, such as webhook recipes
