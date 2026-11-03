@@ -1,4 +1,5 @@
 pub mod check;
+pub mod compile;
 pub mod diag;
 pub mod expr;
 pub mod load;
