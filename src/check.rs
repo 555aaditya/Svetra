@@ -185,6 +185,9 @@ impl<'a> Checker<'a> {
             let fp = format!("{ep}.fields.{}", f.name);
             if let FieldType::Ref(target) = &f.ty {
                 self.reference(target, &fp);
+            }
+            // `user` fields reference auth.users and are what policies filter on, so they need indexes too.
+            if matches!(f.ty, FieldType::Ref(_) | FieldType::User) {
                 let leads = |l: &FieldList| l.fields.first().is_some_and(|x| x.name == f.name);
                 if !f.unique && !e.unique.iter().chain(&e.indexes).any(leads) {
                     let msg = format!(

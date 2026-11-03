@@ -179,7 +179,7 @@ Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002
 | `SVT003` | error | Expression has a type error, or uses a path form not allowed where it appears | `fix_expression` |
 | `SVT004` | warning | Entity has no write path: no policy allows `insert` or `update`, and no hole lists it in `writes` | `add_write_path` |
 | `SVT005` | error | Field whose name suggests money (`amount`, `price`, `balance`, `cost`, `total`, `fee`) uses `float` | `use_money` |
-| `SVT010` | info | Reference field is not the leading column of any index or unique constraint. The compiler adds an index | none |
+| `SVT010` | info | A `ref` or `user` field is not the leading column of any index or unique constraint. The compiler adds an index, because these are the columns joins and policies filter on | none |
 
 Codes are stable. A code is never reused for a different rule.
 

@@ -87,3 +87,11 @@ fn float_money_is_svt005() {
     );
     assert_eq!(codes(&src), ["SVT005"]);
 }
+
+#[test]
+fn unindexed_user_field_is_svt010_info() {
+    let src = format!(
+        "{HEAD}entities:\n  A:\n    fields:\n      id: {{ type: uuid, primary: true }}\n      owner: {{ type: user }}\n{OK_POLICY}"
+    );
+    assert_eq!(codes(&src), ["SVT010"]);
+}
