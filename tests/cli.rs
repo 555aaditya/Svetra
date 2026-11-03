@@ -119,3 +119,47 @@ fn compile_with_errors_writes_nothing() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("Nothing was written."));
     assert!(!dir.join("supabase").exists() && !dir.join("src").exists());
 }
+
+#[test]
+fn explain_matches_golden_files() {
+    for name in ["finledger", "posts"] {
+        let out = svetra(&["explain", &format!("tests/fixtures/{name}.yaml")]);
+        assert_eq!(out.status.code(), Some(0));
+        let want = std::fs::read_to_string(format!("tests/golden/{name}.explain.txt")).unwrap();
+        assert_eq!(String::from_utf8_lossy(&out.stdout), want, "{name}");
+    }
+}
+
+#[test]
+fn explain_never_uses_jargon() {
+    for name in ["finledger", "posts"] {
+        let text = String::from_utf8_lossy(
+            &svetra(&["explain", &format!("tests/fixtures/{name}.yaml")]).stdout,
+        )
+        .to_lowercase();
+        for word in [
+            "rls",
+            "policy",
+            "foreign key",
+            "schema",
+            "migration",
+            "uuid",
+            "constraint",
+            "hole",
+            "row-level",
+        ] {
+            assert!(!text.contains(word), "{name} explanation says `{word}`");
+        }
+    }
+}
+
+#[test]
+fn explain_refuses_invalid_files() {
+    let dir = std::env::temp_dir().join(format!("svetra-explain-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("svetra.yaml");
+    std::fs::write(&file, "svetra: \"0.1\"\nsystem: App\nentities:\n  A:\n    fields:\n      id: { type: uuid, primary: true }\n").unwrap();
+    let out = svetra(&["explain", file.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("SVT001"));
+}

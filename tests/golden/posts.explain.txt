@@ -1,0 +1,21 @@
+App
+
+What your app stores
+  Audit logs
+    - note: text
+  Posts
+    - the signed-in person who owns it (required)
+    - body: text
+
+Who can see and change what
+  Audit logs
+    - Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit.
+  Posts
+    - Signed-in people can see, create, change and delete a post when its author is them.
+    - Anyone, even without signing in, can see posts.
+    - Nobody can see posts any other way.
+
+Custom code
+  write_audit
+    - returns: nothing
+    - can change: audit logs.
