@@ -5,6 +5,7 @@ const HELP: &str = "svetra: design the system with the AI, compile it to the low
 
 Usage:
   svetra validate [FILE] [--json]   Check a svetra.yaml file (default: ./svetra.yaml)
+  svetra explain [FILE]             Describe the app in plain English: data, rules, who can see what
   svetra compile [FILE] [--check]   Write the SQL schema and TypeScript types next to FILE;
                                     --check writes nothing and fails if they are out of date
   svetra --version                  Print the version
@@ -28,6 +29,7 @@ fn main() -> ExitCode {
         }
         Some("validate") => validate(&args[1..]),
         Some("compile") => compile(&args[1..]),
+        Some("explain") => explain(&args[1..]),
         Some(other) => usage(&format!("unknown argument '{other}'")),
     }
 }
@@ -76,6 +78,25 @@ fn validate(args: &[String]) -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+fn explain(args: &[String]) -> ExitCode {
+    let (file, _) = match file_and_flag("explain", args, "--no-such-flag") {
+        Ok(v) => v,
+        Err(e) => return usage(&e),
+    };
+    let src = match read(file) {
+        Ok(s) => s,
+        Err(e) => return usage(&e),
+    };
+    let diags = report::validate(&src);
+    if report::has_errors(&diags) {
+        print!("{}", report::human(file, &diags));
+        return ExitCode::from(1);
+    }
+    let (doc, _) = svetra::load::load(&src);
+    print!("{}", svetra::understand::explain::explain(&doc, &diags));
+    ExitCode::SUCCESS
 }
 
 fn compile(args: &[String]) -> ExitCode {
