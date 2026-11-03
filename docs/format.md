@@ -195,6 +195,8 @@ With `--json`, each diagnostic has this shape:
 }
 ```
 
+- **The JSON output** wraps the diagnostics with the file name and an overall verdict: `{"file": "svetra.yaml", "valid": false, "diagnostics": [ ... ]}`. Diagnostics are sorted by position.
+- **`line` and `column`** are both 1-based, as in editors.
 - **`category`** is one of `syntax`, `naming`, `type`, `reference`, `expression`, `policy`, `money`, `index` and `version`.
 - **`retryable` is always `false`** for validation, because repeating the same call with the same file gives the same result. Fix the file instead.
 - **Exit codes:**
