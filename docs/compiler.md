@@ -152,7 +152,7 @@ export const Account = z.object({
   id: z.string().uuid(),
   owner: z.string().uuid(),
   currency: z.enum(["USD", "EUR", "GBP", "INR"]),
-  balance: z.string().regex(/^-?\d{1,12}(\.\d{1,6})?$/),
+  balance: decimal(18, 6),
   status: z.enum(["active", "frozen", "closed"]).nullable(),
   created_at: z.string().datetime({ offset: true }).nullable(),
 });
@@ -160,7 +160,10 @@ export type Account = z.infer<typeof Account>;
 ```
 
 - **Required fields** are plain. **Optional fields** are `.nullable()`, matching a column that allows `null`.
-- **`decimal` and `money`** are strings checked against their precision and scale: at most `precision - scale` digits before the point and `scale` after. Strings keep exact values that a JavaScript `number` would round.
+- **`decimal` and `money`** use a small generated `decimal(precision, scale)` helper, emitted only when the file needs it. It always yields a **string**, checked against the precision and scale: at most `precision - scale` digits before the point, and `scale` after.
+  - **Why not just strings:** Supabase's API returns `numeric` columns as JSON numbers, and JavaScript rounds numbers past about 15 significant digits. For example, `123456789012.123456` arrives as `123456789012.12346`.
+  - **So the helper accepts exact strings, plus numbers that are still exact.** A number counts as exact while `number * 10^scale` is a safe integer. Larger numbers are **rejected** with a message to select the column as text (`balance::text`), so a rounded amount is never accepted silently.
+- **Zod versions:** the output only uses APIs that exist in both Zod 3.23+ and Zod 4. It's checked with Zod 3.25 and 4.6.
 - **`int`** is `z.number().int()`, **`json`** is `z.unknown()`, and **`date`** is `z.string().date()`.
 - **In version 0.1, declared constraints are enforced by the database only.** Mirroring them in Zod is planned, with matching names, so a failure on either side reports the same constraint name.
 
