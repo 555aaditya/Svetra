@@ -2,7 +2,7 @@
 name = "svetra"
 version = "0.0.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "Design the system with the AI. Svetra compiles it to the low level."
 license = "MIT"
 repository = "https://github.com/555aaditya/Svetra"
