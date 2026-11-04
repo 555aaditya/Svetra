@@ -95,3 +95,28 @@ fn unindexed_user_field_is_svt010_info() {
     );
     assert_eq!(codes(&src), ["SVT010"]);
 }
+
+#[test]
+fn anon_only_access_is_svt007_but_anyone_is_fine() {
+    let entity = format!(
+        "{HEAD}entities:\n  A:\n    fields:\n      id: {{ type: uuid, primary: true }}\n      owner: {{ type: user }}\n    indexes:\n      - [owner]\n"
+    );
+    let own = "  own:\n    on: A\n    allow: [select, insert]\n    when: \"owner == auth.user\"\n";
+    let public =
+        "  public_read:\n    on: A\n    allow: [select]\n    when: \"true\"\n    as: anon\n";
+    // Signed-in people only see their own rows, but logged-out visitors see all of them.
+    assert_eq!(
+        codes(&format!("{entity}policies:\n{own}{public}")),
+        ["SVT007"]
+    );
+    assert!(
+        codes(&format!(
+            "{entity}policies:\n{own}{}",
+            public.replace("as: anon", "as: anyone")
+        ))
+        .is_empty()
+    );
+    // A signed-in policy with the same condition covers it.
+    let same = "  all_signed_in:\n    on: A\n    allow: [select]\n    when: \"true\"\n";
+    assert!(codes(&format!("{entity}policies:\n{own}{public}{same}")).is_empty());
+}
