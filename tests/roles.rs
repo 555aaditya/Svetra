@@ -71,7 +71,7 @@ fn has_role_compiles_and_explains() {
     );
     let text = svetra::understand::explain::explain(&doc, &[]);
     assert!(
-        text.contains("when they have the staff role for its location"),
+        text.contains("People with the staff role for a booking's location can see that booking."),
         "{text}"
     );
 }

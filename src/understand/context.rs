@@ -5,6 +5,18 @@ use crate::model::*;
 
 pub fn context(doc: &Document) -> String {
     let mut out = format!("{} (svetra {})\n", doc.system.name, doc.version);
+    if !doc.roles.is_empty() {
+        let roles: Vec<String> = doc
+            .roles
+            .iter()
+            .map(|r| {
+                r.scope
+                    .as_ref()
+                    .map_or(r.name.clone(), |s| format!("{}({})", r.name, s.name))
+            })
+            .collect();
+        out += &format!("roles {}\n", roles.join("; "));
+    }
     for e in &doc.entities {
         let fields: Vec<String> = e.fields.iter().map(field).collect();
         let mut line = format!(
