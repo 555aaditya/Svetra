@@ -265,6 +265,7 @@ For the bookings app (two entities, two roles), people are `anon`, `alice`, `bob
 - **Generated values can break declared constraints,** for example `ends > starts` when both get the same kind of value. The test-data test reports it. Choosing values that satisfy constraints is planned.
 - **Holes aren't tested,** because their bodies are written by the agent. Grants and rules on the tables they touch are.
 - **Times compared with text** are read the way Postgres reads them when the text is an ISO time: `YYYY-MM-DD`, optionally with `T` or a space and `HH:MM[:SS]`, optionally ending in `Z` or `+00:00`, all in UTC. A `date` compared with such text ignores the time of day. Any other text, such as `'now'`, can't be evaluated ahead of time, so each check it could decide becomes a pgTAP skip that says so, never a guess.
+- **Text ordering** (`<`, `>` on `text`) is evaluated in byte order, which can differ from the database's collation. The generated values are all lowercase ASCII, where the two agree.
 - **One connection runs every check.** Each check switches role and claims inside its own sub-transaction, which resets both on exit. Separate connections per person are planned.
 
 ## Not in version 0.1
