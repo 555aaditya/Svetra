@@ -29,6 +29,9 @@ pub fn schema(doc: &Document) -> String {
     if !idx.is_empty() {
         out += &format!("\n-- Indexes\n{}\n", idx.join("\n"));
     }
+    if !doc.roles.is_empty() {
+        out += &format!("\n-- Roles\n{}", roles(&doc.roles));
+    }
     out += &format!(
         "\n-- Access\n{}\n",
         doc.entities
@@ -248,4 +251,33 @@ fn indexes(e: &Entity) -> Vec<String> {
         }
     }
     out
+}
+
+/// The private role store and the `has_role` check (docs/compiler.md, Roles). The table is
+/// unreachable from the API, and `has_role` is `security definer` with a fixed search path, so
+/// policies that call it never run other tables' policies.
+fn roles(roles: &[RoleDef]) -> String {
+    let names: Vec<String> = roles.iter().map(|r| lit(&r.name)).collect();
+    format!(
+        r#"create schema if not exists "svetra";
+create table "svetra"."role_grants" (
+  "user_id" uuid not null references "auth"."users" ("id") on delete cascade,
+  "role" text not null check ("role" in ({})),
+  "scope_id" uuid,
+  constraint "role_grants_key" unique nulls not distinct ("user_id", "role", "scope_id")
+);
+alter table "svetra"."role_grants" enable row level security;
+
+create function "svetra"."has_role"(p_role text, p_scope uuid default null)
+  returns boolean language sql stable security definer set search_path = ''
+  as $$ select exists (
+    select 1 from "svetra"."role_grants" g
+    where g."user_id" = (select auth.uid()) and g."role" = p_role and g."scope_id" is not distinct from p_scope
+  ) $$;
+revoke all on function "svetra"."has_role"(text, uuid) from public;
+grant usage on schema "svetra" to anon, authenticated;
+grant execute on function "svetra"."has_role"(text, uuid) to anon, authenticated;
+"#,
+        names.join(", ")
+    )
 }
