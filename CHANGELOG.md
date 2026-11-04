@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Access tests.** `svetra compile` also writes `supabase/tests/svetra.test.sql`, run with `supabase test db`. It checks every person × action × row as real users (`anon` and signed-in, never the service key), with expected results evaluated from `svetra.yaml` rather than the generated SQL. It catches drift, such as a migration adding a permissive policy or turning row-level security off, and reports every failing check, not just the first.
+
 ## 0.1.0 (2026-11-04)
 
 The first release. Svetra reads a `svetra.yaml`, checks it, compiles it for Supabase, and explains it.
