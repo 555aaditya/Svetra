@@ -1,0 +1,94 @@
+name: release
+
+# Push a tag like v0.1.0 on main to build binaries, publish a GitHub Release, smoke-test the
+# installer against it, and (only if a CARGO_REGISTRY_TOKEN secret exists) publish to crates.io.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: macos-latest, target: x86_64-apple-darwin }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          name="svetra-${{ matrix.target }}"
+          mkdir "$name"
+          cp README.md LICENSE CHANGELOG.md "$name/"
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp "target/${{ matrix.target }}/release/svetra.exe" "$name/"
+            7z a "$name.zip" "$name" > /dev/null
+          else
+            cp "target/${{ matrix.target }}/release/svetra" "$name/"
+            tar czf "$name.tar.gz" "$name"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: svetra-${{ matrix.target }}
+          path: svetra-${{ matrix.target }}.*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum svetra-* > SHA256SUMS && cat SHA256SUMS
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="$(awk '/^## /{n++} n==1' CHANGELOG.md | tail -n +2)"
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Svetra $GITHUB_REF_NAME" --notes "$notes" --verify-tag
+
+  smoke:
+    # Install from the release that was just published, exactly as a user would.
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install with install.sh
+        run: SVETRA_VERSION="$GITHUB_REF_NAME" SVETRA_INSTALL_DIR="$RUNNER_TEMP/bin" sh install.sh
+      - name: Run it
+        run: |
+          "$RUNNER_TEMP/bin/svetra" --version | grep -F "svetra ${GITHUB_REF_NAME#v}"
+          "$RUNNER_TEMP/bin/svetra" validate tests/fixtures/finledger.yaml
+
+  crates:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Publish to crates.io if a token is configured
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "No CARGO_REGISTRY_TOKEN secret; skipping crates.io."
+          else
+            cargo publish --locked
+          fi
