@@ -55,7 +55,7 @@ svetra.yaml:7:7: error SVT005: `total` looks like money but uses float, which lo
   hint: Use { type: money, precision: 18, scale: 6 }.
 ```
 
-There are 17 checks. They cover tables with no access policy, money stored as `float`, references to things that don't exist, policy and constraint expressions that don't type-check, enum typos, and more. The exit code is `0` for valid, `1` for errors and `2` for a usage error.
+There are 19 checks. They cover tables with no access policy, money stored as `float`, references to things that don't exist, policy and constraint expressions that don't type-check, enum typos, and more. The exit code is `0` for valid, `1` for errors and `2` for a usage error.
 
 ## What works today: `svetra compile`
 
@@ -68,6 +68,8 @@ svetra compile svetra.yaml --check  # writes nothing; fails if they are stale or
 |---|---|
 | `supabase/schemas/svetra.sql` | Tables, constraints, foreign keys and indexes; row-level security on every table; one policy per action. Supabase's `supabase db diff` turns it into migrations |
 | `src/svetra.gen.ts` | One Zod validator and TypeScript type per entity. Money stays exact: it's a string, never a float |
+
+Roles work too: declare `admin`, or `staff` scoped to one location, and use `has_role('staff', location)` in a rule. `explain` then says "People with the staff role for a booking's location can see and change that booking."
 
 It validates first and writes nothing if there are errors. The output is byte-identical for the same input. Every PR applies the generated SQL to a real PostgreSQL 16 and checks that each constraint and policy behaves as declared: who can see which rows, and what gets rejected. The full output is specified in [`docs/compiler.md`](docs/compiler.md).
 
@@ -89,9 +91,10 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 
 | Step | What | Status |
 |---|---|---|
-| Format and validator | `svetra.yaml` v0.1, 17 checks, JSON output, JSON Schema | **Done** |
+| Format and validator | `svetra.yaml` v0.1, 19 checks, JSON output, JSON Schema | **Done** |
 | Compiler | PostgreSQL tables, row-level security, TypeScript types and Zod validators for Supabase and React | **Done** |
-| Understand | `svetra explain` (your app in plain English), `svetra graph` (a diagram), `svetra context` (compact context for agents) | Planned |
+| Understand | `svetra explain` (your app in plain English), `svetra graph` (a diagram), `svetra context` (compact context for agents) | **Done** |
+| Roles and teams | `roles:` (global like `admin`, or scoped like `staff` at one location) and `has_role()` in rules, compiled to a private grants table and a locked-down check function | **Done** |
 | Agents | The Svetra skill for Claude Code, Cursor and Codex; an MCP server; hole files and recipes | Planned |
 | Automations | Scheduled jobs, triggers when data changes, and incoming webhooks | Planned |
 | Start fast | `svetra new` with templates | Planned |
