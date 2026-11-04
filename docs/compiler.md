@@ -22,6 +22,7 @@ svetra compile [FILE] [--check]
 |---|---|---|
 | `supabase/schemas/svetra.sql` | Tables, constraints, foreign keys, indexes, row-level security and policies | Supabase's [declarative schemas](https://supabase.com/docs/guides/local-development/declarative-database-schemas): `supabase db diff` turns it into migrations |
 | `src/svetra.gen.ts` | TypeScript types and Zod validators, one per entity | The React app |
+| `supabase/tests/svetra.test.sql` | Access tests: every person × action × row, checked as real users (see [Access tests](#access-tests)) | `supabase test db`, which runs it with [pgTAP](https://pgtap.org) |
 
 Version 0.1 doesn't make these paths configurable.
 
@@ -195,6 +196,76 @@ export type Account = z.infer<typeof Account>;
 - **Zod versions:** the output only uses APIs that exist in both Zod 3.23+ and Zod 4. It's checked with Zod 3.25 and 4.6.
 - **`int`** is `z.number().int()`, **`json`** is `z.unknown()`, and **`date`** is `z.string().date()`.
 - **In version 0.1, declared constraints are enforced by the database only.** Mirroring them in Zod is planned, with matching names, so a failure on either side reports the same constraint name.
+
+## Access tests
+
+`supabase/tests/svetra.test.sql` checks that the **database** enforces what `svetra.yaml` says, as real users. Run it against a local Supabase with `supabase test db`.
+
+It catches what the other outputs can't:
+- **Drift:** another migration adds a policy that widens access, turns row-level security off, or changes grants. `compile --check` only sees the files Svetra wrote; these tests see the database.
+- **Wrong assumptions:** a rule that reads right but doesn't do what was meant, such as `as: anon` hiding public rows from signed-in people.
+
+### Rules the tests follow
+
+- **Never as the service key or a superuser.** Every check runs as Supabase's `anon` or `authenticated` role, with the person's id in the JWT claims. Those keys bypass row-level security, so a test run with them proves nothing.
+- **Every failure is reported.** Each check is its own pgTAP test, so one broken rule doesn't hide the others. The output names the person, the action and the row, with what happened and what was expected.
+- **Nothing persists.** The file runs in one transaction that ends in `rollback`, and each check also runs inside its own sub-transaction, which is undone afterwards. A check that creates or deletes a row can't affect the next one.
+- **Existing data doesn't matter.** Checks only touch the test rows, by primary key, so seed data in the database neither breaks nor hides a result.
+- **Expected results come from `svetra.yaml`, not from the generated SQL.** The test generator evaluates each rule itself, with SQL's `null` semantics. A bug in the SQL compiler, or a hand edit to the database, shows up as a disagreement.
+
+### The people
+
+| Person | Signed in | Holds |
+|---|---|---|
+| `anon` | No | |
+| `alice` | Yes | Owns the `a` rows: every `user` field on them is alice |
+| `bob` | Yes | Owns the `b` rows |
+| One per global role, named after it, e.g. `admin` | Yes | That role. Owns nothing |
+| One per scoped role, e.g. `staff at Location a` | Yes | That role for the scope entity's `a` row. Owns nothing |
+
+Ids are fixed UUIDs: `5e7a0000-0000-4000-8000-0000000000NN`, where `NN` is the person's position in the table above, starting at `01` for alice. `anon` has no id.
+
+### The test rows
+
+Each entity that the API can reach gets two stored rows, `a` and `b`, plus two candidate rows for creating, `c` (like `a`) and `d` (like `b`).
+
+- **`a` and `b` differ in every field,** so a rule that compares a field sees both outcomes:
+  - `user` fields: alice on `a` and `c`, bob on `b` and `d`
+  - `ref` fields: the target's `a` row on `a` and `c`, its `b` row on `b` and `d`
+  - enums: the first value on `a` and `c`, the second on `b` and `d` (the first again if there's only one)
+  - `bool`: `true` on `a` and `c`, `false` on `b` and `d`
+  - other types: distinct values per row, e.g. `1` to `4` for numbers, `'svetra a'` to `'svetra d'` for text, and `2030-01-01` to `2030-01-04` for dates and timestamps
+- **Primary keys:** `uuid` keys are `5e7a0000-0000-4000-8001-EEEE0000000R`, where `EEEE` is the entity's position in the file and `R` is `a` to `d`. `text` keys are `'svetra a'` to `'svetra d'`, and `int` keys are `2000000001` to `2000000004`.
+- **Rows are inserted as the database owner, as test data,** in reference order, each as its own test. If a declared constraint rejects a generated value, that test fails with the database's message, naming the entity and row.
+- **Role grants** are inserted into `svetra.role_grants` the same way.
+
+### The checks
+
+For every reachable entity and every person:
+
+| Check | How it runs | Allowed when |
+|---|---|---|
+| see `a`, see `b` | `select` the row by primary key | Some `select` rule for the person's role holds on the row |
+| change `a`, change `b` | `update` the row, setting its primary key to itself | Some `select` rule **and** some `update` rule hold on the row. Postgres applies `select` rules to an update that finds rows with `where` |
+| delete `a`, delete `b` | `delete` the row by primary key | Some `select` rule **and** some `delete` rule hold on the row |
+| create `c`, create `d` | `insert` the candidate row | Some `insert` rule holds on the new row |
+
+- **Rules that apply to a person:** `anon` gets rules with `as: anon` or `as: anyone`. Everyone signed in gets `as: authenticated` (the default) or `as: anyone`.
+- **Private entities** get two checks for `anon` and for `alice`: see `a` and create `c`. Both must be denied, because the API has no grants on them.
+- **Results** are `allowed` when the statement touches the row, and `denied` when it touches nothing or is refused by row-level security (SQLSTATE `42501`). Anything else, such as a constraint error, is reported as `error <sqlstate>: <message>`, which never matches an expected result.
+
+**Test names** read as sentences: `ok 12 - bob can't see Booking a`, `ok 31 - staff at Location a can change Booking a`.
+
+### Example
+
+For the bookings app (two entities, two roles), people are `anon`, `alice`, `bob`, `admin` and `staff at Location a`. Each gets 8 checks on Booking and 8 on Location, so there are 80 checks, plus 7 test-data tests. A policy added by hand, such as `create policy leak on booking for select to authenticated using (true)`, makes `alice can't see Booking b`, `bob can't see Booking a` and `staff at Location a can't see Booking b` fail.
+
+### Limits in version 0.1
+
+- **Generated values can break declared constraints,** for example `ends > starts` when both get the same kind of value. The test-data test reports it. Choosing values that satisfy constraints is planned.
+- **Holes aren't tested,** because their bodies are written by the agent. Grants and rules on the tables they touch are.
+- **Text ordering** (`<`, `>` on `text`) is evaluated in byte order, which can differ from the database's collation. The generated values are all lowercase ASCII, where the two agree.
+- **One connection runs every check.** Each check switches role and claims inside its own sub-transaction, which resets both on exit. Separate connections per person are planned.
 
 ## Not in version 0.1
 
