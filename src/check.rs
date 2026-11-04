@@ -331,15 +331,12 @@ impl<'a> Checker<'a> {
     fn expressions(&mut self, doc: &Document) {
         let entities = self.entities.clone();
         for e in &doc.entities {
-            let scope = typeck::Scope {
-                entity: e,
-                entities: &entities,
-                policy: false,
-            };
+            let scope = typeck::Scope::new(e, &entities, false, &doc.roles);
             for c in &e.constraints {
-                if let Err(msg) = typeck::check(&c.expr, &scope) {
+                if let Err(problem) = typeck::check(&c.expr, &scope) {
+                    let (code, msg) = problem.split();
                     self.d(
-                        Code::Svt003,
+                        code,
                         format!("entities.{}.constraints.{}", e.name, c.name),
                         c.pos,
                         msg,
@@ -352,14 +349,11 @@ impl<'a> Checker<'a> {
             let Some(e) = entities.get(p.on.name.as_str()) else {
                 continue;
             };
-            let scope = typeck::Scope {
-                entity: e,
-                entities: &entities,
-                policy: true,
-            };
-            if let Err(msg) = typeck::check(&p.when, &scope) {
+            let scope = typeck::Scope::new(e, &entities, true, &doc.roles);
+            if let Err(problem) = typeck::check(&p.when, &scope) {
+                let (code, msg) = problem.split();
                 self.d(
-                    Code::Svt003,
+                    code,
                     format!("policies.{}.when", p.name),
                     p.pos,
                     msg,

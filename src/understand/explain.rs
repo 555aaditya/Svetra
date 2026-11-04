@@ -159,6 +159,16 @@ fn english(e: &Expr, st: Style) -> String {
             [r, f] => format!("the {} of its {}", label(f), label(r)),
             _ => p.join("."),
         },
+        Expr::Call(_, args) => match args.as_slice() {
+            [Expr::Str(role)] => format!("they have the {role} role"),
+            [Expr::Str(role), Expr::Path(p)] if p.len() == 1 && p[0] == "id" => {
+                format!("they have the {role} role for it")
+            }
+            [Expr::Str(role), Expr::Path(p)] if p.len() == 1 => {
+                format!("they have the {role} role for its {}", label(&p[0]))
+            }
+            _ => "they have the required role".into(),
+        },
         Expr::Neg(x) => format!("-{}", english(x, st)),
         Expr::Not(x) => format!("not ({})", english(x, st)),
         Expr::In(x, items) => {
