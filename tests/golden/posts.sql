@@ -40,5 +40,5 @@ create policy "posts_by_author_delete" on "public"."post"
   using ("author" = (select auth.uid()));
 
 create policy "public_read" on "public"."post"
-  for select to anon
+  for select to anon, authenticated
   using (true);

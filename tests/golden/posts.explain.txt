@@ -12,13 +12,10 @@ Who can see and change what
     - Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit.
   Posts
     - Signed-in people can see, create, change and delete a post when its author is them.
-    - People who aren't signed in can see posts.
+    - Anyone, signed in or not, can see posts.
     - Nobody can see posts any other way.
 
 Custom code
   write_audit
     - returns: nothing
     - can change: audit logs.
-
-Worth knowing
-  - People who aren't signed in can reach some posts that signed-in people may not be able to. Signing in could take access away; if posts should be public, make them public for everyone.
