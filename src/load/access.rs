@@ -37,12 +37,13 @@ impl Cx {
             Some(v) => match self.string(v, &format!("{path}.as"))?.as_str() {
                 "authenticated" => Role::Authenticated,
                 "anon" => Role::Anon,
+                "anyone" => Role::Anyone,
                 _ => {
                     self.report(
                         Code::Svt029,
                         &format!("{path}.as"),
                         v,
-                        "`as` must be `authenticated` or `anon`.".into(),
+                        "`as` must be `authenticated`, `anyone` or `anon`.".into(),
                         "Remove `as` to use authenticated.",
                     );
                     return None;
