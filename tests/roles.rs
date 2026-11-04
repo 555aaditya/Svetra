@@ -75,3 +75,24 @@ fn has_role_compiles_and_explains() {
         "{text}"
     );
 }
+
+#[test]
+fn roles_compile_to_a_private_store_and_a_definer_function() {
+    let (doc, _) = svetra::load::load(&app(""));
+    let sql = svetra::compile::sql::schema(&doc);
+    let roles_at = sql.find("-- Roles").expect("roles section");
+    assert!(
+        roles_at < sql.find("-- Access").unwrap(),
+        "roles come before access"
+    );
+    assert!(sql.contains("check (\"role\" in ('admin', 'staff'))"));
+    assert!(sql.contains("security definer set search_path = ''"));
+    assert!(
+        sql.contains("revoke all on function \"svetra\".\"has_role\"(text, uuid) from public;")
+    );
+    let (plain, _) = svetra::load::load(include_str!("fixtures/finledger.yaml"));
+    assert!(
+        !svetra::compile::sql::schema(&plain).contains("-- Roles"),
+        "no roles, no section"
+    );
+}
