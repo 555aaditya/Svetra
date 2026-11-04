@@ -1,0 +1,25 @@
+Bookings
+
+What your app stores
+  Locations
+    - name: text (required)
+  Bookings
+    - customer: a signed-in person (required)
+    - the location it belongs to (required)
+    - starts: a date and time (required)
+
+Roles
+  - admin: runs the business
+  - staff: works at one location (held for one location at a time)
+
+Who can see and change what
+  Locations
+    - People with the staff role for a location can see that location.
+    - People with the admin role can see, create and change locations.
+    - Nobody can see locations any other way.
+    - Nobody can delete locations directly.
+  Bookings
+    - Signed-in people can see and create a booking when its customer is them.
+    - People with the staff role for a booking's location can see and change that booking.
+    - People with the admin role can see, change and delete bookings.
+    - Nobody can see bookings any other way.
