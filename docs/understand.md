@@ -79,7 +79,11 @@ Anything that doesn't fit a pattern falls back to the expression itself in quote
 ### Roles
 
 - **A "Roles" section comes after "What your app stores".** It lists each role with its description, and says whether it's held for one row (for example, "staff: works at one location, held for one location at a time").
-- **When a policy's whole condition is a single `has_role`,** the sentence starts with the role instead of "Signed-in people": "People with the admin role can see, change and delete bookings." "People with the staff role for its location can see and change a booking."
+- **When a policy's whole condition is a single `has_role`,** the sentence starts with the role instead of "Signed-in people":
+  - "People with the admin role can see, change and delete bookings."
+  - "People with the staff role for a booking's location can see and change that booking."
+  - On the scope entity itself: "People with the staff role for a location can see that location."
+- **A role check inside a larger condition** reads "they have the admin role" or "they have the staff role for its location".
 - `graph` draws each role as a `🎭 role` node, with access edges from it for those policies.
 - `context` adds one line: `roles admin; staff(Location)`.
 

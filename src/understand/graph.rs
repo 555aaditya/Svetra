@@ -23,6 +23,9 @@ pub fn graph(doc: &Document) -> String {
     if has_anyone {
         out += "  anyone((\"🌐 Anyone\"))\n";
     }
+    for r in &doc.roles {
+        out += &format!("  r_{}((\"🎭 {}\"))\n", r.name, r.name);
+    }
     for e in &doc.entities {
         let fields: Vec<String> = e
             .fields
@@ -59,17 +62,31 @@ pub fn graph(doc: &Document) -> String {
             }
         }
     }
-    for (role, node) in [
-        (Role::Authenticated, "person"),
-        (Role::Anon, "visitor"),
-        (Role::Anyone, "anyone"),
-    ] {
+    // Each policy's arrow starts at whoever it's for: a role, if its whole condition is one
+    // has_role check, otherwise the signed-in person, the logged-out visitor or anyone.
+    let source = |p: &Policy| match crate::expr::parse(&p.when) {
+        Ok(crate::expr::Expr::Call(_, args)) => match args.first() {
+            Some(crate::expr::Expr::Str(r)) => format!("r_{r}"),
+            _ => "person".to_string(),
+        },
+        _ => match p.role {
+            Role::Authenticated => "person".to_string(),
+            Role::Anon => "visitor".to_string(),
+            Role::Anyone => "anyone".to_string(),
+        },
+    };
+    let mut nodes: Vec<String> = ["person", "visitor", "anyone"]
+        .iter()
+        .map(|n| n.to_string())
+        .collect();
+    nodes.extend(doc.roles.iter().map(|r| format!("r_{}", r.name)));
+    for node in &nodes {
         for e in &doc.entities {
             let mut verbs: Vec<&str> = Vec::new();
             for p in doc
                 .policies
                 .iter()
-                .filter(|p| p.role == role && p.on.name == e.name)
+                .filter(|p| &source(p) == node && p.on.name == e.name)
             {
                 for a in &p.allow {
                     let v = match a {

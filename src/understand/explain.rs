@@ -21,6 +21,24 @@ pub fn explain(doc: &Document, diags: &[Diagnostic]) -> String {
             out += &format!("    - {}\n", field_line(f));
         }
     }
+    if !doc.roles.is_empty() {
+        out += "\nRoles\n";
+        for r in &doc.roles {
+            let mut line = r.name.clone();
+            if let Some(d) = &r.description {
+                let mut c = d.chars();
+                let d = c.next().map_or(String::new(), |f| {
+                    f.to_lowercase().collect::<String>() + c.as_str()
+                });
+                line += &format!(": {d}");
+            }
+            if let Some(s) = &r.scope {
+                let one = singular(&s.name);
+                line += &format!(" (held for one {one} at a time)");
+            }
+            out += &format!("  - {line}\n");
+        }
+    }
     let rules: Vec<String> = doc
         .entities
         .iter()
@@ -302,6 +320,35 @@ fn access(e: &Entity, doc: &Document, _entities: &HashMap<&str, &Entity>) -> Vec
             .map(String::from)
             .collect();
         let parsed = expr::parse(&p.when).expect("validated expression");
+        // A condition that is only a role check reads best with the role as the subject.
+        if let Expr::Call(_, args) = &parsed {
+            let line = match args.as_slice() {
+                [Expr::Str(r)] => format!(
+                    "People with the {r} role can {} {many}.",
+                    list(&verbs, "and")
+                ),
+                [Expr::Str(r), Expr::Path(f)]
+                    if f.len() == 1 && e.fields.iter().any(|x| x.primary && x.name == f[0]) =>
+                {
+                    format!(
+                        "People with the {r} role for {} {one} can {} that {one}.",
+                        article(&one),
+                        list(&verbs, "and")
+                    )
+                }
+                [Expr::Str(r), Expr::Path(f)] if f.len() == 1 => {
+                    format!(
+                        "People with the {r} role for {} {one}'s {} can {} that {one}.",
+                        article(&one),
+                        label(&f[0]),
+                        list(&verbs, "and")
+                    )
+                }
+                _ => format!("Some people can {} {many}.", list(&verbs, "and")),
+            };
+            out.push(line);
+            continue;
+        }
         let who = match p.role {
             Role::Authenticated => "Signed-in people",
             Role::Anon => "People who aren't signed in",
