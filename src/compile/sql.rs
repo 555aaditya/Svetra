@@ -77,6 +77,7 @@ fn policy(p: &Policy, entities: &HashMap<&str, &Entity>) -> Vec<String> {
     let role = match p.role {
         Role::Authenticated => "authenticated",
         Role::Anon => "anon",
+        Role::Anyone => "anon, authenticated",
     };
     p.allow
         .iter()

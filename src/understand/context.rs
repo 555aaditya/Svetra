@@ -56,10 +56,10 @@ pub fn context(doc: &Document) -> String {
                 Action::Delete => "delete",
             })
             .collect();
-        let role = if p.role == Role::Anon {
-            "anon"
-        } else {
-            "authenticated"
+        let role = match p.role {
+            Role::Authenticated => "authenticated",
+            Role::Anon => "anon",
+            Role::Anyone => "anyone",
         };
         out += &format!(
             "policy {}: {} {} {role} when {}\n",

@@ -294,7 +294,8 @@ fn access(e: &Entity, doc: &Document, _entities: &HashMap<&str, &Entity>) -> Vec
         let parsed = expr::parse(&p.when).expect("validated expression");
         let who = match p.role {
             Role::Authenticated => "Signed-in people",
-            Role::Anon => "Anyone, even without signing in,",
+            Role::Anon => "People who aren't signed in",
+            Role::Anyone => "Anyone, signed in or not,",
         };
         let what = if matches!(parsed, Expr::Bool(true)) {
             many.clone()

@@ -13,10 +13,14 @@ pub fn graph(doc: &Document) -> String {
             .flat_map(|e| &e.fields)
             .any(|f| f.ty == FieldType::User);
     let has_anon = doc.policies.iter().any(|p| p.role == Role::Anon);
+    let has_anyone = doc.policies.iter().any(|p| p.role == Role::Anyone);
     if has_user {
         out += "  person((\"👤 Signed-in person\"))\n";
     }
     if has_anon {
+        out += "  visitor((\"🚪 Not signed in\"))\n";
+    }
+    if has_anyone {
         out += "  anyone((\"🌐 Anyone\"))\n";
     }
     for e in &doc.entities {
@@ -55,7 +59,11 @@ pub fn graph(doc: &Document) -> String {
             }
         }
     }
-    for (role, node) in [(Role::Authenticated, "person"), (Role::Anon, "anyone")] {
+    for (role, node) in [
+        (Role::Authenticated, "person"),
+        (Role::Anon, "visitor"),
+        (Role::Anyone, "anyone"),
+    ] {
         for e in &doc.entities {
             let mut verbs: Vec<&str> = Vec::new();
             for p in doc

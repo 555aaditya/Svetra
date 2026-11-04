@@ -94,8 +94,12 @@ pub enum Action {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
+    /// Signed-in people only (`to authenticated`).
     Authenticated,
+    /// People who aren't signed in only (`to anon`). Rarely what you want: signed-in people get less.
     Anon,
+    /// Everyone, signed in or not (`to anon, authenticated`).
+    Anyone,
 }
 
 #[derive(Debug, Clone, PartialEq)]

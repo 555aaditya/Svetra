@@ -129,7 +129,7 @@ Using a form where it isn't allowed is `SVT003`.
 | `on` | yes | The entity the policy protects (`SVT002` if unknown) |
 | `allow` | yes | Non-empty list of `select`, `insert`, `update`, `delete` |
 | `when` | yes | Boolean expression a row must satisfy |
-| `as` | no | `authenticated` (default) or `anon` |
+| `as` | no | `authenticated` (default): signed-in people. `anyone`: everyone, signed in or not. `anon`: only people who aren't signed in, which is rarely right, because signed-in people then get less (`SVT007`) |
 
 - **Row-level security is on for every table.** That holds whether or not a policy exists, so access is denied by default.
 - **Each action becomes one PostgreSQL policy**, named `<policy>_<action>` when the policy allows more than one action:

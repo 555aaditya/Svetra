@@ -273,9 +273,10 @@
           "type": "string"
         },
         "as": {
-          "description": "Who the policy applies to. Default: authenticated.",
+          "description": "Who the policy applies to: authenticated (signed-in people, the default), anyone (signed in or not) or anon (only people who aren't signed in).",
           "enum": [
             "authenticated",
+            "anyone",
             "anon"
           ]
         }

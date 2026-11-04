@@ -134,7 +134,7 @@ Constraints and policy conditions translate like this:
 - `insert` puts it in `with check (...)`.
 - `update` puts it in both.
 - A policy with one action keeps its name. With more than one action, each gets `<policy>_<action>`.
-- `as: anon` becomes `to anon`; the default is `to authenticated`.
+- The default becomes `to authenticated`. `as: anyone` becomes `to anon, authenticated`, and `as: anon` becomes `to anon`. In Supabase, signed-in people run as `authenticated`, not `anon`, so a policy only `to anon` doesn't apply to them.
 
 ### Example
 

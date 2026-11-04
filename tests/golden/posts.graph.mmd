@@ -1,10 +1,10 @@
 flowchart LR
   person(("👤 Signed-in person"))
-  anyone(("🌐 Anyone"))
+  visitor(("🚪 Not signed in"))
   e_AuditLog["🔒 AuditLog<br/>note: text"]
   e_Post["Post<br/>author: user!<br/>body: text"]
   h_write_audit(["⚙️ write_audit"])
   e_Post -- author --> person
   person -. "sees, creates, changes, deletes" .-> e_Post
-  anyone -. "sees" .-> e_Post
+  visitor -. "sees" .-> e_Post
   h_write_audit == changes ==> e_AuditLog

@@ -138,3 +138,19 @@ fn optional_fields_are_nullable_and_types_map_as_specified() {
     assert!(ts.contains("  price: decimal(10, 0).nullable(),"));
     assert!(ts.contains("export type T = z.infer<typeof T>;"));
 }
+
+#[test]
+fn as_anyone_covers_signed_in_and_logged_out_people() {
+    let src = format!(
+        "{HEAD}entities:\n  Post:\n    fields:\n      id: {{ type: uuid, primary: true }}\n      author: {{ type: user, required: true }}\n    indexes:\n      - [author]\n\
+         policies:\n  read_all:\n    on: Post\n    allow: [select]\n    when: \"true\"\n    as: anyone\n  write_own:\n    on: Post\n    allow: [insert]\n    when: \"author == auth.user\"\n"
+    );
+    let sql = compile(&src);
+    assert!(sql.contains("create policy \"read_all\" on \"public\".\"post\"\n  for select to anon, authenticated\n  using (true);"));
+    let (doc, diags) = load(&src);
+    let text = svetra::understand::explain::explain(&doc, &diags);
+    assert!(
+        text.contains("Anyone, signed in or not, can see posts."),
+        "{text}"
+    );
+}
