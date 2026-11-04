@@ -40,8 +40,15 @@ Every table is closed by default. Here, people can read only their own accounts,
 
 ## What works today: `svetra validate`
 
+**Install** on macOS or Linux; it downloads a release and checks its SHA-256:
+
 ```sh
-cargo install --git https://github.com/555aaditya/Svetra
+curl -fsSL https://raw.githubusercontent.com/555aaditya/Svetra/main/install.sh | sh
+```
+
+Or build from source with Rust 1.88+: `cargo install --git https://github.com/555aaditya/Svetra`. Windows builds are on the [releases page](https://github.com/555aaditya/Svetra/releases).
+
+```sh
 svetra validate svetra.yaml          # readable output
 svetra validate svetra.yaml --json   # for agents
 ```
