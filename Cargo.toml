@@ -1,9 +1,15 @@
 [package]
 name = "svetra"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
-description = "Design the system with the AI. Svetra compiles it to the low level."
+description = "You design the data, Svetra makes it safe: compiles a small svetra.yaml into locked-down Postgres, row-level security and Zod types for Supabase."
+readme = "README.md"
+homepage = "https://github.com/555aaditya/Svetra"
+keywords = ["supabase", "postgres", "row-level-security", "compiler", "cli"]
+categories = ["command-line-utilities", "database", "development-tools"]
+# The crate ships the source, the specs and the schema; not the whitepaper or the test fixtures.
+exclude = ["Svetra.pdf", "tests/", "scripts/", ".github/"]
 license = "MIT"
 repository = "https://github.com/555aaditya/Svetra"
 
