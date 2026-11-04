@@ -229,10 +229,10 @@ Ids are fixed UUIDs: `5e7a0000-0000-4000-8000-0000000000NN`, where `NN` is the p
 
 Each entity that the API can reach gets two stored rows, `a` and `b`, plus two candidate rows for creating, `c` (like `a`) and `d` (like `b`).
 
-- **`a` and `b` differ in every field,** so a rule that compares a field sees both outcomes:
+- **`a` and `b` differ in every field,** so a rule that compares a field sees both outcomes. `c` and `d` keep the owners and links of `a` and `b`, and differ from them elsewhere, so creating one doesn't collide with a `unique` rule:
   - `user` fields: alice on `a` and `c`, bob on `b` and `d`
-  - `ref` fields: the target's `a` row on `a` and `c`, its `b` row on `b` and `d`
-  - enums: the first value on `a` and `c`, the second on `b` and `d` (the first again if there's only one)
+  - `ref` fields: the first ref to each entity points at the target's `a` row on `a` and `c`, and its `b` row on `b` and `d`. A second ref to the same entity points at the other row, so `source != destination` holds
+  - enums: the values in turn, `a` getting the first, `b` the second, `c` the third and `d` the fourth, wrapping around when there are fewer
   - `bool`: `true` on `a` and `c`, `false` on `b` and `d`
   - other types: distinct values per row, e.g. `1` to `4` for numbers, `'svetra a'` to `'svetra d'` for text, and `2030-01-01` to `2030-01-04` for dates and timestamps
 - **Primary keys:** `uuid` keys are `5e7a0000-0000-4000-8001-EEEE0000000R`, where `EEEE` is the entity's position in the file and `R` is `a` to `d`. `text` keys are `'svetra a'` to `'svetra d'`, and `int` keys are `2000000001` to `2000000004`.
