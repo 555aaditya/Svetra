@@ -8,7 +8,7 @@ image="${PG_IMAGE:-postgres:16}"
 work="$(mktemp -d)"
 trap 'docker rm -f svetra-pg-check >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 
-for name in finledger posts; do
+for name in finledger posts bookings; do
   docker rm -f svetra-pg-check >/dev/null 2>&1 || true
   docker run -d --name svetra-pg-check -e POSTGRES_PASSWORD=pw "$image" >/dev/null
   for _ in $(seq 1 60); do docker exec svetra-pg-check pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done

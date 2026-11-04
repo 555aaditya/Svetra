@@ -154,3 +154,12 @@ fn as_anyone_covers_signed_in_and_logged_out_people() {
         "{text}"
     );
 }
+
+/// Roles: checked on Postgres 16 by scripts/pg-check.sh as customers, staff at two locations, an
+/// admin, a user with no role and a logged-out visitor, with a readback after every write.
+#[test]
+fn bookings_sql_and_types_match_golden_files() {
+    let src = include_str!("fixtures/bookings.yaml");
+    assert_eq!(compile(src), include_str!("golden/bookings.sql"));
+    assert_eq!(types(src), include_str!("golden/bookings.ts"));
+}

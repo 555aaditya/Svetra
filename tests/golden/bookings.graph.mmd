@@ -1,0 +1,13 @@
+flowchart LR
+  person(("👤 Signed-in person"))
+  r_admin(("🎭 admin"))
+  r_staff(("🎭 staff"))
+  e_Location["Location<br/>name: text!"]
+  e_Booking["Booking<br/>customer: user!<br/>location: → Location!<br/>starts: timestamp!"]
+  e_Booking -- customer --> person
+  e_Booking -- location --> e_Location
+  person -. "sees, creates" .-> e_Booking
+  r_admin -. "sees, creates, changes" .-> e_Location
+  r_admin -. "sees, changes, deletes" .-> e_Booking
+  r_staff -. "sees" .-> e_Location
+  r_staff -. "sees, changes" .-> e_Booking

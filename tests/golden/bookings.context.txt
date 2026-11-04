@@ -1,0 +1,9 @@
+Bookings (svetra 0.1)
+roles admin; staff(Location)
+Location: id uuid pk; name text!
+Booking: id uuid pk; customer user!; location ref(Location)!; starts timestamp! | index (customer); (location)
+policy customers_see_own: Booking select,insert authenticated when customer == auth.user
+policy staff_manage_local: Booking select,update authenticated when has_role('staff', location)
+policy admins_manage_all: Booking select,update,delete authenticated when has_role('admin')
+policy staff_see_location: Location select authenticated when has_role('staff', id)
+policy admins_see_locations: Location select,insert,update authenticated when has_role('admin')

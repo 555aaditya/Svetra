@@ -1,0 +1,28 @@
+svetra: "0.1"
+system: Bookings
+
+roles:
+  admin: { description: "Runs the business" }
+  staff: { description: "Works at one location", scope: Location }
+
+entities:
+  Location:
+    fields:
+      id:   { type: uuid, primary: true }
+      name: { type: text, required: true }
+  Booking:
+    fields:
+      id:       { type: uuid, primary: true }
+      customer: { type: user, required: true }
+      location: { type: ref, entity: Location, required: true }
+      starts:   { type: timestamp, required: true }
+    indexes:
+      - [customer]
+      - [location]
+
+policies:
+  customers_see_own:    { on: Booking, allow: [select, insert], when: "customer == auth.user" }
+  staff_manage_local:   { on: Booking, allow: [select, update], when: "has_role('staff', location)" }
+  admins_manage_all:    { on: Booking, allow: [select, update, delete], when: "has_role('admin')" }
+  staff_see_location:   { on: Location, allow: [select], when: "has_role('staff', id)" }
+  admins_see_locations: { on: Location, allow: [select, insert, update], when: "has_role('admin')" }
