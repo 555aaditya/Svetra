@@ -21,6 +21,16 @@ pub struct Document {
     pub entities: Vec<Entity>,
     pub policies: Vec<Policy>,
     pub holes: Vec<Hole>,
+    pub roles: Vec<RoleDef>,
+}
+
+/// A role people can hold: global (`admin`), or scoped to rows of one entity (`staff` at a `Location`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoleDef {
+    pub name: String,
+    pub pos: Pos,
+    pub description: Option<String>,
+    pub scope: Option<NameRef>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

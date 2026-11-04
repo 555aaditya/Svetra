@@ -120,3 +120,14 @@ fn anon_only_access_is_svt007_but_anyone_is_fine() {
     let same = "  all_signed_in:\n    on: A\n    allow: [select]\n    when: \"true\"\n";
     assert!(codes(&format!("{entity}policies:\n{own}{public}{same}")).is_empty());
 }
+
+#[test]
+fn roles_need_good_names_and_a_uuid_scope() {
+    let base = format!(
+        "{HEAD}entities:\n  A:\n    fields:\n      id: {{ type: uuid, primary: true }}\n  Code:\n    private: true\n    fields:\n      code: {{ type: text, primary: true }}\n{OK_POLICY}"
+    );
+    assert!(codes(&format!("{base}roles:\n  admin: {{ description: \"Runs it\" }}\n  staff: {{ scope: A }}\n  viewer:\n")).iter().all(|c| *c == "SVT004"));
+    assert!(codes(&format!("{base}roles:\n  Admin: {{}}\n")).contains(&"SVT021"));
+    assert!(codes(&format!("{base}roles:\n  staff: {{ scope: Nope }}\n")).contains(&"SVT002"));
+    assert!(codes(&format!("{base}roles:\n  staff: {{ scope: Code }}\n")).contains(&"SVT006"));
+}
