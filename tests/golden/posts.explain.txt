@@ -19,3 +19,6 @@ Custom code
   write_audit
     - returns: nothing
     - can change: audit logs.
+
+Worth knowing
+  - People who aren't signed in can reach some posts that signed-in people may not be able to. Signing in could take access away; if posts should be public, make them public for everyone.

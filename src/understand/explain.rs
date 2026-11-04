@@ -414,6 +414,17 @@ fn note(d: &Diagnostic, doc: &Document) -> String {
             let what = target.map_or_else(String::new, |p| plural(&p.on.name));
             format!("A rule about who can see {what} does nothing, because {what} are private.")
         }
+        Code::Svt007 => {
+            let target = d
+                .path
+                .strip_prefix("policies.")
+                .and_then(|p| p.split('.').next())
+                .and_then(|name| doc.policies.iter().find(|p| p.name == name));
+            let what = target.map_or_else(String::new, |p| plural(&p.on.name));
+            format!(
+                "People who aren't signed in can reach some {what} that signed-in people may not be able to. Signing in could take access away; if {what} should be public, make them public for everyone."
+            )
+        }
         _ => d.message.clone(),
     }
 }

@@ -2,6 +2,7 @@
 //! access, money, indexes and expressions.
 
 use crate::diag::{Code, Diagnostic};
+use crate::expr;
 use crate::model::*;
 use crate::typeck;
 use std::collections::{HashMap, HashSet};
@@ -22,6 +23,7 @@ pub fn check(doc: &Document) -> Vec<Diagnostic> {
     ck.policies(doc);
     ck.holes(doc);
     ck.access(doc);
+    ck.anon_only(doc);
     ck.expressions(doc);
     ck.out
 }
@@ -334,6 +336,44 @@ impl<'a> Checker<'a> {
                     msg,
                     "Fix the expression; see Expressions in docs/format.md.",
                 );
+            }
+        }
+    }
+
+    /// SVT007: a logged-out-only policy that grants more than signed-in people get. Signed-in
+    /// people are covered only by a policy for the same action whose condition is the same
+    /// expression or `true`; anything narrower means signing in would take access away.
+    fn anon_only(&mut self, doc: &Document) {
+        let cond = |s: &str| expr::parse(s).ok();
+        for p in doc.policies.iter().filter(|p| p.role == Role::Anon) {
+            let mine = cond(&p.when);
+            for a in &p.allow {
+                let covered = doc.policies.iter().any(|q| {
+                    let theirs = cond(&q.when);
+                    q.on.name == p.on.name
+                        && q.role != Role::Anon
+                        && q.allow.contains(a)
+                        && (theirs == Some(expr::Expr::Bool(true)) || theirs == mine)
+                });
+                if !covered {
+                    let verb = match a {
+                        Action::Select => "see",
+                        Action::Insert => "create",
+                        Action::Update => "change",
+                        Action::Delete => "delete",
+                    };
+                    let msg = format!(
+                        "Logged-out visitors can {verb} {} rows through `{}` that signed-in people may not be able to {verb}.",
+                        p.on.name, p.name
+                    );
+                    self.d(
+                        Code::Svt007,
+                        format!("policies.{}.as", p.name),
+                        p.pos,
+                        msg,
+                        "Use `as: anyone` so signed-in people get the same access.",
+                    );
+                }
             }
         }
     }
