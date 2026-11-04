@@ -36,6 +36,7 @@ fn schema_keys_match_the_loader() {
         set(load::PARAM_SPEC_KEYS),
         "param spec"
     );
+    assert_eq!(props(&defs["role"]), set(load::ROLE_KEYS), "role");
 }
 
 #[test]

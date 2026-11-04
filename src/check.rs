@@ -22,6 +22,7 @@ pub fn check(doc: &Document) -> Vec<Diagnostic> {
     }
     ck.policies(doc);
     ck.holes(doc);
+    ck.roles(doc);
     ck.access(doc);
     ck.anon_only(doc);
     ck.expressions(doc);
@@ -115,6 +116,9 @@ impl<'a> Checker<'a> {
         }
         for h in &doc.holes {
             self.name("Hole", &h.name, format!("holes.{}", h.name), h.pos, false);
+        }
+        for r in &doc.roles {
+            self.name("Role", &r.name, format!("roles.{}", r.name), r.pos, false);
         }
     }
 
@@ -236,6 +240,31 @@ impl<'a> Checker<'a> {
             );
         }
         found
+    }
+
+    /// A scoped role needs an existing scope entity (SVT002) with a uuid primary key (SVT006).
+    fn roles(&mut self, doc: &Document) {
+        for r in &doc.roles {
+            let Some(scope) = &r.scope else { continue };
+            if let Some(e) = self.reference(scope, &format!("roles.{}.scope", r.name))
+                && !e
+                    .fields
+                    .iter()
+                    .any(|f| f.primary && f.ty == FieldType::Uuid)
+            {
+                let msg = format!(
+                    "Role `{}` is scoped to {}, whose primary key isn't a uuid.",
+                    r.name, e.name
+                );
+                self.d(
+                    Code::Svt006,
+                    format!("roles.{}.scope", r.name),
+                    scope.pos,
+                    msg,
+                    "Scope roles to an entity with id: { type: uuid, primary: true }.",
+                );
+            }
+        }
     }
 
     fn policies(&mut self, doc: &Document) {

@@ -50,6 +50,16 @@
       "additionalProperties": {
         "$ref": "#/$defs/hole"
       }
+    },
+    "roles": {
+      "description": "Roles people can hold, global or scoped to rows of one entity.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/role"
+      }
     }
   },
   "$defs": {
@@ -435,6 +445,24 @@
         },
         "entity": {
           "description": "The entity a ref points to.",
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        }
+      }
+    },
+    "role": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "Plain words, used by svetra explain.",
+          "type": "string"
+        },
+        "scope": {
+          "description": "An entity: the role is held for one row of it.",
           "type": "string",
           "pattern": "^[A-Z][A-Za-z0-9]*$"
         }

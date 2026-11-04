@@ -12,7 +12,8 @@ mod field;
 pub const FORMAT_VERSION: &str = "0.1";
 
 // The keys each part of the format accepts. The JSON Schema is tested against these.
-pub const TOP_KEYS: &[&str] = &["svetra", "system", "entities", "policies", "holes"];
+pub const TOP_KEYS: &[&str] = &["svetra", "system", "entities", "policies", "holes", "roles"];
+pub const ROLE_KEYS: &[&str] = &["description", "scope"];
 pub const ENTITY_KEYS: &[&str] = &["fields", "constraints", "unique", "indexes", "private"];
 pub const FIELD_KEYS: &[&str] = &[
     "type",
@@ -78,6 +79,7 @@ fn empty_document() -> Document {
         entities: Vec::new(),
         policies: Vec::new(),
         holes: Vec::new(),
+        roles: Vec::new(),
     }
 }
 
@@ -260,7 +262,37 @@ impl Cx {
         {
             doc.holes = hs.iter().filter_map(|(n, h)| self.hole(n, h)).collect();
         }
+        if let Some(v) = k.get("roles")
+            && let Some(rs) = self.map(v, "roles")
+        {
+            doc.roles = rs.iter().filter_map(|(n, r)| self.role(n, r)).collect();
+        }
         doc
+    }
+
+    fn role(&mut self, name: &Node, body: &Node) -> Option<RoleDef> {
+        let rname = self.string(name, "roles")?;
+        let path = format!("roles.{rname}");
+        let mut role = RoleDef {
+            name: rname,
+            pos: pos(name),
+            description: None,
+            scope: None,
+        };
+        if matches!(body.value, Value::Null) {
+            return Some(role);
+        }
+        let entries = self.map(body, &path)?;
+        let k = self.keys(entries, &path, ROLE_KEYS);
+        if let Some(v) = k.get("description") {
+            role.description = self.string(v, &format!("{path}.description"));
+        }
+        if let Some(v) = k.get("scope") {
+            role.scope = self
+                .string(v, &format!("{path}.scope"))
+                .map(|name| NameRef { name, pos: pos(v) });
+        }
+        Some(role)
     }
 
     fn version(&mut self, v: &Node, doc: &mut Document) {
