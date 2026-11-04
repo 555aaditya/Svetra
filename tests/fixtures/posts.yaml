@@ -20,7 +20,7 @@ policies:
     on: Post
     allow: [select]
     when: "true"
-    as: anon
+    as: anyone
 holes:
   write_audit:
     kind: function

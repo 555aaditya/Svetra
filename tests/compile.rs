@@ -46,7 +46,7 @@ fn policies_split_by_action_with_the_right_clauses() {
     assert!(sql.contains(
         "for update to authenticated\n  using (\"author\" = (select auth.uid()))\n  with check ("
     ));
-    assert!(sql.contains("create policy \"public_read\" on \"public\".\"post\"\n  for select to anon\n  using (true);"));
+    assert!(sql.contains("create policy \"public_read\" on \"public\".\"post\"\n  for select to anon, authenticated\n  using (true);"));
 }
 
 #[test]
