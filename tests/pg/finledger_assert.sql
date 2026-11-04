@@ -32,6 +32,7 @@ do $$ begin
 end $$;
 set request.jwt.claim.sub = 'b0000000-0000-0000-0000-000000000000';
 do $$ begin
+  if (select balance from public.account) <> 50 then raise exception 'alice''s update changed bob''s balance'; end if;
   if (select count(*) from public.account) <> 1 then raise exception 'bob should see 1 account'; end if;
   if (select count(*) from public.transaction) <> 1 then raise exception 'bob should see the transaction he received'; end if;
 end $$;
@@ -45,3 +46,9 @@ do $$ begin
   if (select count(*) from public.account) <> 0 then raise exception 'anon should see nothing'; end if;
 end $$;
 reset role;
+
+-- Read back as the table owner, bypassing row-level security: the blocked writes left no trace.
+do $$ begin
+  if (select count(*) from public.account) <> 2 then raise exception 'a blocked insert created an account'; end if;
+  if (select sum(balance) from public.account) <> 150 then raise exception 'a blocked update changed a balance'; end if;
+end $$;
