@@ -75,6 +75,9 @@ svetra compile svetra.yaml --check  # writes nothing; fails if they are stale or
 |---|---|
 | `supabase/schemas/svetra.sql` | Tables, constraints, foreign keys and indexes; row-level security on every table; one policy per action. Supabase's `supabase db diff` turns it into migrations |
 | `src/svetra.gen.ts` | One Zod validator and TypeScript type per entity. Money stays exact: it's a string, never a float |
+| `supabase/tests/svetra.test.sql` | Access tests for `supabase test db`: every person × action × row, run as real signed-in and logged-out users, never the service key. Every failure is reported, and nothing persists |
+
+**The access tests check your database, not just the files.** If another migration adds a policy that lets everyone read bookings, `supabase test db` fails with `alice can't see Booking b` and every other check that broke.
 
 Roles work too: declare `admin`, or `staff` scoped to one location, and use `has_role('staff', location)` in a rule. `explain` then says "People with the staff role for a booking's location can see and change that booking."
 
@@ -102,6 +105,7 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 | Compiler | PostgreSQL tables, row-level security, TypeScript types and Zod validators for Supabase and React | **Done** |
 | Understand | `svetra explain` (your app in plain English), `svetra graph` (a diagram), `svetra context` (compact context for agents) | **Done** |
 | Roles and teams | `roles:` (global like `admin`, or scoped like `staff` at one location) and `has_role()` in rules, compiled to a private grants table and a locked-down check function | **Done** |
+| Access tests | Generated pgTAP tests: every person × action × row, as real users, with every failure reported | **Done** |
 | Agents | The Svetra skill for Claude Code, Cursor and Codex; an MCP server; hole files and recipes | Planned |
 | Automations | Scheduled jobs, triggers when data changes, and incoming webhooks | Planned |
 | Start fast | `svetra new` with templates | Planned |

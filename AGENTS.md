@@ -25,11 +25,11 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 | `src/typeck.rs` | Expression typing (SVT003) |
 | `src/check.rs` | Whole-document rules: names, duplicates, references, access, money, indexes |
 | `src/report.rs` | `validate()`, plus human and JSON output |
-| `src/compile/` | `svetra compile`: names and quoting (`names.rs`), expressions to SQL (`expr.rs`), the SQL schema (`sql.rs`), TypeScript and Zod (`ts.rs`), plus the entry point with header and revision (`mod.rs`) |
+| `src/compile/` | `svetra compile`: names and quoting (`names.rs`), expressions to SQL (`expr.rs`), the SQL schema (`sql.rs`), TypeScript and Zod (`ts.rs`), access tests with their own rule evaluator (`access_tests.rs`), plus the entry point with header and revision (`mod.rs`) |
 | `src/main.rs` | The CLI |
 | `schema/svetra.schema.json` | The JSON Schema for editors. Hand-written; `tests/schema.rs` fails if it drifts from the loader |
 | `tests/` | Integration tests. `tests/fixtures/` holds example `svetra.yaml` files, and `tests/golden/` holds their expected compiler output, compared byte for byte |
-| `tests/pg/`, `scripts/pg-check.sh` | Compiles the fixtures, applies the SQL to PostgreSQL 16 with a Supabase stand-in, and asserts behaviour: who sees which rows, and what's rejected |
+| `tests/pg/`, `scripts/pg-check.sh` | Compiles the fixtures, applies the SQL to PostgreSQL 16 with a Supabase stand-in, and asserts behaviour: who sees which rows, and what's rejected. Then runs the generated access tests with pgTAP, and checks that a leaking policy makes them fail |
 
 ## Commands
 
