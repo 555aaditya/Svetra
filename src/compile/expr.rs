@@ -19,6 +19,14 @@ pub fn sql(e: &Expr, cx: &Ctx) -> String {
         Expr::Bool(b) => b.to_string(),
         Expr::Null => "null".into(),
         Expr::Path(p) => path(p, cx),
+        // has_role: a global role is checked once per query; a scoped role per row.
+        Expr::Call(_, args) => match args.as_slice() {
+            [Expr::Str(role)] => format!("(select \"svetra\".\"has_role\"({}))", lit(role)),
+            [Expr::Str(role), scope] => {
+                format!("\"svetra\".\"has_role\"({}, {})", lit(role), sql(scope, cx))
+            }
+            _ => unreachable!("typeck checks has_role's arguments"),
+        },
         Expr::Neg(x) => format!("-{}", child(x, 7, cx)),
         // Always parenthesise a compound operand: `not (a = b)` reads clearly in a diff.
         Expr::Not(x) => format!("not {}", child(x, 8, cx)),

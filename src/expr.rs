@@ -13,6 +13,8 @@ pub enum Expr {
     Not(Box<Expr>),
     Bin(Op, Box<Expr>, Box<Expr>),
     In(Box<Expr>, Vec<Expr>),
+    /// A function call. Version 0.1 has one: `has_role('role')` or `has_role('role', path)`.
+    Call(String, Vec<Expr>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,6 +283,17 @@ impl Parser {
                         message: format!("unexpected `{w}`"),
                         at,
                     });
+                }
+                _ if self.eat_sym("(") => {
+                    let mut args = Vec::new();
+                    if !self.eat_sym(")") {
+                        args.push(self.or()?);
+                        while self.eat_sym(",") {
+                            args.push(self.or()?);
+                        }
+                        self.expect(")")?;
+                    }
+                    Expr::Call(w, args)
                 }
                 _ => {
                     let mut path = vec![w];
