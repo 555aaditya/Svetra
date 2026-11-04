@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (2026-11-04)
+
+Access tests: your database proves who can see what.
 
 - **Access tests.** `svetra compile` also writes `supabase/tests/svetra.test.sql`, run with `supabase test db`. It checks every person × action × row as real users (`anon` and signed-in, never the service key), with expected results evaluated from `svetra.yaml` rather than the generated SQL. It catches drift, such as a migration adding a permissive policy or turning row-level security off, and reports every failing check, not just the first.
+- **Checked on a real local Supabase** (Postgres 17) with `supabase test db`: all 87 bookings checks pass, and a policy added by hand that lets everyone read bookings fails exactly the three checks it breaks. CI runs the same check on PostgreSQL 16 for every PR.
 
 ## 0.1.0 (2026-11-04)
 
