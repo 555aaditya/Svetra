@@ -59,7 +59,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           notes="$(awk '/^## /{n++} n==1' CHANGELOG.md | tail -n +2)"
-          gh release create "$GITHUB_REF_NAME" dist/* --title "Svetra $GITHUB_REF_NAME" --notes "$notes" --verify-tag
+          # A tag with a suffix, such as v0.1.0-rc.1, is a pre-release: it never becomes "latest".
+          pre=""
+          case "$GITHUB_REF_NAME" in *-*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Svetra $GITHUB_REF_NAME" --notes "$notes" --verify-tag $pre
 
   smoke:
     # Install from the release that was just published, exactly as a user would.
@@ -75,7 +78,8 @@ jobs:
         run: SVETRA_VERSION="$GITHUB_REF_NAME" SVETRA_INSTALL_DIR="$RUNNER_TEMP/bin" sh install.sh
       - name: Run it
         run: |
-          "$RUNNER_TEMP/bin/svetra" --version | grep -F "svetra ${GITHUB_REF_NAME#v}"
+          version="${GITHUB_REF_NAME#v}"
+          "$RUNNER_TEMP/bin/svetra" --version | grep -F "svetra ${version%%-*}"
           "$RUNNER_TEMP/bin/svetra" validate tests/fixtures/finledger.yaml
 
   crates:
@@ -89,6 +93,8 @@ jobs:
         run: |
           if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
             echo "No CARGO_REGISTRY_TOKEN secret; skipping crates.io."
+          elif [ "${GITHUB_REF_NAME#*-}" != "$GITHUB_REF_NAME" ]; then
+            echo "Pre-release tag; skipping crates.io."
           else
             cargo publish --locked
           fi

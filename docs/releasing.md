@@ -23,4 +23,6 @@ The tag starts `.github/workflows/release.yml`, which runs four jobs:
 - Create an API token scoped to publishing `svetra`.
 - Add it as a repository secret named `CARGO_REGISTRY_TOKEN`.
 
+**Dry run:** push a tag with a suffix, such as `v0.1.0-rc.1`. It runs everything except crates.io, and creates a *pre-release*, which never becomes the "latest" the installer uses. Delete the pre-release and tag afterwards.
+
 **npm** (so `npx svetra` works) isn't wired up yet. It needs a maintainer npm account and a small wrapper package that downloads the matching release binary.
