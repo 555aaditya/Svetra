@@ -103,12 +103,13 @@ Signing in
 
 - **Methods** are listed in `sign_in` order, with providers by their usual names (`linkedin_oidc` is "LinkedIn", `slack_oidc` is "Slack").
 - **`invite_only`** reads "Only people you invite can create an account."
+- **`confirm_email: false`** reads "People can sign in before confirming their email address." The email and password lines appear only when `email` is a method.
 - **The Roles section** adds "(needs a second factor)" to a role with `mfa: true`.
 
 "Before going live" lists, in order:
 - For each OAuth provider: "Create a Google sign-in app, then set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID and SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET."
 - With `email`: "Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour."
-- Always: "Set the site URL and redirect URLs for your real domain."
+- Always: "Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in."
 
 `context` adds one line, for example `auth email, google; signup open; confirm email; password 12 lower_upper_letters_digits; mfa admin`.
 
