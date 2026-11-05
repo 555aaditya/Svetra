@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.88"
 description = "You design the data, Svetra makes it safe: compiles a small svetra.yaml into locked-down Postgres, row-level security and Zod types for Supabase."
 readme = "README.md"
-homepage = "https://github.com/555aaditya/Svetra"
+homepage = "https://555aaditya.github.io/Svetra/"
 keywords = ["supabase", "postgres", "row-level-security", "compiler", "cli"]
 categories = ["command-line-utilities", "database", "development-tools"]
 # The crate ships the source, the specs and the schema; not the whitepaper or the test fixtures.
