@@ -48,7 +48,9 @@ Every table is closed by default. Here, people can read only their own accounts,
 curl -fsSL https://raw.githubusercontent.com/555aaditya/Svetra/main/install.sh | sh
 ```
 
-Or build from source with Rust 1.88+: `cargo install --git https://github.com/555aaditya/Svetra`. Windows builds are on the [releases page](https://github.com/555aaditya/Svetra/releases).
+Or with Node 18+, on macOS, Linux or Windows: `npx svetra --version`. The npm package downloads the same release binary on first run and checks its SHA-256.
+
+Or with Rust 1.88+: `cargo install svetra`. Windows builds are also on the [releases page](https://github.com/555aaditya/Svetra/releases).
 
 ```sh
 svetra validate svetra.yaml          # readable output
