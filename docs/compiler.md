@@ -22,6 +22,7 @@ svetra compile [FILE] [--check]
 |---|---|---|
 | `supabase/schemas/svetra.sql` | Tables, constraints, foreign keys, indexes, row-level security and policies | Supabase's [declarative schemas](https://supabase.com/docs/guides/local-development/declarative-database-schemas): `supabase db diff` turns it into migrations |
 | `src/svetra.gen.ts` | TypeScript types and Zod validators, one per entity | The React app |
+| `supabase/config.toml` | Only the sign-in settings Svetra owns, edited in place (see [Sign-in settings](#sign-in-settings)). Only with an `auth` section | `supabase start` locally. `supabase config push` sends them to a hosted project, and `supabase config diff` previews that |
 | `supabase/tests/svetra.test.sql` | Access tests: every person × action × row, checked as real users (see [Access tests](#access-tests)) | `supabase test db`, which runs it with [pgTAP](https://pgtap.org) |
 
 Version 0.1 doesn't make these paths configurable.
@@ -197,6 +198,40 @@ export type Account = z.infer<typeof Account>;
 - **`int`** is `z.number().int()`, **`json`** is `z.unknown()`, and **`date`** is `z.string().date()`.
 - **In version 0.1, declared constraints are enforced by the database only.** Mirroring them in Zod is planned, with matching names, so a failure on either side reports the same constraint name.
 
+## Sign-in settings
+
+`supabase/config.toml` belongs to the Supabase CLI and to you, so Svetra never writes the whole file. With an `auth` section, it sets only the keys below, in place, and keeps every other line and comment as it was.
+
+| Key | Value |
+|---|---|
+| `[auth] enable_signup` | `true` for `signup: open`, `false` for `invite_only` |
+| `[auth] enable_anonymous_sign_ins` | `false` |
+| `[auth] minimum_password_length` | `password.min_length` |
+| `[auth] password_requirements` | `password.require`, or `""` for `none` |
+| `[auth.email] enabled` | `true` when `email` is in `sign_in` |
+| `[auth.email] enable_confirmations` | `confirm_email` |
+| `[auth.email] secure_password_change` | `true`: changing a password needs a recent sign-in |
+| `[auth.mfa.totp] enroll_enabled`, `verify_enabled` | `true` when any role has `mfa: true`, otherwise `false` |
+| `[auth.external.<provider>] enabled` | `true` for each OAuth provider in `sign_in`. Every other `[auth.external.*]` table already in the file gets `false` |
+| `[auth.external.<provider>] client_id`, `secret` | `"env(SUPABASE_AUTH_EXTERNAL_<PROVIDER>_CLIENT_ID)"` and `"env(SUPABASE_AUTH_EXTERNAL_<PROVIDER>_SECRET)"`, so credentials never live in the file |
+
+- **A missing key** is added at the end of its table. **A missing table** is added at the end of the file.
+- **No `config.toml`:** nothing is written, and `compile` says to run `supabase init` first. The other outputs are written as usual.
+- **No `auth` section:** `config.toml` isn't touched.
+- **`--check`** lists every owned key whose value differs, for example `out of date: supabase/config.toml (auth.minimum_password_length is 6, svetra.yaml says 10)`.
+- **The header comment isn't added** to this file, because Svetra doesn't own it.
+
+### Second factors in SQL
+
+For roles with `mfa: true`, `svetra.has_role` also requires the session's assurance level to be `aal2`, which Supabase sets once a person has verified an authenticator app:
+
+```sql
+where g."user_id" = (select auth.uid()) and g."role" = p_role and g."scope_id" is not distinct from p_scope
+  and (g."role" not in ('admin') or coalesce((select auth.jwt() ->> 'aal'), '') = 'aal2')
+```
+
+The list holds every role with `mfa: true`. Without any, the line is left out.
+
 ## Access tests
 
 `supabase/tests/svetra.test.sql` checks that the **database** enforces what `svetra.yaml` says, as real users. Run it against a local Supabase with `supabase test db`.
@@ -222,6 +257,7 @@ It catches what the other outputs can't:
 | `bob` | Yes | Owns the `b` rows |
 | One per global role, named after it, e.g. `admin` | Yes | That role. Owns nothing |
 | One per scoped role, e.g. `staff at Location a` | Yes | That role for the scope entity's `a` row. Owns nothing |
+| One per role with `mfa: true`, e.g. `admin without a second factor` | Yes | The same grant, in a session without a second factor. Gets only what any signed-in person gets |
 
 Ids are fixed UUIDs: `5e7a0000-0000-4000-8000-0000000000NN`, where `NN` is the person's position in the table above, starting at `01` for alice. `anon` has no id.
 

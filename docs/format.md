@@ -148,6 +148,7 @@ Roles say who can do more than an ordinary signed-in person. A role is either **
 |---|---|---|
 | `description` | no | Plain words, used by `svetra explain` |
 | `scope` | no | An entity. If set, the role is held *for one row* of that entity. Its primary key must be a `uuid` (`SVT006`) |
+| `mfa` | no | `true`: the role only counts in a session verified with a second factor, an authenticator app. Default `false`. See [Authentication](#authentication) |
 
 ### `has_role` in policies
 
@@ -199,6 +200,38 @@ insert into svetra.role_grants (user_id, role, scope_id) values ('<user id>', 's
 ```
 
 A generated, admin-only way to grant roles from the app comes with the agent tools (M4). Until then, granting is deliberately not possible from the client.
+
+## Authentication
+
+The optional `auth` section says how people sign in. Without it, Supabase's own defaults apply: email sign-in with passwords of 6 characters, and no email confirmation. `svetra validate` points that out as `SVT009` (info).
+
+```yaml
+auth:
+  sign_in: [email, google]
+  signup: open
+  confirm_email: true
+  password: { min_length: 12, require: lower_upper_letters_digits }
+
+roles:
+  admin: { description: "Runs the business", mfa: true }
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `sign_in` | yes | Non-empty list of methods. `email` is a password or an emailed sign-in link, through Supabase's email provider. The others are OAuth providers: `apple`, `bitbucket`, `discord`, `facebook`, `github`, `gitlab`, `google`, `linkedin_oidc`, `notion`, `slack_oidc`, `spotify`, `twitch`, `twitter`, `x`, `zoom` |
+| `signup` | no | `open` (default): anyone can create an account. `invite_only`: only people you invite, and existing users can still sign in |
+| `confirm_email` | no | `true` (default): people confirm their email address before they can sign in |
+| `password.min_length` | no | At least 8. Default 10 |
+| `password.require` | no | `none` (default), `letters_digits`, `lower_upper_letters_digits` or `lower_upper_letters_digits_symbols` |
+
+Rules, all reported as `SVT008`:
+- Every `sign_in` method must be in the list above.
+- `password` and `confirm_email` need `email` in `sign_in`.
+- `password.min_length` must be at least 8.
+
+**Second factors for roles.** A role with `mfa: true` only counts when the person's current session was verified with an authenticator app. Signed in with a password alone, an `admin` gets what any signed-in person gets, and no more. Use it for roles that can see or change everyone's data.
+
+**Not in version 0.1:** phone and SMS sign-in; anonymous sign-ins, which Svetra keeps off, because Supabase gives anonymous users the `authenticated` role, so every `as: authenticated` rule would apply to them; SAML and enterprise single sign-on; the providers that need extra settings (`azure`, `keycloak`, `workos`); and per-environment site URLs, planned with environments.
 
 ## Holes
 
@@ -345,3 +378,4 @@ These come later, if real use asks for them:
 - Migrations between graph revisions (planned for `svetra diff` and `patch`)
 - Multiple files and imports
 - Hole kinds other than `function`, such as webhook recipes
+- The sign-in methods listed under [Authentication](#authentication) as not in version 0.1

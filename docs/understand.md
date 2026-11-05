@@ -36,6 +36,7 @@ The reader may never have written code, so:
 3. **Who can see and change what.** Per entity: who can see, create, change and delete, then what **nobody** can do directly.
 4. **Custom code.** Per hole: what it takes, what it returns, and what it can read and change.
 5. **Worth knowing.** Warnings and info from `validate`, in plain words.
+6. **Before going live.** Only with an `auth` section: what to set up outside Svetra (see [Signing in](#signing-in)).
 
 ### Field descriptions
 
@@ -86,6 +87,30 @@ Anything that doesn't fit a pattern falls back to the expression itself in quote
 - **A role check inside a larger condition** reads "they have the admin role" or "they have the staff role for its location".
 - `graph` draws each role as a `🎭 role` node, with access edges from it for those policies.
 - `context` adds one line: `roles admin; staff(Location)`.
+
+### Signing in
+
+With an `auth` section, a "Signing in" section comes after "Roles":
+
+```
+Signing in
+  - People sign in with email (a password or an emailed link) or Google.
+  - Anyone can create an account.
+  - People confirm their email address before they can sign in.
+  - Passwords need at least 12 characters, with lowercase and uppercase letters and digits.
+  - The admin role only counts after a second factor, an authenticator app.
+```
+
+- **Methods** are listed in `sign_in` order, with providers by their usual names (`linkedin_oidc` is "LinkedIn", `slack_oidc` is "Slack").
+- **`invite_only`** reads "Only people you invite can create an account."
+- **The Roles section** adds "(needs a second factor)" to a role with `mfa: true`.
+
+"Before going live" lists, in order:
+- For each OAuth provider: "Create a Google sign-in app, then set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID and SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET."
+- With `email`: "Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour."
+- Always: "Set the site URL and redirect URLs for your real domain."
+
+`context` adds one line, for example `auth email, google; signup open; confirm email; password 12 lower_upper_letters_digits; mfa admin`.
 
 ### Access, stated completely
 
