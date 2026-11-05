@@ -12,8 +12,12 @@ mod field;
 pub const FORMAT_VERSION: &str = "0.1";
 
 // The keys each part of the format accepts. The JSON Schema is tested against these.
-pub const TOP_KEYS: &[&str] = &["svetra", "system", "entities", "policies", "holes", "roles"];
-pub const ROLE_KEYS: &[&str] = &["description", "scope"];
+pub const TOP_KEYS: &[&str] = &[
+    "svetra", "system", "entities", "policies", "holes", "roles", "auth",
+];
+pub const ROLE_KEYS: &[&str] = &["description", "scope", "mfa"];
+pub const AUTH_KEYS: &[&str] = &["sign_in", "signup", "confirm_email", "password"];
+pub const PASSWORD_KEYS: &[&str] = &["min_length", "require"];
 pub const ENTITY_KEYS: &[&str] = &["fields", "constraints", "unique", "indexes", "private"];
 pub const FIELD_KEYS: &[&str] = &[
     "type",
@@ -80,6 +84,7 @@ fn empty_document() -> Document {
         policies: Vec::new(),
         holes: Vec::new(),
         roles: Vec::new(),
+        auth: None,
     }
 }
 
@@ -267,7 +272,68 @@ impl Cx {
         {
             doc.roles = rs.iter().filter_map(|(n, r)| self.role(n, r)).collect();
         }
+        if let Some(v) = k.get("auth") {
+            doc.auth = self.auth(v);
+        }
         doc
+    }
+
+    fn auth(&mut self, node: &Node) -> Option<Auth> {
+        let entries = self.map(node, "auth")?;
+        let k = self.keys(entries, "auth", AUTH_KEYS);
+        let mut auth = Auth {
+            pos: pos(node),
+            sign_in: Vec::new(),
+            signup: None,
+            confirm_email: None,
+            password: None,
+        };
+        if let Some(v) = self.need(&k, "sign_in", "auth", node) {
+            auth.sign_in = self.name_list(v, "auth.sign_in");
+        }
+        if let Some(v) = k.get("signup") {
+            auth.signup = self
+                .string(v, "auth.signup")
+                .map(|name| NameRef { name, pos: pos(v) });
+        }
+        if let Some(v) = k.get("confirm_email") {
+            auth.confirm_email = Some((self.boolean(v, "auth.confirm_email"), pos(v)));
+        }
+        if let Some(v) = k.get("password")
+            && let Some(es) = self.map(v, "auth.password")
+        {
+            let pk = self.keys(es, "auth.password", PASSWORD_KEYS);
+            let mut password = Password {
+                pos: pos(v),
+                min_length: None,
+                require: None,
+            };
+            if let Some(n) = pk.get("min_length") {
+                match n.value {
+                    Value::Int(i) => password.min_length = Some((i, pos(n))),
+                    _ => {
+                        let msg = format!(
+                            "Expected a whole number at auth.password.min_length, found a {}.",
+                            n.kind()
+                        );
+                        self.report(
+                            Code::Svt029,
+                            "auth.password.min_length",
+                            n,
+                            msg,
+                            "Write a number, such as 12.",
+                        );
+                    }
+                }
+            }
+            if let Some(r) = pk.get("require") {
+                password.require = self
+                    .string(r, "auth.password.require")
+                    .map(|name| NameRef { name, pos: pos(r) });
+            }
+            auth.password = Some(password);
+        }
+        Some(auth)
     }
 
     fn role(&mut self, name: &Node, body: &Node) -> Option<RoleDef> {
@@ -278,6 +344,7 @@ impl Cx {
             pos: pos(name),
             description: None,
             scope: None,
+            mfa: false,
         };
         if matches!(body.value, Value::Null) {
             return Some(role);
@@ -286,6 +353,9 @@ impl Cx {
         let k = self.keys(entries, &path, ROLE_KEYS);
         if let Some(v) = k.get("description") {
             role.description = self.string(v, &format!("{path}.description"));
+        }
+        if let Some(v) = k.get("mfa") {
+            role.mfa = self.boolean(v, &format!("{path}.mfa"));
         }
         if let Some(v) = k.get("scope") {
             role.scope = self

@@ -2,10 +2,16 @@ use svetra::check::check;
 use svetra::load::load;
 
 /// Load then check, returning codes in order. Panics if loading itself failed.
+/// SVT009 (no `auth` section) is left out, because most examples have none; tests/auth.rs
+/// covers it.
 fn codes(src: &str) -> Vec<&'static str> {
     let (doc, load_diags) = load(src);
     assert!(load_diags.is_empty(), "{load_diags:#?}");
-    check(&doc).iter().map(|d| d.code.id()).collect()
+    check(&doc)
+        .iter()
+        .map(|d| d.code.id())
+        .filter(|&c| c != "SVT009")
+        .collect()
 }
 
 const HEAD: &str = "svetra: \"0.1\"\nsystem: App\n";

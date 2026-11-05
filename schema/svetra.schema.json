@@ -60,6 +60,10 @@
       "additionalProperties": {
         "$ref": "#/$defs/role"
       }
+    },
+    "auth": {
+      "description": "How people sign in. Without it, Supabase's defaults apply.",
+      "$ref": "#/$defs/auth"
     }
   },
   "$defs": {
@@ -465,6 +469,79 @@
           "description": "An entity: the role is held for one row of it.",
           "type": "string",
           "pattern": "^[A-Z][A-Za-z0-9]*$"
+        },
+        "mfa": {
+          "description": "The role only counts in a session verified with a second factor.",
+          "type": "boolean"
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sign_in"
+      ],
+      "properties": {
+        "sign_in": {
+          "description": "Sign-in methods: email, or an OAuth provider.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "email",
+              "apple",
+              "bitbucket",
+              "discord",
+              "facebook",
+              "github",
+              "gitlab",
+              "google",
+              "linkedin_oidc",
+              "notion",
+              "slack_oidc",
+              "spotify",
+              "twitch",
+              "twitter",
+              "x",
+              "zoom"
+            ]
+          }
+        },
+        "signup": {
+          "description": "open: anyone can create an account. invite_only: only invited people.",
+          "enum": [
+            "open",
+            "invite_only"
+          ]
+        },
+        "confirm_email": {
+          "description": "People confirm their email address before they can sign in. Default true.",
+          "type": "boolean"
+        },
+        "password": {
+          "$ref": "#/$defs/password"
+        }
+      }
+    },
+    "password": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_length": {
+          "description": "At least 8. Default 10.",
+          "type": "integer",
+          "minimum": 8
+        },
+        "require": {
+          "description": "Character classes a password must contain.",
+          "enum": [
+            "none",
+            "letters_digits",
+            "lower_upper_letters_digits",
+            "lower_upper_letters_digits_symbols"
+          ]
         }
       }
     }

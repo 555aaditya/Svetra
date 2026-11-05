@@ -276,6 +276,8 @@ Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002
 | `SVT005` | error | Field whose name suggests money (`amount`, `price`, `balance`, `cost`, `total`, `fee`) uses `float` | `use_money` |
 | `SVT006` | error | `has_role` names an undeclared role, has the wrong number of arguments, or its scope argument doesn't point at the role's scope entity; or a role's `scope` entity doesn't have a `uuid` primary key | `fix_role` |
 | `SVT007` | warning | A policy with `as: anon` gives people who aren't signed in access that signed-in people may not get. No policy for signed-in people covers the same action on the same entity with the same condition or with `true`, so signing in could take access away. Usually you meant `as: anyone` | `use_anyone` |
+| `SVT008` | error | Invalid sign-in settings: an unknown method or value, a method listed twice, a password shorter than 8, or password or `confirm_email` settings without `email` sign-in | `fix_auth` |
+| `SVT009` | info | No `auth` section, so Supabase's defaults apply: passwords of 6 characters and no email confirmation | `add_auth` |
 | `SVT010` | info | A `ref` or `user` field is not the leading column of any index or unique constraint. The compiler adds an index, because these are the columns joins and policies filter on | none |
 
 Codes are stable. A code is never reused for a different rule.

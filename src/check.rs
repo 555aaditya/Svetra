@@ -10,6 +10,35 @@ use std::collections::{HashMap, HashSet};
 /// Words that mark a field as money for SVT005.
 const MONEY_WORDS: &[&str] = &["amount", "price", "balance", "cost", "total", "fee"];
 
+/// Sign-in methods for `auth.sign_in`: email, and the OAuth providers that need only a
+/// client id and secret (docs/format.md, Authentication).
+pub const SIGN_IN: &[&str] = &[
+    "email",
+    "apple",
+    "bitbucket",
+    "discord",
+    "facebook",
+    "github",
+    "gitlab",
+    "google",
+    "linkedin_oidc",
+    "notion",
+    "slack_oidc",
+    "spotify",
+    "twitch",
+    "twitter",
+    "x",
+    "zoom",
+];
+
+/// Supabase's `password_requirements` values, plus `none`.
+const REQUIRE: &[&str] = &[
+    "none",
+    "letters_digits",
+    "lower_upper_letters_digits",
+    "lower_upper_letters_digits_symbols",
+];
+
 pub fn check(doc: &Document) -> Vec<Diagnostic> {
     let mut ck = Checker {
         entities: doc.entities.iter().map(|e| (e.name.as_str(), e)).collect(),
@@ -26,6 +55,7 @@ pub fn check(doc: &Document) -> Vec<Diagnostic> {
     ck.access(doc);
     ck.anon_only(doc);
     ck.expressions(doc);
+    ck.auth(doc);
     ck.out
 }
 
@@ -243,6 +273,102 @@ impl<'a> Checker<'a> {
     }
 
     /// A scoped role needs an existing scope entity (SVT002) with a uuid primary key (SVT006).
+    /// SVT008 for invalid sign-in settings, and SVT009 when there are none at all.
+    fn auth(&mut self, doc: &Document) {
+        let Some(a) = &doc.auth else {
+            self.d(
+                Code::Svt009,
+                "auth".into(),
+                doc.system.pos,
+                "No `auth` section, so Supabase's defaults apply: passwords of 6 characters, and no email confirmation.".into(),
+                "Add `auth: { sign_in: [email] }` for safe defaults: 10-character passwords and confirmed emails.",
+            );
+            return;
+        };
+        let bad = |what: &str, got: &str, allowed: &[&str]| {
+            (
+                format!("`{got}` isn't a {what}."),
+                format!("Use one of: {}.", allowed.join(", ")),
+            )
+        };
+        if a.sign_in.is_empty() {
+            self.d(
+                Code::Svt008,
+                "auth.sign_in".into(),
+                a.pos,
+                "`auth.sign_in` lists no sign-in method.".into(),
+                "Add at least one, such as `email`.",
+            );
+        }
+        let mut seen = HashSet::new();
+        for m in &a.sign_in {
+            if !SIGN_IN.contains(&m.name.as_str()) {
+                let (msg, hint) = bad("sign-in method", &m.name, SIGN_IN);
+                self.d(Code::Svt008, "auth.sign_in".into(), m.pos, msg, &hint);
+            } else if !seen.insert(m.name.as_str()) {
+                let msg = format!("`{}` is listed twice in `auth.sign_in`.", m.name);
+                self.d(
+                    Code::Svt008,
+                    "auth.sign_in".into(),
+                    m.pos,
+                    msg,
+                    "Remove the second one.",
+                );
+            }
+        }
+        if let Some(s) = &a.signup
+            && !["open", "invite_only"].contains(&s.name.as_str())
+        {
+            let (msg, hint) = bad("signup setting", &s.name, &["open", "invite_only"]);
+            self.d(Code::Svt008, "auth.signup".into(), s.pos, msg, &hint);
+        }
+        if let Some(p) = &a.password {
+            if let Some((n, at)) = p.min_length
+                && n < 8
+            {
+                let msg = format!("Passwords of {n} characters are too easy to guess.");
+                self.d(
+                    Code::Svt008,
+                    "auth.password.min_length".into(),
+                    at,
+                    msg,
+                    "Use at least 8; 10 or more is better.",
+                );
+            }
+            if let Some(r) = &p.require
+                && !REQUIRE.contains(&r.name.as_str())
+            {
+                let (msg, hint) = bad("password rule", &r.name, REQUIRE);
+                self.d(
+                    Code::Svt008,
+                    "auth.password.require".into(),
+                    r.pos,
+                    msg,
+                    &hint,
+                );
+            }
+        }
+        if !a.email() {
+            let set = a
+                .password
+                .as_ref()
+                .map(|p| ("password", p.pos))
+                .or(a.confirm_email.map(|(_, at)| ("confirm_email", at)));
+            if let Some((key, at)) = set {
+                let msg = format!(
+                    "`auth.{key}` only applies to email sign-in, which `sign_in` doesn't list."
+                );
+                self.d(
+                    Code::Svt008,
+                    format!("auth.{key}"),
+                    at,
+                    msg,
+                    "Add `email` to `sign_in`, or remove this setting.",
+                );
+            }
+        }
+    }
+
     fn roles(&mut self, doc: &Document) {
         for r in &doc.roles {
             let Some(scope) = &r.scope else { continue };
