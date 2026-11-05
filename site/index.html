@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Svetra: you design the data, Svetra makes it safe</title>
+<meta name="description" content="Svetra compiles a small svetra.yaml into locked-down Postgres, row-level security, roles, Zod types and access tests for Supabase. Open source, written in Rust.">
+<meta property="og:title" content="Svetra: you design the data, Svetra makes it safe">
+<meta property="og:description" content="One small file compiles to locked-down Postgres, row-level security, roles, Zod types and access tests for Supabase.">
+<meta property="og:url" content="https://555aaditya.github.io/Svetra/">
+<meta property="og:type" content="website">
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d1c1a; --muted: #5d5a54; --line: #e4e0d8;
+    --panel: #f2efe8; --accent: #1f6f5c; --bad: #a3361f;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151513; --fg: #ecebe6; --muted: #a8a59d; --line: #2c2b27;
+            --panel: #1e1d1a; --accent: #5fc4a8; --bad: #f08a6c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+  header { border-bottom: 1px solid var(--line); }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .brand { font-weight: 700; font-size: 20px; color: var(--fg); text-decoration: none; }
+  nav a { margin-left: 18px; color: var(--muted); text-decoration: none; font-size: 15px; }
+  nav a:hover { color: var(--fg); }
+  .hero { padding-top: 72px; padding-bottom: 48px; }
+  h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.1; margin: 0 0 20px; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .lede { font-size: 20px; color: var(--muted); max-width: 720px; margin: 0 0 28px; }
+  h2 { font-size: 28px; margin: 0 0 12px; letter-spacing: -0.01em; }
+  h3 { font-size: 17px; margin: 0 0 8px; }
+  section { padding: 48px 0; border-top: 1px solid var(--line); }
+  p { margin: 0 0 16px; }
+  .muted { color: var(--muted); }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+        padding: 14px 16px; overflow-x: auto; margin: 0 0 16px;
+        font: 13.5px/1.55 var(--mono); }
+  code { font-family: var(--mono); font-size: 0.92em; }
+  .install pre { font-size: 15px; }
+  .grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr)); }
+  .grid > * { min-width: 0; }
+  .wide { grid-column: 1 / -1; }
+  .step b { display: block; color: var(--accent); font: 600 13px var(--mono); margin-bottom: 4px; }
+  .bad { color: var(--bad); }
+  ul { padding-left: 20px; margin: 0 0 16px; }
+  li { margin-bottom: 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .done { color: var(--accent); font-weight: 600; }
+  .button { display: inline-block; padding: 10px 18px; border-radius: 8px; text-decoration: none;
+            background: var(--accent); color: var(--bg); font-weight: 600; margin-right: 10px; }
+  .button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  @media (max-width: 600px) {
+    nav a:not(:last-child) { display: none; }
+    .lede { font-size: 18px; }
+  }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 48px; color: var(--muted); font-size: 15px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="./">Svetra</a>
+    <nav aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="#tests">Access tests</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/555aaditya/Svetra">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="wrap hero">
+  <h1>You design the data.<br><span>Svetra makes it safe.</span><br>The AI builds the rest.</h1>
+  <p class="lede">One small file, <code>svetra.yaml</code>, compiles to locked-down Postgres, row-level security, roles, Zod types and access tests for Supabase. You review a short file and a plain-English explanation, not thousands of generated lines.</p>
+  <a class="button" href="#install">Install</a>
+  <a class="button ghost" href="https://github.com/555aaditya/Svetra">View on GitHub</a>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2>The leak behind most vibe-coded apps</h2>
+    <p>Supabase lets the browser query your tables directly. That's safe only if every table has row-level security and the right rules. Miss one, and anyone with your public key can read the whole table. AI agents miss it all the time, and the people building with them often can't read the SQL to notice.</p>
+    <p>Svetra turns on row-level security for every table, closes each one by default, and refuses a table the API can reach without a rule (<code>SVT001</code>). Then it proves the rules hold on your real database.</p>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="muted">A booking app with customers, staff at each location, and admins.</p>
+    <div class="grid">
+      <div class="step">
+        <b>1. You and your agent write svetra.yaml</b>
+<pre>roles:
+  admin: { description: "Runs the business" }
+  staff: { description: "Works at one location",
+           scope: Location }
+
+policies:
+  customers_see_own:
+    on: Booking
+    allow: [select, insert]
+    when: "customer == auth.user"
+  staff_manage_local:
+    on: Booking
+    allow: [select, update]
+    when: "has_role('staff', location)"
+  admins_manage_all:
+    on: Booking
+    allow: [select, update, delete]
+    when: "has_role('admin')"</pre>
+      </div>
+      <div class="step">
+        <b>2. svetra explain says it in plain English</b>
+<pre>Bookings
+  - Signed-in people can see and create a booking
+    when its customer is them.
+  - People with the staff role for a booking's
+    location can see and change that booking.
+  - People with the admin role can see, change
+    and delete bookings.
+  - Nobody can see bookings any other way.</pre>
+      </div>
+      <div class="step wide">
+        <b>3. svetra compile writes the rest</b>
+<pre>create policy "staff_manage_local_update" on "public"."booking"
+  for update to authenticated
+  using ("svetra"."has_role"('staff', "location"))
+  with check ("svetra"."has_role"('staff', "location"));</pre>
+        <ul>
+          <li><code>supabase/schemas/svetra.sql</code>: tables, keys, indexes, row-level security, one policy per action, and a private roles table</li>
+          <li><code>src/svetra.gen.ts</code>: TypeScript types and Zod validators. Money stays exact</li>
+          <li><code>supabase/tests/svetra.test.sql</code>: access tests</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tests">
+  <div class="wrap">
+    <h2>Access tests: your database proves who can see what</h2>
+    <p>The generated tests check every person, action and row on your database, signed in as each person and as a logged-out visitor, never with the service key that bypasses security. Run them with <code>supabase test db</code>.</p>
+    <p>Here, a migration adds one policy by hand that lets every signed-in person read every booking. Exactly the checks it breaks fail, each by name:</p>
+<pre><span class="bad"># Failed test 57: "alice can't see Booking b"</span>
+#         have: allowed
+#         want: denied
+<span class="bad"># Failed test 64: "bob can't see Booking a"</span>
+#         have: allowed
+#         want: denied
+<span class="bad"># Failed test 81: "staff at Location a can't see Booking b"</span>
+#         have: allowed
+#         want: denied
+# Looks like you failed 3 tests of 87
+Result: FAIL</pre>
+    <ul>
+      <li><strong>Every failure is reported,</strong> not just the first. Each check is undone afterwards, and the file rolls back, so nothing persists.</li>
+      <li><strong>Expected results come from <code>svetra.yaml</code>,</strong> worked out by Svetra itself rather than copied from the SQL it wrote, so a hand-edited database or a compiler bug both show up.</li>
+      <li><strong>Checked on PostgreSQL 16 in CI</strong> for every change to Svetra, and on a local Supabase stack with <code>supabase test db</code>.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>What it checks before anything is written</h2>
+    <p><code>svetra validate</code> runs 19 checks, each with a stable code, a line and column, and a fix. A few of them:</p>
+    <table>
+      <tr><th>Code</th><th>Catches</th></tr>
+      <tr><td><code>SVT001</code></td><td>A table the API can reach with no access rule</td></tr>
+      <tr><td><code>SVT005</code></td><td>Money stored as a float, which loses cents</td></tr>
+      <tr><td><code>SVT006</code></td><td>A role that isn't declared, or a scoped role checked against the wrong thing</td></tr>
+      <tr><td><code>SVT007</code></td><td>Logged-out visitors getting more than signed-in people</td></tr>
+    </table>
+    <p class="muted">Add <code>--json</code> and your agent gets the same findings in a form it can act on.</p>
+  </div>
+</section>
+
+<section id="install" class="install">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p>macOS and Linux. The script checks the download's SHA-256 before installing.</p>
+<pre>curl -fsSL https://raw.githubusercontent.com/555aaditya/Svetra/main/install.sh | sh</pre>
+    <p>Or with Rust:</p>
+<pre>cargo install svetra</pre>
+    <p>Windows builds are on the <a href="https://github.com/555aaditya/Svetra/releases/latest">releases page</a>. Then:</p>
+<pre>svetra validate svetra.yaml
+svetra compile svetra.yaml
+svetra explain svetra.yaml
+supabase test db</pre>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Roadmap</h2>
+    <table>
+      <tr><th>What</th><th>Status</th></tr>
+      <tr><td>Format and validator, 19 checks, JSON output for agents</td><td class="done">Done</td></tr>
+      <tr><td>Compiler: Postgres, row-level security, TypeScript and Zod</td><td class="done">Done</td></tr>
+      <tr><td><code>explain</code>, <code>graph</code> and <code>context</code></td><td class="done">Done</td></tr>
+      <tr><td>Roles and teams: global and scoped roles</td><td class="done">Done</td></tr>
+      <tr><td>Access tests, proven on your database</td><td class="done">Done</td></tr>
+      <tr><td>Sign-in settings: methods, email confirmation, MFA for admins</td><td>Next</td></tr>
+      <tr><td>The Svetra skill and MCP server for Claude Code, Cursor and Codex</td><td>Planned</td></tr>
+      <tr><td><code>svetra view</code>: an interactive map of your app</td><td>Planned</td></tr>
+    </table>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    Svetra is open source under the MIT licence. The format, compiler and test rules are specified in
+    <a href="https://github.com/555aaditya/Svetra/tree/main/docs">docs/</a>.
+    Built in public by <a href="https://x.com/555aaditya">@555aaditya</a>.
+  </div>
+</footer>
+</body>
+</html>
