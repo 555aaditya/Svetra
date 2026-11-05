@@ -1,0 +1,30 @@
+@import "./styles/globals.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource/instrument-serif/400-italic.css";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Svetra's brand: BoardUI's accent ramp becomes teal, and the type stack is self-hosted
+ * (no third-party requests). The serif is only for the accent words in headlines. */
+:root {
+  --font-inter: "Inter Variable";
+}
+
+@theme {
+  --color-accent-50: #effcf8;
+  --color-accent-100: #d3f6ea;
+  --color-accent-200: #aaecd8;
+  --color-accent-300: #74dcc0;
+  --color-accent-400: #5fc4a8;
+  --color-accent-500: #2ea688;
+  --color-accent-600: #1f856e;
+  --color-accent-700: #1f6f5c;
+  --color-accent-800: #1c5649;
+  --color-accent-900: #19473d;
+  --color-accent-950: #0a2923;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
