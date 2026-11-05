@@ -92,3 +92,29 @@ fn structural_mistakes_use_the_usual_codes() {
         "SVT029"
     );
 }
+
+#[test]
+fn mfa_roles_need_a_second_factor_in_sql_and_in_the_access_tests() {
+    let src = include_str!("fixtures/clinic.yaml");
+    let (doc, diags) = load(src);
+    assert!(diags.is_empty(), "{diags:#?}");
+    let sql = svetra::compile::sql::schema(&doc);
+    assert_eq!(sql, include_str!("golden/clinic.sql"));
+    assert!(sql.contains(
+        "and (g.\"role\" not in ('admin') or coalesce((select auth.jwt() ->> 'aal'), '') = 'aal2')"
+    ));
+    let tests = svetra::compile::access_tests::tests(&doc);
+    assert_eq!(tests, include_str!("golden/clinic.test.sql"));
+    // The admin with a second factor runs in an aal2 session and gets the role;
+    // the same grant without one gets only what any signed-in person gets.
+    assert!(tests.contains("$svetra$, 'aal2'), 'allowed', 'admin can delete Visit b');"));
+    assert!(tests.contains("'admin without a second factor can''t see Visit a');"));
+    assert!(tests.contains("select plan(45);"));
+}
+
+#[test]
+fn roles_without_mfa_compile_as_before() {
+    let src = include_str!("fixtures/bookings.yaml");
+    let (doc, _) = load(src);
+    assert!(!svetra::compile::sql::schema(&doc).contains("aal"));
+}

@@ -4,14 +4,14 @@ begin;
 create extension if not exists pgtap;
 -- Run one statement as one person, then undo it. Returns allowed, denied or the error.
 create schema svetra_test;
-create function svetra_test.try(p_role text, p_user uuid, p_sql text) returns text
+create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
 language plpgsql as $$
 declare n bigint;
 begin
   begin
     perform set_config('role', p_role, true);
     perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
-    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role)::text, true);
+    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
     execute p_sql;
     get diagnostics n = row_count;
     raise exception 'svetra_undo';

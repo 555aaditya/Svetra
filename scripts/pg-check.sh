@@ -16,7 +16,7 @@ access_tests() {
   if grep -E '^(not ok|# Looks like|ERROR)' <<<"$out"; then return 1; fi
 }
 
-for name in finledger posts bookings; do
+for name in finledger posts bookings clinic; do
   docker rm -f svetra-pg-check >/dev/null 2>&1 || true
   docker run -d --name svetra-pg-check -e POSTGRES_PASSWORD=pw "$image" >/dev/null
   for _ in $(seq 1 60); do docker exec svetra-pg-check pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
@@ -40,6 +40,17 @@ not ok 64 - bob can't see Booking a
 not ok 81 - staff at Location a can't see Booking b
 # Looks like you failed 3 tests of 87"
     [ "$out" = "$want" ] || { echo "unexpected failures for the leaking policy:"; echo "$out"; exit 1; }
+  fi
+  if [ "$name" = clinic ]; then
+    # Dropping the second-factor condition from has_role must fail exactly the checks for
+    # the admin without one.
+    sed -n '/^create function "svetra"."has_role"/,/\$\$;/p' "$work/$name/supabase/schemas/svetra.sql" |
+      grep -v "auth.jwt()" | sed 's/^create function/create or replace function/' | psql
+    if out="$(access_tests "$tests")"; then echo "access tests missed a missing second factor"; exit 1; fi
+    want="$(printf "not ok %s - admin without a second factor can't %s\n" \
+      38 "see Visit a" 39 "see Visit b" 40 "change Visit a" 41 "change Visit b" 42 "delete Visit a" 43 "delete Visit b")
+# Looks like you failed 6 tests of 45"
+    [ "$out" = "$want" ] || { echo "unexpected failures without the second factor:"; echo "$out"; exit 1; }
   fi
   echo "ok: $name compiles, applies to $image, and behaves as declared"
 done

@@ -1,0 +1,23 @@
+svetra: "0.1"
+system: Clinic
+
+auth:
+  sign_in: [email, google]
+  signup: invite_only
+  password: { min_length: 12, require: lower_upper_letters_digits }
+
+roles:
+  admin: { description: "Runs the clinic", mfa: true }
+
+entities:
+  Visit:
+    fields:
+      id:      { type: uuid, primary: true }
+      patient: { type: user, required: true }
+      notes:   { type: text }
+    indexes:
+      - [patient]
+
+policies:
+  patients_see_own: { on: Visit, allow: [select, insert], when: "patient == auth.user" }
+  admins_manage:    { on: Visit, allow: [select, update, delete], when: "has_role('admin')" }

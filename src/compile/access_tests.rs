@@ -28,6 +28,8 @@ struct Person {
     id: Option<String>,
     /// (role, scope id): `None` for a global role.
     grants: Vec<(String, Option<String>)>,
+    /// The session was verified with a second factor (`aal2`).
+    aal2: bool,
 }
 
 struct World<'a> {
@@ -35,6 +37,8 @@ struct World<'a> {
     by_name: HashMap<&'a str, usize>,
     alice: String,
     bob: String,
+    /// Roles with `mfa: true`: they count only in an `aal2` session.
+    mfa: Vec<&'a str>,
 }
 
 fn person_id(n: usize) -> String {
@@ -269,7 +273,8 @@ fn eval(e: &Expr, env: &Env) -> Val {
                 env.person
                     .grants
                     .iter()
-                    .any(|(g, s)| g == role && *s == scope),
+                    .any(|(g, s)| g == role && *s == scope)
+                    && (env.person.aal2 || !env.world.mfa.contains(&role.as_str())),
             )
         }
         Expr::Neg(x) => match eval(x, env) {
@@ -410,14 +415,14 @@ fn insert_order(world: &World) -> Vec<usize> {
 
 const HELPER: &str = r#"-- Run one statement as one person, then undo it. Returns allowed, denied or the error.
 create schema svetra_test;
-create function svetra_test.try(p_role text, p_user uuid, p_sql text) returns text
+create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
 language plpgsql as $$
 declare n bigint;
 begin
   begin
     perform set_config('role', p_role, true);
     perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
-    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role)::text, true);
+    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
     execute p_sql;
     get diagnostics n = row_count;
     raise exception 'svetra_undo';
@@ -439,16 +444,19 @@ pub fn tests(doc: &Document) -> String {
             name: "anon".into(),
             id: None,
             grants: vec![],
+            aal2: false,
         },
         Person {
             name: "alice".into(),
             id: Some(person_id(1)),
             grants: vec![],
+            aal2: false,
         },
         Person {
             name: "bob".into(),
             id: Some(person_id(2)),
             grants: vec![],
+            aal2: false,
         },
     ];
     let world = World {
@@ -461,10 +469,23 @@ pub fn tests(doc: &Document) -> String {
             .collect(),
         alice: person_id(1),
         bob: person_id(2),
+        mfa: doc
+            .roles
+            .iter()
+            .filter(|r| r.mfa)
+            .map(|r| r.name.as_str())
+            .collect(),
     };
     let globals = doc.roles.iter().filter(|r| r.scope.is_none());
     let scoped = doc.roles.iter().filter(|r| r.scope.is_some());
-    for r in globals.chain(scoped) {
+    let holders: Vec<&RoleDef> = globals.chain(scoped).collect();
+    let without: Vec<&RoleDef> = holders.iter().copied().filter(|r| r.mfa).collect();
+    // Each role holder, then each mfa role again, held in a session without a second factor.
+    for (r, aal2) in holders
+        .iter()
+        .map(|r| (r, r.mfa))
+        .chain(without.iter().map(|r| (r, false)))
+    {
         let id = person_id(people.len());
         let (name, scope) = match &r.scope {
             None => (r.name.clone(), None),
@@ -476,10 +497,16 @@ pub fn tests(doc: &Document) -> String {
                 (format!("{} at {} a", r.name, s.name), Some(sid))
             }
         };
+        let name = if r.mfa && !aal2 {
+            format!("{name} without a second factor")
+        } else {
+            name
+        };
         people.push(Person {
             name,
             id: Some(id),
             grants: vec![(r.name.clone(), scope)],
+            aal2,
         });
     }
 
@@ -526,10 +553,11 @@ pub fn tests(doc: &Document) -> String {
                     "anon"
                 };
                 let user = p.id.as_ref().map_or("null".into(), |id| format!("'{id}'"));
+                let aal = if p.aal2 { ", 'aal2'" } else { "" };
                 let what = format!("{verb} {} {}", e.name, ROWS[k]);
                 checks.push(match ok {
                     Some(ok) => format!(
-                        "select is(svetra_test.try('{role}', {user}, $svetra${sql}$svetra$), '{}', {});",
+                        "select is(svetra_test.try('{role}', {user}, $svetra${sql}$svetra${aal}), '{}', {});",
                         if ok { "allowed" } else { "denied" },
                         lit(&format!("{} {} {what}", p.name, if ok { "can" } else { "can't" }))
                     ),
