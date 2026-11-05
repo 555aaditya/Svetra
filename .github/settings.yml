@@ -3,6 +3,7 @@
 
 repository:
   description: "You design the data. Svetra makes it safe. Compiles a small svetra.yaml into locked-down Postgres, row-level security and Zod types for Supabase, and explains it in plain English."
+  homepage: "https://555aaditya.github.io/Svetra/"
   topics: "compiler, vibe-coding, ai-agents, developer-tools"
   default_branch: develop
   allow_squash_merge: true
