@@ -258,6 +258,20 @@ fn indexes(e: &Entity) -> Vec<String> {
 /// policies that call it never run other tables' policies.
 fn roles(roles: &[RoleDef]) -> String {
     let names: Vec<String> = roles.iter().map(|r| lit(&r.name)).collect();
+    let mfa: Vec<String> = roles
+        .iter()
+        .filter(|r| r.mfa)
+        .map(|r| lit(&r.name))
+        .collect();
+    // Roles with `mfa: true` count only once the session is verified with a second factor.
+    let mfa = if mfa.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n      and (g.\"role\" not in ({}) or coalesce((select auth.jwt() ->> 'aal'), '') = 'aal2')",
+            mfa.join(", ")
+        )
+    };
     format!(
         r#"create schema if not exists "svetra";
 create table "svetra"."role_grants" (
@@ -272,7 +286,7 @@ create function "svetra"."has_role"(p_role text, p_scope uuid default null)
   returns boolean language sql stable security definer set search_path = ''
   as $$ select exists (
     select 1 from "svetra"."role_grants" g
-    where g."user_id" = (select auth.uid()) and g."role" = p_role and g."scope_id" is not distinct from p_scope
+    where g."user_id" = (select auth.uid()) and g."role" = p_role and g."scope_id" is not distinct from p_scope{mfa}
   ) $$;
 revoke all on function "svetra"."has_role"(text, uuid) from public;
 grant usage on schema "svetra" to anon, authenticated;
