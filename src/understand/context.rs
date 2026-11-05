@@ -17,6 +17,45 @@ pub fn context(doc: &Document) -> String {
             .collect();
         out += &format!("roles {}\n", roles.join("; "));
     }
+    if let Some(a) = &doc.auth {
+        let methods: Vec<&str> = a.sign_in.iter().map(|m| m.name.as_str()).collect();
+        let mut parts = vec![
+            methods.join(", "),
+            format!(
+                "signup {}",
+                if a.invite_only() {
+                    "invite_only"
+                } else {
+                    "open"
+                }
+            ),
+        ];
+        if a.email() {
+            parts.push(
+                if a.confirms_email() {
+                    "confirm email"
+                } else {
+                    "no email confirmation"
+                }
+                .into(),
+            );
+            parts.push(
+                format!("password {} {}", a.min_length(), a.requirements())
+                    .trim_end()
+                    .into(),
+            );
+        }
+        let mfa: Vec<&str> = doc
+            .roles
+            .iter()
+            .filter(|r| r.mfa)
+            .map(|r| r.name.as_str())
+            .collect();
+        if !mfa.is_empty() {
+            parts.push(format!("mfa {}", mfa.join(", ")));
+        }
+        out += &format!("auth {}\n", parts.join("; "));
+    }
     for e in &doc.entities {
         let fields: Vec<String> = e.fields.iter().map(field).collect();
         let mut line = format!(

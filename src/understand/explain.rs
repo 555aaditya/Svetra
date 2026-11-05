@@ -36,6 +36,15 @@ pub fn explain(doc: &Document, diags: &[Diagnostic]) -> String {
                 let one = singular(&s.name);
                 line += &format!(" (held for one {one} at a time)");
             }
+            if r.mfa {
+                line += " (needs a second factor)";
+            }
+            out += &format!("  - {line}\n");
+        }
+    }
+    if let Some(a) = &doc.auth {
+        out += "\nSigning in\n";
+        for line in signing_in(a, &doc.roles) {
             out += &format!("  - {line}\n");
         }
     }
@@ -77,6 +86,82 @@ pub fn explain(doc: &Document, diags: &[Diagnostic]) -> String {
             out += &format!("  - {n}\n");
         }
     }
+    if let Some(a) = &doc.auth {
+        out += "\nBefore going live\n";
+        for line in before_live(a) {
+            out += &format!("  - {line}\n");
+        }
+    }
+    out
+}
+
+/// A sign-in method's usual name.
+fn method(m: &str) -> String {
+    match m {
+        "email" => "email (a password or an emailed link)",
+        "github" => "GitHub",
+        "gitlab" => "GitLab",
+        "linkedin_oidc" => "LinkedIn",
+        "slack_oidc" => "Slack",
+        "x" => "X",
+        other => return sentence(other),
+    }
+    .into()
+}
+
+fn signing_in(a: &Auth, roles: &[RoleDef]) -> Vec<String> {
+    let methods: Vec<String> = a.sign_in.iter().map(|m| method(&m.name)).collect();
+    let mut out = vec![format!("People sign in with {}.", list(&methods, "or"))];
+    out.push(if a.invite_only() {
+        "Only people you invite can create an account.".into()
+    } else {
+        "Anyone can create an account.".into()
+    });
+    if a.email() {
+        out.push(if a.confirms_email() {
+            "People confirm their email address before they can sign in.".into()
+        } else {
+            "People can sign in before confirming their email address.".into()
+        });
+        let with = match a.requirements() {
+            "letters_digits" => ", with letters and digits",
+            "lower_upper_letters_digits" => ", with lowercase and uppercase letters and digits",
+            "lower_upper_letters_digits_symbols" => {
+                ", with lowercase and uppercase letters, digits and symbols"
+            }
+            _ => "",
+        };
+        out.push(format!(
+            "Passwords need at least {} characters{with}.",
+            a.min_length()
+        ));
+    }
+    for r in roles.iter().filter(|r| r.mfa) {
+        out.push(format!(
+            "The {} role only counts after a second factor, an authenticator app.",
+            r.name
+        ));
+    }
+    out
+}
+
+fn before_live(a: &Auth) -> Vec<String> {
+    let mut out: Vec<String> = a
+        .sign_in
+        .iter()
+        .filter(|m| m.name != "email")
+        .map(|m| {
+            let env = format!("SUPABASE_AUTH_EXTERNAL_{}", m.name.to_uppercase());
+            format!(
+                "Create a {} sign-in app, then set {env}_CLIENT_ID and {env}_SECRET.",
+                method(&m.name)
+            )
+        })
+        .collect();
+    if a.email() {
+        out.push("Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.".into());
+    }
+    out.push("Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in.".into());
     out
 }
 

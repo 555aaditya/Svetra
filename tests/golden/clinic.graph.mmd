@@ -1,0 +1,7 @@
+flowchart LR
+  person(("👤 Signed-in person"))
+  r_admin(("🎭 admin"))
+  e_Visit["Visit<br/>patient: user!<br/>notes: text"]
+  e_Visit -- patient --> person
+  person -. "sees, creates" .-> e_Visit
+  r_admin -. "sees, changes, deletes" .-> e_Visit

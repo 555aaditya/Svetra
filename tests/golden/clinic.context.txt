@@ -1,0 +1,6 @@
+Clinic (svetra 0.1)
+roles admin
+auth email, google; signup invite_only; confirm email; password 12 lower_upper_letters_digits; mfa admin
+Visit: id uuid pk; patient user!; notes text | index (patient)
+policy patients_see_own: Visit select,insert authenticated when patient == auth.user
+policy admins_manage: Visit select,update,delete authenticated when has_role('admin')

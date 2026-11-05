@@ -1,0 +1,27 @@
+Clinic
+
+What your app stores
+  Visits
+    - patient: a signed-in person (required)
+    - notes: text
+
+Roles
+  - admin: runs the clinic (needs a second factor)
+
+Signing in
+  - People sign in with email (a password or an emailed link) or Google.
+  - Only people you invite can create an account.
+  - People confirm their email address before they can sign in.
+  - Passwords need at least 12 characters, with lowercase and uppercase letters and digits.
+  - The admin role only counts after a second factor, an authenticator app.
+
+Who can see and change what
+  Visits
+    - Signed-in people can see and create a visit when its patient is them.
+    - People with the admin role can see, change and delete visits.
+    - Nobody can see visits any other way.
+
+Before going live
+  - Create a Google sign-in app, then set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID and SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET.
+  - Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.
+  - Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in.
