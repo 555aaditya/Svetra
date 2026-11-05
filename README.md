@@ -2,6 +2,8 @@
 
 **Design the system with your AI. Svetra compiles it to the low level.**
 
+Website: [555aaditya.github.io/Svetra](https://555aaditya.github.io/Svetra/)
+
 People now build apps by talking to AI agents, and most of them can't read the code those agents write. That code decides the things that matter most: what data exists, which rules always hold, and who can see what. When it's wrong, users' data leaks. The most common case is a database table that anyone on the internet can read.
 
 Svetra moves those decisions out of the code and into one small, typed file, `svetra.yaml`. Your agent writes and edits it while you design the app together. Svetra checks every change, and will compile it into the database schema, security policies, types and validators, deterministically, the same way every time. You review a short file and a plain-English explanation instead of thousands of generated lines, and your agent spends fewer tokens because it stops rewriting boilerplate.
