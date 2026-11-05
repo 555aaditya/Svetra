@@ -191,9 +191,11 @@ Result: FAIL</pre>
     <h2>Install</h2>
     <p>macOS and Linux. The script checks the download's SHA-256 before installing.</p>
 <pre>curl -fsSL https://raw.githubusercontent.com/555aaditya/Svetra/main/install.sh | sh</pre>
+    <p>Or with Node 18+, on macOS, Linux or Windows. The first run downloads the same release binary and checks its SHA-256:</p>
+<pre>npx svetra --version</pre>
     <p>Or with Rust:</p>
 <pre>cargo install svetra</pre>
-    <p>Windows builds are on the <a href="https://github.com/555aaditya/Svetra/releases/latest">releases page</a>. Then:</p>
+    <p>Windows builds are also on the <a href="https://github.com/555aaditya/Svetra/releases/latest">releases page</a>. Then:</p>
 <pre>svetra validate svetra.yaml
 svetra compile svetra.yaml
 svetra explain svetra.yaml
