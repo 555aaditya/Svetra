@@ -1,10 +1,11 @@
 name: pages
 
-# Publish site/ to GitHub Pages whenever main changes, so the site describes the released version.
+# Build site/ and publish it to GitHub Pages whenever main changes, so the site describes the
+# released version. The site imports real compiler output from tests/, so changes there count.
 on:
   push:
     branches: [main]
-    paths: [site/**, .github/workflows/pages.yml]
+    paths: [site/**, tests/fixtures/**, tests/golden/**, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -24,9 +25,18 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+        working-directory: site
+      - run: npm run build
+        working-directory: site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: site/dist
       - id: deploy
         uses: actions/deploy-pages@v4
