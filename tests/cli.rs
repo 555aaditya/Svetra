@@ -194,3 +194,86 @@ fn context_is_smaller_than_the_yaml() {
         );
     }
 }
+
+#[test]
+fn compile_sets_only_the_owned_sign_in_settings_in_config_toml() {
+    let dir = temp_project("config", include_str!("fixtures/clinic.yaml"));
+    let original = include_str!("fixtures/supabase-config.toml");
+    std::fs::create_dir_all(dir.join("supabase")).unwrap();
+    std::fs::write(dir.join("supabase/config.toml"), original).unwrap();
+    let file = dir.join("svetra.yaml");
+    let out = svetra(&["compile", file.to_str().unwrap()]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    assert!(stdout.contains("updated the sign-in settings in supabase/config.toml"));
+    let config = std::fs::read_to_string(dir.join("supabase/config.toml")).unwrap();
+    for line in [
+        "enable_signup = false",
+        "minimum_password_length = 12",
+        "password_requirements = \"lower_upper_letters_digits\"",
+        "enable_confirmations = true",
+        "secure_password_change = true",
+        "[auth.external.google]\nenabled = true\nclient_id = \"env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)\"",
+        "[auth.mfa.totp]\nenroll_enabled = true\nverify_enabled = true",
+    ] {
+        assert!(config.contains(line), "missing: {line}");
+    }
+    // Everything Svetra doesn't own is untouched: compare the lines that aren't owned keys.
+    let owned = [
+        "enable_signup",
+        "enable_anonymous_sign_ins",
+        "minimum_password_length",
+        "password_requirements",
+        "enable_confirmations",
+        "secure_password_change",
+        "enroll_enabled",
+        "verify_enabled",
+        "enabled",
+        "client_id",
+        "secret",
+    ];
+    let unowned = |s: &str| -> Vec<String> {
+        s.lines()
+            .filter(|l| {
+                !owned
+                    .iter()
+                    .any(|k| l.trim().starts_with(&format!("{k} =")))
+            })
+            .filter(|l| !l.trim().is_empty() && l.trim() != "[auth.external.google]")
+            .map(String::from)
+            .collect()
+    };
+    assert_eq!(unowned(&config), unowned(original));
+
+    let out = svetra(&["compile", file.to_str().unwrap(), "--check"]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    std::fs::write(
+        dir.join("supabase/config.toml"),
+        config.replace(
+            "minimum_password_length = 12",
+            "minimum_password_length = 6",
+        ),
+    )
+    .unwrap();
+    let out = svetra(&["compile", file.to_str().unwrap(), "--check"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stdout).contains(
+        "out of date: supabase/config.toml (auth.minimum_password_length is 6, svetra.yaml says 12)"
+    ));
+}
+
+#[test]
+fn without_config_toml_compile_says_to_run_supabase_init() {
+    let dir = temp_project("noconfig", include_str!("fixtures/clinic.yaml"));
+    let file = dir.join("svetra.yaml");
+    let out = svetra(&["compile", file.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("Run `supabase init`"));
+    assert!(!dir.join("supabase/config.toml").exists());
+    assert!(dir.join("supabase/schemas/svetra.sql").exists());
+}

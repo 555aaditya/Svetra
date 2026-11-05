@@ -1,6 +1,7 @@
 //! `svetra compile`: turn a validated document into its output files (docs/compiler.md).
 
 pub mod access_tests;
+pub mod config;
 pub mod expr;
 pub mod names;
 pub mod sql;

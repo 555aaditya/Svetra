@@ -8,7 +8,8 @@ Usage:
   svetra explain [FILE]             Describe the app in plain English: data, rules, who can see what
   svetra graph [FILE]               Draw the app as a Mermaid diagram
   svetra context [FILE]             Print the whole app compactly, for agents
-  svetra compile [FILE] [--check]   Write the SQL schema and TypeScript types next to FILE;
+  svetra compile [FILE] [--check]   Write the SQL schema, TypeScript types and access tests next
+                                    to FILE, and sign-in settings into supabase/config.toml;
                                     --check writes nothing and fails if they are out of date
   svetra --version                  Print the version
   svetra --help                     Print this help
@@ -142,15 +143,36 @@ fn compile(args: &[String]) -> ExitCode {
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(std::path::Path::new("."));
+    // Sign-in settings go into Supabase's own config.toml, which Svetra edits but doesn't own.
+    let (doc, _) = svetra::load::load(&src);
+    let config_path = dir.join(CONFIG);
+    let config = match (&doc.auth, std::fs::read_to_string(&config_path)) {
+        (None, _) => None,
+        (Some(_), Ok(existing)) => {
+            let settings = svetra::compile::config::settings(&doc, &existing);
+            Some((existing, settings))
+        }
+        (Some(_), Err(_)) => {
+            println!(
+                "note: no {CONFIG}, so the sign-in settings weren't applied. Run `supabase init`, then `svetra compile` again."
+            );
+            None
+        }
+    };
     if check {
-        let stale: Vec<&str> = outputs
+        let mut stale: Vec<String> = outputs
             .iter()
             .filter(|o| {
                 std::fs::read_to_string(dir.join(o.path)).ok().as_deref()
                     != Some(o.contents.as_str())
             })
-            .map(|o| o.path)
+            .map(|o| o.path.to_string())
             .collect();
+        if let Some((existing, settings)) = &config {
+            for d in svetra::compile::config::differences(existing, settings) {
+                stale.push(format!("{CONFIG} ({d})"));
+            }
+        }
         if stale.is_empty() {
             println!("Generated files are up to date.");
             return ExitCode::SUCCESS;
@@ -170,8 +192,20 @@ fn compile(args: &[String]) -> ExitCode {
         }
         println!("wrote {}", o.path);
     }
+    if let Some((existing, settings)) = config {
+        let updated = svetra::compile::config::apply(&existing, &settings);
+        if updated != existing {
+            if let Err(e) = write_atomic(&config_path, &updated) {
+                eprintln!("svetra: cannot write {CONFIG}: {e}");
+                return ExitCode::from(1);
+            }
+            println!("updated the sign-in settings in {CONFIG}");
+        }
+    }
     ExitCode::SUCCESS
 }
+
+const CONFIG: &str = "supabase/config.toml";
 
 /// Write to a temporary file in the same folder, then rename, so a crash never leaves half a file.
 fn write_atomic(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
