@@ -4,8 +4,9 @@ Releases are cut from `main` by the maintainer.
 
 1. **Update the version:**
    1. In `Cargo.toml`, set the version.
-   2. In `CHANGELOG.md`, rename "unreleased" to the release date.
-   3. Merge both into `develop` through a PR.
+   2. In `npm/package.json`, set the same version. `tests/npm.rs` fails if they differ.
+   3. In `CHANGELOG.md`, rename "unreleased" to the release date.
+   4. Merge them into `develop` through a PR.
 2. **Publish `main`** by fast-forwarding it to `develop`: `git push origin develop:main`. Only the maintainer can push to `main`.
 3. **Tag the release:** `git tag -s v0.1.0 main && git push origin v0.1.0`.
 
@@ -25,4 +26,11 @@ The tag starts `.github/workflows/release.yml`, which runs four jobs:
 
 **Dry run:** push a tag with a suffix, such as `v0.1.0-rc.1`. It runs everything except crates.io, and creates a *pre-release*, which never becomes the "latest" the installer uses. Delete the pre-release and tag afterwards.
 
-**npm** (so `npx svetra` works) isn't wired up yet. It needs a maintainer npm account and a small wrapper package that downloads the matching release binary.
+**npm** (`npx svetra`): `npm/` is a small wrapper with no dependencies. On first run it downloads the binary from the GitHub release whose tag matches its own version, checks it against `SHA256SUMS`, and caches it. Publish it **after** the release workflow has finished, because before that its first run has nothing to download:
+
+```sh
+cd npm
+npm publish --access public
+```
+
+npm asks for a one-time code from the maintainer's authenticator app. Publishing isn't automated yet.

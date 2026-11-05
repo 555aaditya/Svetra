@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **npm package.** `npx svetra` runs the release binary for macOS, Linux or Windows: the first run downloads it from the matching GitHub release, checks its SHA-256 against `SHA256SUMS`, and caches it. No dependencies and no install scripts.
+
 ## 0.3.0 (2026-11-05)
 
 Sign-in settings: how people get in, safe by default.
