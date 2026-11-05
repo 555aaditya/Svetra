@@ -22,6 +22,52 @@ pub struct Document {
     pub policies: Vec<Policy>,
     pub holes: Vec<Hole>,
     pub roles: Vec<RoleDef>,
+    pub auth: Option<Auth>,
+}
+
+/// The `auth` section: how people sign in. Unset keys keep their defaults (docs/format.md).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Auth {
+    pub pos: Pos,
+    pub sign_in: Vec<NameRef>,
+    /// `open` or `invite_only`.
+    pub signup: Option<NameRef>,
+    pub confirm_email: Option<(bool, Pos)>,
+    pub password: Option<Password>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Password {
+    pub pos: Pos,
+    pub min_length: Option<(i64, Pos)>,
+    pub require: Option<NameRef>,
+}
+
+impl Auth {
+    pub fn email(&self) -> bool {
+        self.sign_in.iter().any(|m| m.name == "email")
+    }
+    pub fn invite_only(&self) -> bool {
+        self.signup
+            .as_ref()
+            .is_some_and(|s| s.name == "invite_only")
+    }
+    pub fn confirms_email(&self) -> bool {
+        self.confirm_email.is_none_or(|(b, _)| b)
+    }
+    pub fn min_length(&self) -> i64 {
+        self.password
+            .as_ref()
+            .and_then(|p| p.min_length)
+            .map_or(10, |(n, _)| n)
+    }
+    /// Supabase's `password_requirements` value: empty for `none`.
+    pub fn requirements(&self) -> &str {
+        match self.password.as_ref().and_then(|p| p.require.as_ref()) {
+            Some(r) if r.name != "none" => &r.name,
+            _ => "",
+        }
+    }
 }
 
 /// A role people can hold: global (`admin`), or scoped to rows of one entity (`staff` at a `Location`).
@@ -31,6 +77,8 @@ pub struct RoleDef {
     pub pos: Pos,
     pub description: Option<String>,
     pub scope: Option<NameRef>,
+    /// The role counts only in a session verified with a second factor.
+    pub mfa: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -10,9 +10,11 @@ fn app(extra: &str) -> String {
     )
 }
 
+/// Findings other than SVT009 (no `auth` section), which tests/auth.rs covers.
 fn codes(src: &str) -> Vec<(String, String)> {
     validate(src)
         .into_iter()
+        .filter(|d| d.code.id() != "SVT009")
         .map(|d| (d.code.id().to_string(), d.message))
         .collect()
 }

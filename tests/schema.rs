@@ -37,6 +37,12 @@ fn schema_keys_match_the_loader() {
         "param spec"
     );
     assert_eq!(props(&defs["role"]), set(load::ROLE_KEYS), "role");
+    assert_eq!(props(&defs["auth"]), set(load::AUTH_KEYS), "auth");
+    assert_eq!(
+        props(&defs["password"]),
+        set(load::PASSWORD_KEYS),
+        "password"
+    );
 }
 
 #[test]

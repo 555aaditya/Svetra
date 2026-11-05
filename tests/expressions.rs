@@ -1,6 +1,7 @@
 use svetra::report::validate;
 
 /// Validate a one-entity file with `extra` appended, returning (code, message) pairs.
+/// SVT009 (no `auth` section) is left out; tests/auth.rs covers it.
 fn run(constraint: &str, policy_when: &str) -> Vec<(String, String)> {
     let src = format!(
         "svetra: \"0.1\"\nsystem: App\nentities:\n  Org:\n    fields:\n      id: {{ type: uuid, primary: true }}\n      admin: {{ type: user, required: true }}\n    indexes:\n      - [admin]\n\
@@ -12,6 +13,7 @@ fn run(constraint: &str, policy_when: &str) -> Vec<(String, String)> {
     );
     validate(&src)
         .into_iter()
+        .filter(|d| d.code.id() != "SVT009")
         .map(|d| (d.code.id().to_string(), d.message))
         .collect()
 }
