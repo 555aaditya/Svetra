@@ -173,13 +173,14 @@ Result: FAIL</pre>
 <section>
   <div class="wrap">
     <h2>What it checks before anything is written</h2>
-    <p><code>svetra validate</code> runs 19 checks, each with a stable code, a line and column, and a fix. A few of them:</p>
+    <p><code>svetra validate</code> runs 21 checks, each with a stable code, a line and column, and a fix. A few of them:</p>
     <table>
       <tr><th>Code</th><th>Catches</th></tr>
       <tr><td><code>SVT001</code></td><td>A table the API can reach with no access rule</td></tr>
       <tr><td><code>SVT005</code></td><td>Money stored as a float, which loses cents</td></tr>
       <tr><td><code>SVT006</code></td><td>A role that isn't declared, or a scoped role checked against the wrong thing</td></tr>
       <tr><td><code>SVT007</code></td><td>Logged-out visitors getting more than signed-in people</td></tr>
+      <tr><td><code>SVT008</code></td><td>Weak or invalid sign-in settings, such as passwords shorter than 8 characters</td></tr>
     </table>
     <p class="muted">Add <code>--json</code> and your agent gets the same findings in a form it can act on.</p>
   </div>
@@ -205,13 +206,13 @@ supabase test db</pre>
     <h2>Roadmap</h2>
     <table>
       <tr><th>What</th><th>Status</th></tr>
-      <tr><td>Format and validator, 19 checks, JSON output for agents</td><td class="done">Done</td></tr>
+      <tr><td>Format and validator, 21 checks, JSON output for agents</td><td class="done">Done</td></tr>
       <tr><td>Compiler: Postgres, row-level security, TypeScript and Zod</td><td class="done">Done</td></tr>
       <tr><td><code>explain</code>, <code>graph</code> and <code>context</code></td><td class="done">Done</td></tr>
       <tr><td>Roles and teams: global and scoped roles</td><td class="done">Done</td></tr>
       <tr><td>Access tests, proven on your database</td><td class="done">Done</td></tr>
-      <tr><td>Sign-in settings: methods, email confirmation, MFA for admins</td><td>Next</td></tr>
-      <tr><td>The Svetra skill and MCP server for Claude Code, Cursor and Codex</td><td>Planned</td></tr>
+      <tr><td>Sign-in settings: methods, email confirmation, password rules, second factors for roles</td><td class="done">Done</td></tr>
+      <tr><td>The Svetra skill and MCP server for Claude Code, Cursor and Codex</td><td>Next</td></tr>
       <tr><td><code>svetra view</code>: an interactive map of your app</td><td>Planned</td></tr>
     </table>
   </div>

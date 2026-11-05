@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Sign-in settings.** A new `auth` section: `sign_in` (email and OAuth providers), `signup` (`open` or `invite_only`), `confirm_email` and `password` rules, with safe defaults (10-character passwords, confirmed emails). `svetra compile` sets only the keys Svetra owns in `supabase/config.toml`, keeping every other line, and `--check` names each key that differs. OAuth secrets are written as `env(...)` references.
+- **Second factors for roles.** `mfa: true` on a role makes `has_role` require an `aal2` session. The access tests add a person who holds the role without a second factor and must get nothing extra.
+- **`explain`** adds "Signing in" and "Before going live". `context` adds an `auth` line.
+- **New checks:** `SVT008` (invalid sign-in settings) and `SVT009` (info: no `auth` section, so Supabase's weak defaults apply).
+
 ## 0.2.0 (2026-11-04)
 
 Access tests: your database proves who can see what.
