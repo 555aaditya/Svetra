@@ -49,7 +49,7 @@ create policy "owner_reads_own_transactions" on "public"."transaction"
 -- Holes
 create schema if not exists "svetra_holes";
 
-create role "svetra_hole_transfer" nologin;
+do $$ begin create role "svetra_hole_transfer" nologin; exception when duplicate_object then null; end $$;
 grant "svetra_hole_transfer" to current_user;
 grant usage, create on schema "svetra_holes" to "svetra_hole_transfer";
 grant usage on schema "public" to "svetra_hole_transfer";

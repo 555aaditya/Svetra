@@ -46,7 +46,7 @@ create policy "public_read" on "public"."post"
 -- Holes
 create schema if not exists "svetra_holes";
 
-create role "svetra_hole_write_audit" nologin;
+do $$ begin create role "svetra_hole_write_audit" nologin; exception when duplicate_object then null; end $$;
 grant "svetra_hole_write_audit" to current_user;
 grant usage, create on schema "svetra_holes" to "svetra_hole_write_audit";
 grant usage on schema "public" to "svetra_hole_write_audit";

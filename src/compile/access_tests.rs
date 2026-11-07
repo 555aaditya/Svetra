@@ -390,10 +390,10 @@ fn both(x: Option<bool>, y: Option<bool>) -> Option<bool> {
 }
 
 /// Entities in an order where every ref target comes first; file order breaks ties and cycles.
-fn insert_order(world: &World) -> Vec<usize> {
+fn insert_order(world: &World, tables: usize) -> Vec<usize> {
     let mut done: Vec<usize> = Vec::new();
-    while done.len() < world.entities.len() {
-        let ready = (0..world.entities.len()).find(|&i| {
+    while done.len() < tables {
+        let ready = (0..tables).find(|&i| {
             !done.contains(&i)
                 && world.entities[i].fields.iter().all(|f| match &f.ty {
                     FieldType::Ref(t) => {
@@ -404,7 +404,7 @@ fn insert_order(world: &World) -> Vec<usize> {
                 })
         });
         let next = ready.unwrap_or_else(|| {
-            (0..world.entities.len())
+            (0..tables)
                 .find(|i| !done.contains(i))
                 .expect("some entity is left")
         });
@@ -435,6 +435,27 @@ begin
     return 'error ' || sqlstate || ': ' || sqlerrm;
   end;
 end $$;
+-- Call a hole as one person, then undo it. Refused means SQLSTATE 42501; anything else, even an
+-- error from the hole's own code, means the call got past who-may-call-it.
+create function svetra_test.call(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
+language plpgsql as $$
+begin
+  begin
+    perform set_config('role', p_role, true);
+    perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
+    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
+    execute p_sql;
+    raise exception 'svetra_undo';
+  exception when others then
+    return case when sqlstate = '42501' then 'refused' else 'let through' end;
+  end;
+end $$;
+-- What a role may do on a table, as "select, insert, update, delete" or "none".
+create function svetra_test.privileges(p_role text, p_table text) returns text language sql as $$
+  select coalesce(string_agg(v.p, ', ' order by v.o), 'none')
+  from (values (1, 'select'), (2, 'insert'), (3, 'update'), (4, 'delete')) v(o, p)
+  where has_table_privilege(p_role, p_table, v.p)
+$$;
 "#;
 
 /// The whole test file for a validated document.
@@ -459,14 +480,24 @@ pub fn tests(doc: &Document) -> String {
             aal2: false,
         },
     ];
+    // Each hole's inputs act as one more entity, so its `when` evaluates like a policy. Only the
+    // first `tables` entities are tables.
+    let tables = doc.entities.len();
+    let by_name_src: std::collections::HashMap<&str, &Entity> =
+        doc.entities.iter().map(|e| (e.name.as_str(), e)).collect();
+    let hole_inputs: Vec<Entity> = doc
+        .holes
+        .iter()
+        .map(|h| crate::typeck::hole_entity(h, &by_name_src))
+        .collect();
+    let all: Vec<&Entity> = doc.entities.iter().chain(&hole_inputs).collect();
     let world = World {
-        entities: doc.entities.iter().collect(),
-        by_name: doc
-            .entities
+        by_name: all
             .iter()
             .enumerate()
             .map(|(i, e)| (e.name.as_str(), i))
             .collect(),
+        entities: all,
         alice: person_id(1),
         bob: person_id(2),
         mfa: doc
@@ -536,7 +567,7 @@ pub fn tests(doc: &Document) -> String {
             setup.push(lives(&sql, &format!("{} holds {role}", p.name)));
         }
     }
-    for ei in insert_order(&world) {
+    for ei in insert_order(&world, tables) {
         for (k, r) in ROWS.iter().enumerate().take(2) {
             let what = format!("{} {r}", world.entities[ei].name);
             setup.push(lives(&insert(&world, ei, k), &what));
@@ -544,7 +575,7 @@ pub fn tests(doc: &Document) -> String {
     }
 
     let mut checks = Vec::new();
-    for (ei, e) in world.entities.iter().enumerate() {
+    for (ei, e) in world.entities.iter().enumerate().take(tables) {
         for p in &people {
             let mut check = |verb: &str, k: usize, sql: String, ok: Option<bool>| {
                 let role = if p.id.is_some() {
@@ -588,6 +619,86 @@ pub fn tests(doc: &Document) -> String {
             }
             for k in 2..4 {
                 check("create", k, insert(&world, ei, k), can(k, Action::Insert));
+            }
+        }
+    }
+
+    for (hi, h) in doc.holes.iter().enumerate() {
+        let ei = tables + hi;
+        let role = format!("svetra_hole_{}", h.name);
+        let declared = |list: &[NameRef], e: &Entity| list.iter().any(|r| r.name == e.name);
+        for e in &doc.entities {
+            let (want, words) = if declared(&h.writes, e) {
+                ("select, insert, update, delete", "can change")
+            } else if declared(&h.reads, e) {
+                ("select", "can only read")
+            } else {
+                ("none", "can't touch")
+            };
+            checks.push(format!(
+                "select is(svetra_test.privileges({}, {}), {}, {});",
+                lit(&role),
+                lit(&table(&e.name)),
+                lit(want),
+                lit(&format!("{} {words} {}", h.name, e.name))
+            ));
+        }
+        let when = h
+            .when
+            .as_deref()
+            .map(|w| expr::parse(w).expect("validated"));
+        for p in &people {
+            let role = if p.id.is_some() {
+                "authenticated"
+            } else {
+                "anon"
+            };
+            let user = p.id.as_ref().map_or("null".into(), |id| format!("'{id}'"));
+            let aal = if p.aal2 { ", 'aal2'" } else { "" };
+            for (k, r) in ROWS.iter().enumerate().take(2) {
+                let applies = match h.role {
+                    Role::Anyone => true,
+                    Role::Anon => p.id.is_none(),
+                    Role::Authenticated => p.id.is_some(),
+                };
+                let ok = if !applies {
+                    Some(false)
+                } else if let Some(w) = &when {
+                    let unsure = Cell::new(false);
+                    let env = Env {
+                        world: &world,
+                        ei,
+                        k,
+                        person: p,
+                        unsure: &unsure,
+                    };
+                    let v = eval(w, &env);
+                    if unsure.get() {
+                        None
+                    } else {
+                        Some(v == Val::Bool(true))
+                    }
+                } else {
+                    Some(true)
+                };
+                let args: Vec<String> = world.entities[ei]
+                    .fields
+                    .iter()
+                    .map(|f| world.value(ei, f, k).0)
+                    .collect();
+                let sql = format!("select \"public\".{}({})", q(&h.name), args.join(", "));
+                let what = format!("call {} on the {r} rows", h.name);
+                checks.push(match ok {
+                    Some(ok) => format!(
+                        "select is(svetra_test.call('{role}', {user}, $svetra${sql}$svetra${aal}), '{}', {});",
+                        if ok { "let through" } else { "refused" },
+                        lit(&format!("{} {} {what}", p.name, if ok { "can" } else { "can't" }))
+                    ),
+                    None => format!(
+                        "select skip({}, 1);",
+                        lit(&format!("{} {what}: a rule compares a time with text that isn't an ISO time", p.name))
+                    ),
+                });
             }
         }
     }

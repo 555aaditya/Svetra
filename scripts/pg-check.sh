@@ -26,6 +26,10 @@ for name in finledger posts bookings clinic; do
   for _ in $(seq 1 90); do docker logs svetra-pg-check 2>&1 | grep -q "init process complete" && break; sleep 1; done
   for _ in $(seq 1 60); do docker exec svetra-pg-check pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
   mkdir -p "$work/$name" && cp "tests/fixtures/$name.yaml" "$work/$name/svetra.yaml"
+  # Real hole bodies, where a fixture has them; otherwise compile writes stubs.
+  if [ -d "tests/fixtures/holes/$name" ]; then
+    mkdir -p "$work/$name/supabase/holes" && cp "tests/fixtures/holes/$name/"*.sql "$work/$name/supabase/holes/"
+  fi
   "$bin" compile "$work/$name/svetra.yaml" >/dev/null
   psql() { docker exec -i svetra-pg-check psql -U postgres -v ON_ERROR_STOP=1 -q "$@"; }
   psql < tests/pg/supabase_stub.sql

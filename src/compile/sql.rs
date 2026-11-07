@@ -99,7 +99,10 @@ fn hole(
 ) -> String {
     let role = q(&format!("svetra_hole_{}", h.name));
     let mut out = vec![
-        format!("create role {role} nologin;"),
+        // Roles belong to the whole server and survive a database reset, so create it only once.
+        format!(
+            "do $$ begin create role {role} nologin; exception when duplicate_object then null; end $$;"
+        ),
         // The migration's own role must be a member to hand the role a function.
         format!("grant {role} to current_user;"),
         format!("grant usage, create on schema \"svetra_holes\" to {role};"),
