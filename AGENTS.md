@@ -28,7 +28,7 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 | `src/compile/` | `svetra compile`: names and quoting (`names.rs`), expressions to SQL (`expr.rs`), the SQL schema (`sql.rs`), TypeScript and Zod (`ts.rs`), access tests with their own rule evaluator (`access_tests.rs`), sign-in settings edited into `supabase/config.toml` (`config.rs`), plus the entry point with header and revision (`mod.rs`) |
 | `src/main.rs` | The CLI |
 | `schema/svetra.schema.json` | The JSON Schema for editors. Hand-written; `tests/schema.rs` fails if it drifts from the loader |
-| `tests/` | Integration tests. `tests/fixtures/` holds example `svetra.yaml` files, and `tests/golden/` holds their expected compiler output, compared byte for byte |
+| `tests/` | Integration tests. `tests/fixtures/` holds example `svetra.yaml` files (and real hole bodies in `tests/fixtures/holes/<fixture>/`), and `tests/golden/` holds their expected compiler output, compared byte for byte |
 | `site/` | The website: Vite, React, Tailwind v4 and BoardUI's free components (MIT, see `site/LICENSE-BOARDUI`). Shows only real output, imported from `tests/` at build time. `npm run build` in `site/`; deployed from `main` by `pages.yml` |
 | `npm/` | The npm wrapper: downloads, verifies and caches the release binary on first run |
 | `tests/pg/`, `scripts/pg-check.sh` | Compiles the fixtures, applies the SQL to PostgreSQL 16 with a Supabase stand-in, and asserts behaviour: who sees which rows, and what's rejected. Then runs the generated access tests with pgTAP, and each deliberate breakage in `tests/pg/breakages/` (a `.sql` change plus the exact `.expected` failures), on its own copy of the database |
