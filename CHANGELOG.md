@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-11-07)
+
+Svetra inside your agent: holes for custom code, an MCP server, and a Claude Code skill.
 
 - **`svetra init`** sets a project up for agents: the Svetra skill for Claude Code (`.claude/skills/svetra/SKILL.md`), which teaches the design-validate-compile-explain loop and its safety rules; the `svetra` server in `.mcp.json`, keeping every other server; and a starter `svetra.yaml` if there isn't one.
 - **`svetra mcp`**, an MCP server over stdio for Claude Code, Cursor, Codex and other agents. Its tools are `validate`, `compile` (with `check`), `explain`, `context` and `graph`, each returning JSON; an invalid file returns its diagnostics with remediation hints. Add it to Claude Code with `claude mcp add svetra -- npx -y svetra mcp`.
