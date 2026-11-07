@@ -15,8 +15,8 @@ Sets a project up for agents. `DIR` defaults to the current folder. It writes:
 | File | What | If it exists |
 |---|---|---|
 | `.claude/skills/svetra/SKILL.md` | The Svetra skill (below) | Replaced, so it stays current. It's generated and marked as such |
-| `.mcp.json` | Adds a `svetra` server: `{"command": "npx", "args": ["svetra", "mcp"]}` | The `svetra` entry is added or updated, and every other server is kept |
-| `svetra.yaml` | A minimal valid starting file: one private entity and an `auth` section | **Never overwritten** |
+| `.mcp.json` | Adds a `svetra` server: `{"command": "npx", "args": ["-y", "svetra", "mcp"]}`. `-y` matters: agents start MCP servers without a terminal, so npx's install prompt would hang | The `svetra` entry is added or updated, and every other server and key is kept, in order. Invalid JSON is refused, not overwritten |
+| `svetra.yaml` | A valid starting file: a `Note` that only its author can see and change, and an `auth` section with email sign-in | **Never overwritten** |
 
 `init` prints what it wrote and the next step: "Open your agent and describe the app you want."
 
