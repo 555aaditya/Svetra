@@ -1,0 +1,7 @@
+not ok 38 - admin without a second factor can't see Visit a
+not ok 39 - admin without a second factor can't see Visit b
+not ok 40 - admin without a second factor can't change Visit a
+not ok 41 - admin without a second factor can't change Visit b
+not ok 42 - admin without a second factor can't delete Visit a
+not ok 43 - admin without a second factor can't delete Visit b
+# Looks like you failed 6 tests of 45
