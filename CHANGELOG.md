@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Holes run as guarded Postgres functions.** A hole like `transfer` compiles to a function the app calls with `supabase.rpc()`. It runs as its own database role, granted only the tables in its `reads` and `writes`. A new `when` condition, such as `source.owner == auth.user`, is checked before any hand-written code and refuses everyone else with SQLSTATE 42501, and a new `as` says who may call it. The body is PL/pgSQL in `supabase/holes/<name>.sql`, created once as a stub and never overwritten. `src/svetra.gen.ts` gets a typed function per hole that validates input and output with Zod.
+- **Access tests cover holes:** each hole's role must hold exactly its declared table privileges, and its guard is checked for every person. `explain` says who can call each hole, in plain words.
 - **npm package.** `npx svetra` runs the release binary for macOS, Linux or Windows: the first run downloads it from the matching GitHub release, checks its SHA-256 against `SHA256SUMS`, and caches it. No dependencies and no install scripts.
 
 ## 0.3.0 (2026-11-05)
