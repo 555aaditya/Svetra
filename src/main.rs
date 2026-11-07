@@ -116,92 +116,41 @@ fn view(
 }
 
 fn compile(args: &[String]) -> ExitCode {
+    use svetra::project::{CONFIG, Failure};
     let (file, check) = match file_and_flag("compile", args, "--check") {
         Ok(v) => v,
         Err(e) => return usage(&e),
     };
-    let src = match read(file) {
-        Ok(s) => s,
-        Err(e) => return usage(&e),
-    };
-    let path = std::path::Path::new(file);
-    let name = path
-        .file_name()
-        .map_or(file.into(), |n| n.to_string_lossy());
-    let dir = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(std::path::Path::new("."));
-    // Hole bodies are yours: read each one, and write a stub only where there's none yet.
-    let (doc, _) = svetra::load::load(&src);
-    let mut bodies = std::collections::HashMap::new();
-    for h in &doc.holes {
-        let rel = format!("supabase/holes/{}.sql", h.name);
-        match std::fs::read_to_string(dir.join(&rel)) {
-            Ok(body) => {
-                bodies.insert(h.name.clone(), body);
-            }
-            Err(_)
-                if !check
-                    && svetra::report::validate(&src)
-                        .iter()
-                        .all(|d| d.code.severity() != svetra::diag::Severity::Error) =>
-            {
-                if let Err(e) = write_atomic(&dir.join(&rel), &svetra::compile::sql::stub(&h.name))
-                {
-                    eprintln!("svetra: cannot write {rel}: {e}");
-                    return ExitCode::from(1);
-                }
-                println!("wrote {rel} (a stub: write the body there)");
-            }
-            Err(_) => {}
-        }
-    }
-    let (outputs, notes) = match svetra::compile::compile_with(&src, &name, &bodies) {
-        Ok(v) => v,
-        Err(diags) => {
+    let run = match svetra::project::compile(std::path::Path::new(file), check) {
+        Ok(run) => run,
+        Err(Failure::Read(e)) => return usage(&e),
+        Err(Failure::Invalid(diags)) => {
             print!("{}", report::human(file, &diags));
             println!("Nothing was written.");
             return ExitCode::from(1);
         }
+        Err(Failure::Write(e)) => {
+            eprintln!("svetra: {e}");
+            return ExitCode::from(1);
+        }
     };
-    if !notes.is_empty() {
-        print!("{}", report::human(file, &notes));
+    for s in &run.stubs {
+        println!("wrote {s} (a stub: write the body there)");
     }
-    // Sign-in settings go into Supabase's own config.toml, which Svetra edits but doesn't own.
-    let config_path = dir.join(CONFIG);
-    let config = match (&doc.auth, std::fs::read_to_string(&config_path)) {
-        (None, _) => None,
-        (Some(_), Ok(existing)) => {
-            let settings = svetra::compile::config::settings(&doc, &existing);
-            Some((existing, settings))
-        }
-        (Some(_), Err(_)) => {
-            println!(
-                "note: no {CONFIG}, so the sign-in settings weren't applied. Run `supabase init`, then `svetra compile` again."
-            );
-            None
-        }
-    };
+    if !run.notes.is_empty() {
+        print!("{}", report::human(file, &run.notes));
+    }
+    if run.no_config {
+        println!(
+            "note: no {CONFIG}, so the sign-in settings weren't applied. Run `supabase init`, then `svetra compile` again."
+        );
+    }
     if check {
-        let mut stale: Vec<String> = outputs
-            .iter()
-            .filter(|o| {
-                std::fs::read_to_string(dir.join(o.path)).ok().as_deref()
-                    != Some(o.contents.as_str())
-            })
-            .map(|o| o.path.to_string())
-            .collect();
-        if let Some((existing, settings)) = &config {
-            for d in svetra::compile::config::differences(existing, settings) {
-                stale.push(format!("{CONFIG} ({d})"));
-            }
-        }
-        if stale.is_empty() {
+        if run.stale.is_empty() {
             println!("Generated files are up to date.");
             return ExitCode::SUCCESS;
         }
-        for p in &stale {
+        for p in &run.stale {
             println!("out of date: {p}");
         }
         println!(
@@ -209,36 +158,13 @@ fn compile(args: &[String]) -> ExitCode {
         );
         return ExitCode::from(1);
     }
-    for o in &outputs {
-        if let Err(e) = write_atomic(&dir.join(o.path), &o.contents) {
-            eprintln!("svetra: cannot write {}: {e}", o.path);
-            return ExitCode::from(1);
-        }
-        println!("wrote {}", o.path);
+    for w in &run.written {
+        println!("wrote {w}");
     }
-    if let Some((existing, settings)) = config {
-        let updated = svetra::compile::config::apply(&existing, &settings);
-        if updated != existing {
-            if let Err(e) = write_atomic(&config_path, &updated) {
-                eprintln!("svetra: cannot write {CONFIG}: {e}");
-                return ExitCode::from(1);
-            }
-            println!("updated the sign-in settings in {CONFIG}");
-        }
+    if run.config_updated {
+        println!("updated the sign-in settings in {CONFIG}");
     }
     ExitCode::SUCCESS
-}
-
-const CONFIG: &str = "supabase/config.toml";
-
-/// Write to a temporary file in the same folder, then rename, so a crash never leaves half a file.
-fn write_atomic(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let tmp = path.with_extension("svetra-tmp");
-    std::fs::write(&tmp, contents)?;
-    std::fs::rename(&tmp, path)
 }
 
 fn usage(msg: &str) -> ExitCode {
