@@ -59,6 +59,7 @@ export const outputs = [
 
 export const install = [
   { id: "npx", label: "npx", cmd: "npx svetra --version", note: "Node 18+, on macOS, Linux and Windows. The first run downloads the release binary and checks its SHA-256." },
+  { id: "npm", label: "npm", cmd: "npm install --save-dev svetra", note: "Pins the version per project, so the whole team and CI use the same one; then run npx svetra. For your PATH instead: npm install -g svetra." },
   { id: "cargo", label: "cargo", cmd: "cargo install svetra", note: "Rust 1.88+, from crates.io." },
   { id: "curl", label: "curl", cmd: "curl -fsSL https://raw.githubusercontent.com/555aaditya/Svetra/main/install.sh | sh", note: "macOS and Linux. Checks the download's SHA-256 before installing." },
 ];

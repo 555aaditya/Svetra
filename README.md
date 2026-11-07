@@ -48,7 +48,13 @@ Every table is closed by default. Here, people can read only their own accounts,
 curl -fsSL https://raw.githubusercontent.com/555aaditya/Svetra/main/install.sh | sh
 ```
 
-Or with Node 18+, on macOS, Linux or Windows: `npx svetra --version`. The npm package downloads the same release binary on first run and checks its SHA-256.
+Or with Node 18+, on macOS, Linux or Windows. The npm package downloads the same release binary on first run, checks its SHA-256, and caches it:
+
+```sh
+npx svetra --version              # run it without installing
+npm install -g svetra             # or put `svetra` on your PATH
+npm install --save-dev svetra     # or pin it per project, then `npx svetra ...`
+```
 
 Or with Rust 1.88+: `cargo install svetra`. Windows builds are also on the [releases page](https://github.com/555aaditya/Svetra/releases).
 
