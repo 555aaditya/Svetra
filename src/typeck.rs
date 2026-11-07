@@ -70,6 +70,50 @@ impl<'a> Scope<'a> {
     }
 }
 
+/// A hole's inputs as the fields of a stand-in entity, so `when` is checked, compiled and
+/// evaluated like a policy. An input typed `Entity.<primary key>` becomes a reference to that
+/// entity, which allows one hop: `source.owner`.
+pub fn hole_entity(h: &Hole, entities: &HashMap<&str, &Entity>) -> Entity {
+    let fields = h
+        .input
+        .iter()
+        .filter_map(|p| {
+            let ty = match &p.ty {
+                ParamType::FieldOf { entity, field } => {
+                    let e = entities.get(entity.name.as_str())?;
+                    let f = e.fields.iter().find(|f| &f.name == field)?;
+                    if f.primary {
+                        FieldType::Ref(entity.clone())
+                    } else {
+                        f.ty.clone()
+                    }
+                }
+                ParamType::Type(t) => t.clone(),
+                ParamType::Entity(_) => return None,
+            };
+            Some(Field {
+                name: p.name.clone(),
+                pos: p.pos,
+                ty,
+                required: true,
+                primary: false,
+                unique: false,
+                default: None,
+                auto_now: false,
+            })
+        })
+        .collect();
+    Entity {
+        name: h.name.clone(),
+        pos: h.pos,
+        fields,
+        constraints: Vec::new(),
+        unique: Vec::new(),
+        indexes: Vec::new(),
+        private: false,
+    }
+}
+
 /// Why an expression was rejected: a role problem (SVT006) or any other problem (SVT003).
 #[derive(Debug, PartialEq)]
 pub enum Problem {

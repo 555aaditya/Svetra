@@ -487,6 +487,21 @@ impl<'a> Checker<'a> {
                 );
             }
         }
+        for h in &doc.holes {
+            let Some(when) = &h.when else { continue };
+            let inputs = typeck::hole_entity(h, &entities);
+            let scope = typeck::Scope::new(&inputs, &entities, true, &doc.roles);
+            if let Err(problem) = typeck::check(when, &scope) {
+                let (code, msg) = problem.split();
+                self.d(
+                    code,
+                    format!("holes.{}.when", h.name),
+                    h.pos,
+                    msg,
+                    "Fix the expression; it uses the hole's inputs. See Holes in docs/format.md.",
+                );
+            }
+        }
     }
 
     /// SVT007: a logged-out-only policy that grants more than signed-in people get. Signed-in

@@ -331,6 +331,18 @@
             "type": "string",
             "pattern": "^[A-Z][A-Za-z0-9]*$"
           }
+        },
+        "as": {
+          "description": "Who may call it: authenticated (default), anyone or anon.",
+          "enum": [
+            "authenticated",
+            "anyone",
+            "anon"
+          ]
+        },
+        "when": {
+          "description": "A condition over the inputs that must hold for the call to run, such as \"source.owner == auth.user\".",
+          "type": "string"
         }
       }
     },

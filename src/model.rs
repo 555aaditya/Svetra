@@ -179,6 +179,10 @@ pub struct Hole {
     pub output: Option<ParamType>,
     pub reads: Vec<NameRef>,
     pub writes: Vec<NameRef>,
+    /// Who may call it, as for policies.
+    pub role: Role,
+    /// A condition over the inputs that must hold for the call to run.
+    pub when: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
