@@ -52,3 +52,29 @@ do $$ begin
   if (select count(*) from public.account) <> 2 then raise exception 'a blocked insert created an account'; end if;
   if (select sum(balance) from public.account) <> 150 then raise exception 'a blocked update changed a balance'; end if;
 end $$;
+
+-- The transfer hole, with the real body in tests/fixtures/holes/finledger/transfer.sql.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000000';
+do $$ declare t public.transaction; begin
+  t := public.transfer('a1000000-0000-0000-0000-000000000000', 'b1000000-0000-0000-0000-000000000000', 30);
+  if t.amount <> 30 or t.status <> 'committed' then raise exception 'transfer returned the wrong transaction'; end if;
+end $$;
+-- Bob can't move alice's money: the guard refuses him before the body runs.
+set request.jwt.claim.sub = 'b0000000-0000-0000-0000-000000000000';
+do $$ begin
+  perform public.transfer('a1000000-0000-0000-0000-000000000000', 'b1000000-0000-0000-0000-000000000000', 30);
+  raise exception 'bob moved alice''s money';
+exception when insufficient_privilege then null; end $$;
+reset role;
+set role anon;
+do $$ begin
+  perform public.transfer('a1000000-0000-0000-0000-000000000000', 'b1000000-0000-0000-0000-000000000000', 30);
+  raise exception 'a logged-out visitor called transfer';
+exception when insufficient_privilege then null; end $$;
+reset role;
+do $$ begin
+  if (select balance from public.account where id = 'a1000000-0000-0000-0000-000000000000') <> 70 then raise exception 'alice should have 70 after the transfer'; end if;
+  if (select balance from public.account where id = 'b1000000-0000-0000-0000-000000000000') <> 80 then raise exception 'bob should have 80 after the transfer'; end if;
+  if (select count(*) from public.transaction) <> 2 then raise exception 'the transfer should be recorded once'; end if;
+end $$;

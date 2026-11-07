@@ -79,3 +79,30 @@ fn when_can_only_read_through_declared_entities() {
         "{found:?}"
     );
 }
+
+#[test]
+fn access_tests_check_each_holes_grants_and_guard() {
+    let (doc, _) = load(include_str!("fixtures/finledger.yaml"));
+    let t = svetra::compile::access_tests::tests(&doc);
+    for (want, name) in [
+        (
+            "select, insert, update, delete",
+            "transfer can change Account",
+        ),
+        ("refused", "anon can't call transfer on the a rows"),
+        ("let through", "alice can call transfer on the a rows"),
+        ("refused", "alice can't call transfer on the b rows"),
+        ("let through", "bob can call transfer on the b rows"),
+    ] {
+        let line = t
+            .lines()
+            .find(|l| l.ends_with(&format!("'{}');", name.replace('\'', "''"))));
+        let line = line.unwrap_or_else(|| panic!("no check named {name}"));
+        assert!(line.contains(&format!("'{want}'")), "{name}: {line}");
+    }
+    // A hole with no `when` lets every signed-in person through, and checks its grants.
+    let (posts, _) = load(include_str!("fixtures/posts.yaml"));
+    let t = svetra::compile::access_tests::tests(&posts);
+    assert!(t.contains("'bob can call write_audit on the a rows');"));
+    assert!(t.contains("'none', 'write_audit can''t touch Post');"));
+}

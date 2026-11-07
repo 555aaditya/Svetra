@@ -24,8 +24,29 @@ begin
     return 'error ' || sqlstate || ': ' || sqlerrm;
   end;
 end $$;
+-- Call a hole as one person, then undo it. Refused means SQLSTATE 42501; anything else, even an
+-- error from the hole's own code, means the call got past who-may-call-it.
+create function svetra_test.call(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
+language plpgsql as $$
+begin
+  begin
+    perform set_config('role', p_role, true);
+    perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
+    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
+    execute p_sql;
+    raise exception 'svetra_undo';
+  exception when others then
+    return case when sqlstate = '42501' then 'refused' else 'let through' end;
+  end;
+end $$;
+-- What a role may do on a table, as "select, insert, update, delete" or "none".
+create function svetra_test.privileges(p_role text, p_table text) returns text language sql as $$
+  select coalesce(string_agg(v.p, ', ' order by v.o), 'none')
+  from (values (1, 'select'), (2, 'insert'), (3, 'update'), (4, 'delete')) v(o, p)
+  where has_table_privilege(p_role, p_table, v.p)
+$$;
 
-select plan(33);
+select plan(41);
 
 -- Test data, inserted as the database owner
 select lives_ok($svetra$insert into auth.users (id, email) values ('5e7a0000-0000-4000-8000-000000000001', 'alice@svetra.test'), ('5e7a0000-0000-4000-8000-000000000002', 'bob@svetra.test')$svetra$, 'test data: people');
@@ -63,6 +84,14 @@ select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$delete from "public"."post" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'allowed', 'bob can delete Post b');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$insert into "public"."post" ("id", "author", "body") values ('5e7a0000-0000-4000-8001-00020000000c', '5e7a0000-0000-4000-8000-000000000001', 'svetra c')$svetra$), 'denied', 'bob can''t create Post c');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$insert into "public"."post" ("id", "author", "body") values ('5e7a0000-0000-4000-8001-00020000000d', '5e7a0000-0000-4000-8000-000000000002', 'svetra d')$svetra$), 'allowed', 'bob can create Post d');
+select is(svetra_test.privileges('svetra_hole_write_audit', '"public"."audit_log"'), 'select, insert, update, delete', 'write_audit can change AuditLog');
+select is(svetra_test.privileges('svetra_hole_write_audit', '"public"."post"'), 'none', 'write_audit can''t touch Post');
+select is(svetra_test.call('anon', null, $svetra$select "public"."write_audit"()$svetra$), 'refused', 'anon can''t call write_audit on the a rows');
+select is(svetra_test.call('anon', null, $svetra$select "public"."write_audit"()$svetra$), 'refused', 'anon can''t call write_audit on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."write_audit"()$svetra$), 'let through', 'alice can call write_audit on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."write_audit"()$svetra$), 'let through', 'alice can call write_audit on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select "public"."write_audit"()$svetra$), 'let through', 'bob can call write_audit on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select "public"."write_audit"()$svetra$), 'let through', 'bob can call write_audit on the b rows');
 
 select * from finish();
 rollback;

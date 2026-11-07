@@ -24,6 +24,27 @@ begin
     return 'error ' || sqlstate || ': ' || sqlerrm;
   end;
 end $$;
+-- Call a hole as one person, then undo it. Refused means SQLSTATE 42501; anything else, even an
+-- error from the hole's own code, means the call got past who-may-call-it.
+create function svetra_test.call(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
+language plpgsql as $$
+begin
+  begin
+    perform set_config('role', p_role, true);
+    perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
+    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
+    execute p_sql;
+    raise exception 'svetra_undo';
+  exception when others then
+    return case when sqlstate = '42501' then 'refused' else 'let through' end;
+  end;
+end $$;
+-- What a role may do on a table, as "select, insert, update, delete" or "none".
+create function svetra_test.privileges(p_role text, p_table text) returns text language sql as $$
+  select coalesce(string_agg(v.p, ', ' order by v.o), 'none')
+  from (values (1, 'select'), (2, 'insert'), (3, 'update'), (4, 'delete')) v(o, p)
+  where has_table_privilege(p_role, p_table, v.p)
+$$;
 
 select plan(87);
 
