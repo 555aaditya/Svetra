@@ -1,0 +1,29 @@
+not ok 48 - anon can't see Booking a
+not ok 49 - anon can't see Booking b
+not ok 50 - anon can't change Booking a
+not ok 51 - anon can't change Booking b
+not ok 52 - anon can't delete Booking a
+not ok 53 - anon can't delete Booking b
+not ok 54 - anon can't create Booking c
+not ok 55 - anon can't create Booking d
+not ok 57 - alice can't see Booking b
+not ok 58 - alice can't change Booking a
+not ok 59 - alice can't change Booking b
+not ok 60 - alice can't delete Booking a
+not ok 61 - alice can't delete Booking b
+not ok 63 - alice can't create Booking d
+not ok 64 - bob can't see Booking a
+not ok 66 - bob can't change Booking a
+not ok 67 - bob can't change Booking b
+not ok 68 - bob can't delete Booking a
+not ok 69 - bob can't delete Booking b
+not ok 70 - bob can't create Booking c
+not ok 78 - admin can't create Booking c
+not ok 79 - admin can't create Booking d
+not ok 81 - staff at Location a can't see Booking b
+not ok 83 - staff at Location a can't change Booking b
+not ok 84 - staff at Location a can't delete Booking a
+not ok 85 - staff at Location a can't delete Booking b
+not ok 86 - staff at Location a can't create Booking c
+not ok 87 - staff at Location a can't create Booking d
+# Looks like you failed 28 tests of 87
