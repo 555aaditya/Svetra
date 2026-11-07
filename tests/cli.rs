@@ -277,3 +277,42 @@ fn without_config_toml_compile_says_to_run_supabase_init() {
     assert!(!dir.join("supabase/config.toml").exists());
     assert!(dir.join("supabase/schemas/svetra.sql").exists());
 }
+
+#[test]
+fn hole_bodies_are_stubbed_once_compiled_in_and_never_overwritten() {
+    let dir = temp_project("holes", include_str!("fixtures/finledger.yaml"));
+    let file = dir.join("svetra.yaml");
+    let body = dir.join("supabase/holes/transfer.sql");
+    let out = svetra(&["compile", file.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(0));
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("wrote supabase/holes/transfer.sql (a stub")
+    );
+    assert!(
+        std::fs::read_to_string(&body)
+            .unwrap()
+            .contains("transfer is not written yet")
+    );
+
+    // An edited body that hasn't been compiled makes the schema out of date.
+    std::fs::write(&body, "  return null;\n").unwrap();
+    let out = svetra(&["compile", file.to_str().unwrap(), "--check"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("out of date: supabase/schemas/svetra.sql")
+    );
+
+    // Compiling takes the body in, and leaves the file alone.
+    let out = svetra(&["compile", file.to_str().unwrap()]);
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("stub"));
+    assert_eq!(std::fs::read_to_string(&body).unwrap(), "  return null;\n");
+    let sql = std::fs::read_to_string(dir.join("supabase/schemas/svetra.sql")).unwrap();
+    assert!(sql.contains("  end if;\n  return null;\nend\n$svetra$;"));
+    let out = svetra(&["compile", file.to_str().unwrap(), "--check"]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+}

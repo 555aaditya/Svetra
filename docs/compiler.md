@@ -238,10 +238,12 @@ The list holds every role with `mfa: true`. Without any, the line is left out.
 Each hole compiles to two functions, plus a role that holds exactly its declared access. All of it is in the SQL schema, in a `-- Holes` section after `-- Policies`.
 
 1. **A role per hole,** `svetra_hole_<name>`, which can't log in. It gets `select` on each entity in `reads` and `writes`, and `insert`, `update` and `delete` on each entity in `writes`, nothing else, plus a permissive policy on each of those tables that lets it through row-level security. Those grants are the only thing a hole's code can touch.
-2. **The body function,** `svetra_holes.<name>`, in a schema the API doesn't expose. It's `security definer` and owned by the hole's role, so its statements run with that role's access and no more, and it has `set search_path = ''`. Svetra writes the signature, then:
-   - **the `when` guard first:** if the condition isn't true, it raises SQLSTATE `42501` (insufficient privilege), so a refused call looks like any other refusal
+2. **The body function,** `svetra_holes.<name>(p_caller, p_<input>, …)`, in a schema the API doesn't expose. It's `security definer` and owned by the hole's role, so its statements run with that role's access and no more, and it has `set search_path = ''`. Svetra writes the signature, then:
+   - **the `when` guard first,** left out when there's no `when`: if the condition isn't true, it raises SQLSTATE `42501` (insufficient privilege), so a refused call looks like any other refusal. `auth.user` in the guard is `p_caller`.
    - **then the body** from `supabase/holes/<name>.sql`, verbatim
-3. **The callable function,** `public.<name>`, which the app calls with `supabase.rpc('<name>', …)`. It's `security invoker` and passes its arguments to the body function. Execute is granted to the hole's `as` roles and revoked from everyone else.
+
+   Only the migration's role may execute it, so no caller can pass in someone else's id.
+3. **The callable function,** `public.<name>`, which the app calls with `supabase.rpc('<name>', …)`. It's generated in full, with no hand-written code. It's `security definer`, so it can call the body function, passing `auth.uid()` as `p_caller` and the arguments as they came. Execute is granted to the hole's `as` roles and revoked from everyone else, so a logged-out visitor calling an `authenticated` hole gets "permission denied".
 
 **The stub body** returns nothing useful and says so: `raise exception 'transfer is not written yet: edit supabase/holes/transfer.sql';`. A hole with a stub still compiles, applies and passes the access tests, because the guard runs before it.
 

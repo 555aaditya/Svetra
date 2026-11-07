@@ -50,3 +50,4 @@ holes:
     output: Transaction
     reads: [Account]
     writes: [Account, Transaction]
+    when: "source.owner == auth.user"

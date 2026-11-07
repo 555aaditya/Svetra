@@ -45,3 +45,33 @@ create policy "owner_reads_own_accounts" on "public"."account"
 create policy "owner_reads_own_transactions" on "public"."transaction"
   for select to authenticated
   using ((select t."owner" from "public"."account" t where t."id" = "transaction"."source") = (select auth.uid()) or (select t."owner" from "public"."account" t where t."id" = "transaction"."destination") = (select auth.uid()));
+
+-- Holes
+create schema if not exists "svetra_holes";
+
+create role "svetra_hole_transfer" nologin;
+grant "svetra_hole_transfer" to current_user;
+grant usage, create on schema "svetra_holes" to "svetra_hole_transfer";
+grant usage on schema "public" to "svetra_hole_transfer";
+grant select, insert, update, delete on table "public"."account" to "svetra_hole_transfer";
+create policy "svetra_hole_transfer" on "public"."account" for all to "svetra_hole_transfer" using (true) with check (true);
+grant select, insert, update, delete on table "public"."transaction" to "svetra_hole_transfer";
+create policy "svetra_hole_transfer" on "public"."transaction" for all to "svetra_hole_transfer" using (true) with check (true);
+create function "svetra_holes"."transfer"(p_caller uuid, p_source uuid, p_destination uuid, p_amount numeric(18, 6))
+  returns "public"."transaction" language plpgsql security definer set search_path = ''
+  as $svetra$
+begin
+  if not coalesce((select t."owner" from "public"."account" t where t."id" = p_source) = p_caller, false) then
+    raise exception 'not allowed to call transfer' using errcode = '42501';
+  end if;
+  raise exception 'transfer is not written yet: edit supabase/holes/transfer.sql';
+end
+$svetra$;
+alter function "svetra_holes"."transfer"(uuid, uuid, uuid, numeric(18, 6)) owner to "svetra_hole_transfer";
+revoke all on function "svetra_holes"."transfer"(uuid, uuid, uuid, numeric(18, 6)) from public;
+grant execute on function "svetra_holes"."transfer"(uuid, uuid, uuid, numeric(18, 6)) to current_user;
+create function "public"."transfer"(source uuid, destination uuid, amount numeric(18, 6))
+  returns "public"."transaction" language plpgsql security definer set search_path = ''
+  as $svetra$ begin return "svetra_holes"."transfer"((select auth.uid()), source, destination, amount); end $svetra$;
+revoke all on function "public"."transfer"(uuid, uuid, numeric(18, 6)) from public;
+grant execute on function "public"."transfer"(uuid, uuid, numeric(18, 6)) to authenticated;

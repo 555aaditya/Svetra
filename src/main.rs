@@ -128,7 +128,36 @@ fn compile(args: &[String]) -> ExitCode {
     let name = path
         .file_name()
         .map_or(file.into(), |n| n.to_string_lossy());
-    let (outputs, notes) = match svetra::compile::compile(&src, &name) {
+    let dir = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    // Hole bodies are yours: read each one, and write a stub only where there's none yet.
+    let (doc, _) = svetra::load::load(&src);
+    let mut bodies = std::collections::HashMap::new();
+    for h in &doc.holes {
+        let rel = format!("supabase/holes/{}.sql", h.name);
+        match std::fs::read_to_string(dir.join(&rel)) {
+            Ok(body) => {
+                bodies.insert(h.name.clone(), body);
+            }
+            Err(_)
+                if !check
+                    && svetra::report::validate(&src)
+                        .iter()
+                        .all(|d| d.code.severity() != svetra::diag::Severity::Error) =>
+            {
+                if let Err(e) = write_atomic(&dir.join(&rel), &svetra::compile::sql::stub(&h.name))
+                {
+                    eprintln!("svetra: cannot write {rel}: {e}");
+                    return ExitCode::from(1);
+                }
+                println!("wrote {rel} (a stub: write the body there)");
+            }
+            Err(_) => {}
+        }
+    }
+    let (outputs, notes) = match svetra::compile::compile_with(&src, &name, &bodies) {
         Ok(v) => v,
         Err(diags) => {
             print!("{}", report::human(file, &diags));
@@ -139,12 +168,7 @@ fn compile(args: &[String]) -> ExitCode {
     if !notes.is_empty() {
         print!("{}", report::human(file, &notes));
     }
-    let dir = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(std::path::Path::new("."));
     // Sign-in settings go into Supabase's own config.toml, which Svetra edits but doesn't own.
-    let (doc, _) = svetra::load::load(&src);
     let config_path = dir.join(CONFIG);
     let config = match (&doc.auth, std::fs::read_to_string(&config_path)) {
         (None, _) => None,

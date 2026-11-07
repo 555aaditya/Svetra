@@ -64,6 +64,22 @@ struct Checker<'a> {
     out: Vec<Diagnostic>,
 }
 
+/// The inputs an expression reads through: `source` in `source.owner`.
+fn hops(e: &expr::Expr) -> Vec<String> {
+    use expr::Expr::*;
+    match e {
+        Path(p) if p.len() == 2 && !(p[0] == "auth" && p[1] == "user") => vec![p[0].clone()],
+        Neg(x) | Not(x) => hops(x),
+        Bin(_, l, r) => [hops(l), hops(r)].concat(),
+        In(x, items) => items.iter().fold(hops(x), |mut v, i| {
+            v.extend(hops(i));
+            v
+        }),
+        Call(_, args) => args.iter().flat_map(hops).collect(),
+        _ => Vec::new(),
+    }
+}
+
 fn pascal(s: &str) -> bool {
     s.starts_with(|c: char| c.is_ascii_uppercase()) && s.chars().all(|c| c.is_ascii_alphanumeric())
 }
@@ -500,6 +516,28 @@ impl<'a> Checker<'a> {
                     msg,
                     "Fix the expression; it uses the hole's inputs. See Holes in docs/format.md.",
                 );
+            }
+            // The guard runs as the hole's role, which can read only what the hole declares.
+            else if let Ok(e) = expr::parse(when) {
+                for hop in hops(&e) {
+                    let Some(FieldType::Ref(t)) =
+                        inputs.fields.iter().find(|f| f.name == hop).map(|f| &f.ty)
+                    else {
+                        continue;
+                    };
+                    if !h.reads.iter().chain(&h.writes).any(|r| r.name == t.name) {
+                        self.d(
+                            Code::Svt003,
+                            format!("holes.{}.when", h.name),
+                            h.pos,
+                            format!(
+                                "`when` reads {} through `{hop}`, but the hole doesn't declare it.",
+                                t.name
+                            ),
+                            &format!("Add {} to the hole's reads.", t.name),
+                        );
+                    }
+                }
             }
         }
     }
