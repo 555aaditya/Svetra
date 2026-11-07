@@ -39,3 +39,22 @@ export const Transaction = z.object({
   created_at: z.string().datetime({ offset: true }).nullable(),
 });
 export type Transaction = z.infer<typeof Transaction>;
+
+/** The one client method holes need. A Supabase client has it. */
+export type Rpc = {
+  rpc(fn: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }>;
+};
+
+export const TransferInput = z.object({
+  source: z.string().uuid(),
+  destination: z.string().uuid(),
+  amount: decimal(18, 6),
+});
+export type TransferInput = z.infer<typeof TransferInput>;
+
+/** Calls the `transfer` hole. Throws the database's error if the call is refused. */
+export async function transfer(client: Rpc, input: TransferInput): Promise<Transaction> {
+  const { data, error } = await client.rpc("transfer", TransferInput.parse(input));
+  if (error) throw error;
+  return Transaction.parse(data);
+}
