@@ -18,4 +18,5 @@ Who can see and change what
 Custom code
   write_audit
     - returns: nothing
+    - who can call it: signed-in people
     - can change: audit logs.

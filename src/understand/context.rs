@@ -144,6 +144,14 @@ pub fn context(doc: &Document) -> String {
         if !h.writes.is_empty() {
             line += &format!("; writes {}", names(&h.writes));
         }
+        match h.role {
+            Role::Authenticated => {}
+            Role::Anon => line += "; as anon",
+            Role::Anyone => line += "; as anyone",
+        }
+        if let Some(w) = &h.when {
+            line += &format!("; when {w}");
+        }
         out += &line;
         out.push('\n');
     }

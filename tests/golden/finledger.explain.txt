@@ -34,4 +34,5 @@ Custom code
   transfer
     - takes: source (an account), destination (an account), amount (an amount of money, up to 12 digits before the point and 6 after)
     - returns: a transaction
+    - who can call it: signed-in people, only when the owner of the source is them
     - can read: accounts. Can change: accounts, transactions.

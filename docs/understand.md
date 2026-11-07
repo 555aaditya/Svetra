@@ -34,7 +34,7 @@ The reader may never have written code, so:
 1. **What your app stores.** One block per entity: its fields in plain words, and which are required.
 2. **Rules that always hold.** The declared constraints and uniqueness, in English.
 3. **Who can see and change what.** Per entity: who can see, create, change and delete, then what **nobody** can do directly.
-4. **Custom code.** Per hole: what it takes, what it returns, and what it can read and change.
+4. **Custom code.** Per hole: what it takes, what it returns, who can call it ("who can call it: signed-in people, only when the owner of the source is them", from `as` and `when`), and what it can read and change.
 5. **Worth knowing.** Warnings and info from `validate`, in plain words.
 6. **Before going live.** Only with an `auth` section: what to set up outside Svetra (see [Signing in](#signing-in)).
 
@@ -153,6 +153,7 @@ Custom code
   transfer
     - takes: source (an account), destination (an account), amount (an amount of money)
     - returns: a transaction
+    - who can call it: signed-in people, only when the owner of the source is them
     - can read: accounts. Can change: accounts, transactions.
 ```
 
