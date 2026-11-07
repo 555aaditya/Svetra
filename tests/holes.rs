@@ -3,10 +3,12 @@ use svetra::report::validate;
 
 /// The ledger with `when` and `as` on its hole; `extra` replaces the hole's last two lines.
 fn ledger(hole_tail: &str) -> String {
-    include_str!("fixtures/finledger.yaml").replace(
-        "    reads: [Account]\n    writes: [Account, Transaction]",
-        &format!("    reads: [Account]\n    writes: [Account, Transaction]\n{hole_tail}"),
-    )
+    include_str!("fixtures/finledger.yaml")
+        .replace("    when: \"source.owner == auth.user\"\n", "")
+        .replace(
+            "    reads: [Account]\n    writes: [Account, Transaction]",
+            &format!("    reads: [Account]\n    writes: [Account, Transaction]\n{hole_tail}"),
+        )
 }
 
 fn codes(src: &str) -> Vec<(String, String)> {
@@ -59,4 +61,21 @@ fn has_role_works_in_hole_guards() {
 fn as_must_be_a_known_role() {
     let found = codes(&ledger("    as: everyone"));
     assert_eq!(found[0].0, "SVT029");
+}
+
+#[test]
+fn when_can_only_read_through_declared_entities() {
+    let src = ledger("    when: \"source.owner == auth.user\"").replace(
+        "    reads: [Account]\n    writes: [Account, Transaction]",
+        "    writes: [Transaction]",
+    );
+    let found: Vec<_> = codes(&src)
+        .into_iter()
+        .filter(|(c, _)| c == "SVT003")
+        .collect();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found[0].1.contains("reads Account through `source`"),
+        "{found:?}"
+    );
 }

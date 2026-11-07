@@ -7,8 +7,20 @@ use crate::expr;
 use crate::model::*;
 use std::collections::HashMap;
 
-/// The full schema for a validated document: tables, foreign keys, indexes, access and policies.
+/// The full schema for a validated document: tables, foreign keys, indexes, access, policies and
+/// holes, with every hole's body a stub.
 pub fn schema(doc: &Document) -> String {
+    schema_with(doc, &HashMap::new())
+}
+
+/// The first line of a hole body that hasn't been written yet. `compile` writes it to
+/// `supabase/holes/<name>.sql` when that file doesn't exist.
+pub fn stub(hole: &str) -> String {
+    format!("  raise exception '{hole} is not written yet: edit supabase/holes/{hole}.sql';\n")
+}
+
+/// The full schema, with each hole's body taken from `bodies` (by hole name), or a stub.
+pub fn schema_with(doc: &Document, bodies: &HashMap<String, String>) -> String {
     let entities: HashMap<&str, &Entity> =
         doc.entities.iter().map(|e| (e.name.as_str(), e)).collect();
     let tables: Vec<String> = doc
@@ -48,7 +60,150 @@ pub fn schema(doc: &Document) -> String {
     if !policies.is_empty() {
         out += &format!("\n-- Policies\n{}\n", policies.join("\n\n"));
     }
+    if !doc.holes.is_empty() {
+        let holes: Vec<String> = doc
+            .holes
+            .iter()
+            .map(|h| hole(h, doc, &entities, bodies))
+            .collect();
+        out += &format!(
+            "\n-- Holes\ncreate schema if not exists \"svetra_holes\";\n\n{}",
+            holes.join("\n")
+        );
+    }
     out
+}
+
+fn param_type(t: &ParamType, entities: &HashMap<&str, &Entity>) -> String {
+    match t {
+        ParamType::FieldOf { entity, field } => {
+            let f = entities[entity.name.as_str()]
+                .fields
+                .iter()
+                .find(|f| &f.name == field)
+                .expect("validated hole input");
+            column_type(&f.ty)
+        }
+        ParamType::Entity(e) => table(&e.name),
+        ParamType::Type(t) => column_type(t),
+    }
+}
+
+/// One hole (docs/compiler.md, Holes): a role holding exactly the declared access, the body
+/// function that runs as that role behind the `when` guard, and the function the API calls.
+fn hole(
+    h: &Hole,
+    doc: &Document,
+    entities: &HashMap<&str, &Entity>,
+    bodies: &HashMap<String, String>,
+) -> String {
+    let role = q(&format!("svetra_hole_{}", h.name));
+    let mut out = vec![
+        format!("create role {role} nologin;"),
+        // The migration's own role must be a member to hand the role a function.
+        format!("grant {role} to current_user;"),
+        format!("grant usage, create on schema \"svetra_holes\" to {role};"),
+        format!("grant usage on schema \"public\" to {role};"),
+    ];
+    let declared = |list: &[NameRef], e: &Entity| list.iter().any(|r| r.name == e.name);
+    for e in &doc.entities {
+        let (privileges, policy) = if declared(&h.writes, e) {
+            (
+                "select, insert, update, delete",
+                "for all to {role} using (true) with check (true)",
+            )
+        } else if declared(&h.reads, e) {
+            ("select", "for select to {role} using (true)")
+        } else {
+            continue;
+        };
+        out.push(format!(
+            "grant {privileges} on table {} to {role};",
+            table(&e.name)
+        ));
+        out.push(format!(
+            "create policy {role} on {} {};",
+            table(&e.name),
+            policy.replace("{role}", &role)
+        ));
+    }
+    if !doc.roles.is_empty() {
+        out.push(format!("grant usage on schema \"svetra\" to {role};"));
+        out.push(format!(
+            "grant execute on function \"svetra\".\"has_role\"(text, uuid) to {role};"
+        ));
+    }
+    let returns = h
+        .output
+        .as_ref()
+        .map_or("void".into(), |t| param_type(t, entities));
+    let inputs: Vec<(String, String)> = h
+        .input
+        .iter()
+        .map(|p| (p.name.clone(), param_type(&p.ty, entities)))
+        .collect();
+    let types: Vec<&str> = inputs.iter().map(|(_, t)| t.as_str()).collect();
+    let inner_sig = format!(
+        "\"svetra_holes\".{}(uuid{})",
+        q(&h.name),
+        types.iter().map(|t| format!(", {t}")).collect::<String>()
+    );
+    let inner_params: Vec<String> = std::iter::once("p_caller uuid".to_string())
+        .chain(inputs.iter().map(|(n, t)| format!("p_{n} {t}")))
+        .collect();
+    let guard = h.when.as_deref().map(|w| {
+        let fields = crate::typeck::hole_entity(h, entities);
+        let cx = Ctx {
+            entity: &fields,
+            entities,
+            params: true,
+        };
+        expr_sql(&expr::parse(w).expect("validated expression"), &cx)
+    });
+    let body = bodies
+        .get(&h.name)
+        .cloned()
+        .unwrap_or_else(|| stub(&h.name));
+    out.push(format!(
+        "create function \"svetra_holes\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$\nbegin\n{}{}{}end\n$svetra$;",
+        q(&h.name),
+        inner_params.join(", "),
+        guard.map_or(String::new(), |g| format!(
+            "  if not coalesce({g}, false) then\n    raise exception 'not allowed to call {}' using errcode = '42501';\n  end if;\n",
+            h.name
+        )),
+        body,
+        if body.ends_with('\n') { "" } else { "\n" }
+    ));
+    out.push(format!("alter function {inner_sig} owner to {role};"));
+    out.push(format!("revoke all on function {inner_sig} from public;"));
+    out.push(format!(
+        "grant execute on function {inner_sig} to current_user;"
+    ));
+    let outer_sig = format!("\"public\".{}({})", q(&h.name), types.join(", "));
+    let outer_params: Vec<String> = inputs.iter().map(|(n, t)| format!("{n} {t}")).collect();
+    let args: String = inputs.iter().map(|(n, _)| format!(", {n}")).collect();
+    let call = format!("\"svetra_holes\".{}((select auth.uid()){args})", q(&h.name));
+    let run = if h.output.is_some() {
+        format!("return {call};")
+    } else {
+        format!("perform {call};")
+    };
+    out.push(format!(
+        "create function \"public\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$ begin {run} end $svetra$;",
+        q(&h.name),
+        outer_params.join(", ")
+    ));
+    out.push(format!("revoke all on function {outer_sig} from public;"));
+    let callers = match h.role {
+        Role::Authenticated => "authenticated",
+        Role::Anon => "anon",
+        Role::Anyone => "anon, authenticated",
+    };
+    out.push(format!(
+        "grant execute on function {outer_sig} to {callers};"
+    ));
+    out.join("\n") + "\n"
 }
 
 /// Row-level security on every table, so a table with no policy denies everyone.
@@ -75,6 +230,7 @@ fn policy(p: &Policy, entities: &HashMap<&str, &Entity>) -> Vec<String> {
     let cx = Ctx {
         entity: e,
         entities,
+        params: false,
     };
     let cond = expr_sql(&expr::parse(&p.when).expect("validated expression"), &cx);
     let role = match p.role {
@@ -165,6 +321,7 @@ fn create_table(e: &Entity, entities: &HashMap<&str, &Entity>) -> String {
     let cx = Ctx {
         entity: e,
         entities,
+        params: false,
     };
     for c in &e.constraints {
         let parsed = expr::parse(&c.expr).expect("validated expression");

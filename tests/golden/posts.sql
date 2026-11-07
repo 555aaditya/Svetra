@@ -42,3 +42,28 @@ create policy "posts_by_author_delete" on "public"."post"
 create policy "public_read" on "public"."post"
   for select to anon, authenticated
   using (true);
+
+-- Holes
+create schema if not exists "svetra_holes";
+
+create role "svetra_hole_write_audit" nologin;
+grant "svetra_hole_write_audit" to current_user;
+grant usage, create on schema "svetra_holes" to "svetra_hole_write_audit";
+grant usage on schema "public" to "svetra_hole_write_audit";
+grant select, insert, update, delete on table "public"."audit_log" to "svetra_hole_write_audit";
+create policy "svetra_hole_write_audit" on "public"."audit_log" for all to "svetra_hole_write_audit" using (true) with check (true);
+create function "svetra_holes"."write_audit"(p_caller uuid)
+  returns void language plpgsql security definer set search_path = ''
+  as $svetra$
+begin
+  raise exception 'write_audit is not written yet: edit supabase/holes/write_audit.sql';
+end
+$svetra$;
+alter function "svetra_holes"."write_audit"(uuid) owner to "svetra_hole_write_audit";
+revoke all on function "svetra_holes"."write_audit"(uuid) from public;
+grant execute on function "svetra_holes"."write_audit"(uuid) to current_user;
+create function "public"."write_audit"()
+  returns void language plpgsql security definer set search_path = ''
+  as $svetra$ begin perform "svetra_holes"."write_audit"((select auth.uid())); end $svetra$;
+revoke all on function "public"."write_audit"() from public;
+grant execute on function "public"."write_audit"() to authenticated;

@@ -25,11 +25,20 @@ pub fn revision(src: &str) -> String {
         .collect()
 }
 
-/// Validate `src`, then compile it. Any validation error means no output at all.
-/// Warnings and info come back alongside the files.
+/// Validate `src`, then compile it, with every hole body a stub. Any validation error means no
+/// output at all. Warnings and info come back alongside the files.
 pub fn compile(
     src: &str,
     file_name: &str,
+) -> Result<(Vec<Output>, Vec<Diagnostic>), Vec<Diagnostic>> {
+    compile_with(src, file_name, &std::collections::HashMap::new())
+}
+
+/// [`compile`], with hole bodies by hole name: the contents of `supabase/holes/<name>.sql`.
+pub fn compile_with(
+    src: &str,
+    file_name: &str,
+    bodies: &std::collections::HashMap<String, String>,
 ) -> Result<(Vec<Output>, Vec<Diagnostic>), Vec<Diagnostic>> {
     let diags = crate::report::validate(src);
     if crate::report::has_errors(&diags) {
@@ -44,7 +53,7 @@ pub fn compile(
     let outputs = vec![
         Output {
             path: "supabase/schemas/svetra.sql",
-            contents: format!("-- {header}\n\n{}", sql::schema(&doc)),
+            contents: format!("-- {header}\n\n{}", sql::schema_with(&doc, bodies)),
         },
         Output {
             path: "src/svetra.gen.ts",

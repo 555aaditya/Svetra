@@ -254,13 +254,16 @@ A parameter or output type is one of three things:
 
 Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002`). The code a hole runs gets access only to the entities it declares.
 
-**The body** is the one hand-written part: PL/pgSQL statements in `supabase/holes/<name>.sql`, next to `svetra.yaml`. Inputs are named `p_<input>`, such as `p_source`, so they never clash with column names. `compile` creates the file with a stub the first time and never overwrites it.
+**The body** is the one hand-written part: PL/pgSQL statements in `supabase/holes/<name>.sql`, next to `svetra.yaml`.
+- **Inputs** are named `p_<input>`, such as `p_source`, so they never clash with column names. **`p_caller`** is the signed-in person's id, or `null` for a logged-out visitor.
+- **Variables** need their own block inside the body: `declare v_tx "public"."transaction"; begin … end;`.
+- **The file** is created with a stub the first time, and never overwritten.
 
 **`when`** uses the expression language of policies, over the hole's inputs instead of a row's fields:
 - `p_` isn't written in expressions. `source` means the `source` input.
 - An input typed `Entity.<primary key>`, such as `source: Account.id`, also allows one hop to that row's fields: `source.owner` is the owner of the account whose id is `source`.
 - `auth.user` and `has_role(...)` work as in policies.
-- Errors are `SVT003`, as for policies.
+- Errors are `SVT003`, as for policies. That includes reading through an input into an entity the hole doesn't declare in `reads` or `writes`, because the guard runs with the hole's access.
 
 ```yaml
 holes:

@@ -10,6 +10,8 @@ use std::collections::HashMap;
 pub struct Ctx<'a> {
     pub entity: &'a Entity,
     pub entities: &'a HashMap<&'a str, &'a Entity>,
+    /// A hole's `when`: fields are the hole's inputs (`p_<name>`), and `auth.user` is `p_caller`.
+    pub params: bool,
 }
 
 pub fn sql(e: &Expr, cx: &Ctx) -> String {
@@ -99,7 +101,9 @@ fn child_right(e: &Expr, parent: u8, cx: &Ctx) -> String {
 
 fn path(p: &[String], cx: &Ctx) -> String {
     match p {
+        [f] if cx.params => format!("p_{f}"),
         [f] => q(f),
+        [a, b] if a == "auth" && b == "user" && cx.params => "p_caller".into(),
         [a, b] if a == "auth" && b == "user" => "(select auth.uid())".into(),
         [r, f] => {
             // One hop through a ref field: a scalar subquery on the referenced row's primary key.
@@ -113,13 +117,16 @@ fn path(p: &[String], cx: &Ctx) -> String {
                 .iter()
                 .find(|x| x.primary)
                 .expect("validated primary key");
+            let from = if cx.params {
+                format!("p_{r}")
+            } else {
+                format!("{}.{}", q(&snake(&cx.entity.name)), q(r))
+            };
             format!(
-                "(select t.{} from {} t where t.{} = {}.{})",
+                "(select t.{} from {} t where t.{} = {from})",
                 q(f),
                 table(&target.name),
-                q(&pk.name),
-                q(&snake(&cx.entity.name)),
-                q(r)
+                q(&pk.name)
             )
         }
         _ => unreachable!("typeck rejects deeper paths"),
@@ -140,6 +147,7 @@ mod tests {
         let cx = Ctx {
             entity: entities[entity],
             entities: &entities,
+            params: false,
         };
         sql(&parse(src).unwrap(), &cx)
     }
