@@ -23,6 +23,7 @@ svetra compile [FILE] [--check]
 | `supabase/schemas/svetra.sql` | Tables, constraints, foreign keys, indexes, row-level security and policies | Supabase's [declarative schemas](https://supabase.com/docs/guides/local-development/declarative-database-schemas): `supabase db diff` turns it into migrations |
 | `src/svetra.gen.ts` | TypeScript types and Zod validators, one per entity | The React app |
 | `supabase/config.toml` | Only the sign-in settings Svetra owns, edited in place (see [Sign-in settings](#sign-in-settings)). Only with an `auth` section | `supabase start` locally. `supabase config push` sends them to a hosted project, and `supabase config diff` previews that |
+| `supabase/holes/<name>.sql` | A stub body for each hole, created only if the file doesn't exist. **Never overwritten:** it's yours | You or your agent write the body |
 | `supabase/tests/svetra.test.sql` | Access tests: every person × action × row, checked as real users (see [Access tests](#access-tests)) | `supabase test db`, which runs it with [pgTAP](https://pgtap.org) |
 
 Version 0.1 doesn't make these paths configurable.
@@ -232,6 +233,39 @@ where g."user_id" = (select auth.uid()) and g."role" = p_role and g."scope_id" i
 
 The list holds every role with `mfa: true`. Without any, the line is left out.
 
+## Holes
+
+Each hole compiles to two functions, plus a role that holds exactly its declared access. All of it is in the SQL schema, in a `-- Holes` section after `-- Policies`.
+
+1. **A role per hole,** `svetra_hole_<name>`, which can't log in. It gets `select` on each entity in `reads` and `writes`, and `insert`, `update` and `delete` on each entity in `writes`, nothing else, plus a permissive policy on each of those tables that lets it through row-level security. Those grants are the only thing a hole's code can touch.
+2. **The body function,** `svetra_holes.<name>`, in a schema the API doesn't expose. It's `security definer` and owned by the hole's role, so its statements run with that role's access and no more, and it has `set search_path = ''`. Svetra writes the signature, then:
+   - **the `when` guard first:** if the condition isn't true, it raises SQLSTATE `42501` (insufficient privilege), so a refused call looks like any other refusal
+   - **then the body** from `supabase/holes/<name>.sql`, verbatim
+3. **The callable function,** `public.<name>`, which the app calls with `supabase.rpc('<name>', …)`. It's `security invoker` and passes its arguments to the body function. Execute is granted to the hole's `as` roles and revoked from everyone else.
+
+**The stub body** returns nothing useful and says so: `raise exception 'transfer is not written yet: edit supabase/holes/transfer.sql';`. A hole with a stub still compiles, applies and passes the access tests, because the guard runs before it.
+
+**`--check`** compares the schema including the current bodies, so an edited body that hasn't been compiled shows up as out of date.
+
+### Holes in TypeScript
+
+`src/svetra.gen.ts` gets one function per hole, which validates the input with Zod, calls `rpc`, and validates the result:
+
+```ts
+export async function transfer(client: Rpc, input: TransferInput): Promise<Transaction>
+```
+
+`Rpc` is the one method it needs, `rpc(name, args)`, so the file needs no Supabase import. A Supabase client fits it.
+
+### Holes in the access tests
+
+For each hole:
+- **Access:** a check that the hole's role can do exactly what `reads` and `writes` declare on every entity, and nothing on the others (`has_table_privilege`).
+- **The guard,** for every person and the test rows:
+  - a call with inputs that point at the `a` rows, and one with inputs that point at the `b` rows
+  - each is expected to be refused (`42501`) or let through, as the evaluator works out from `when`
+  - **"let through" means the guard passed,** whatever the body then does, so the check doesn't depend on hand-written code
+
 ## Access tests
 
 `supabase/tests/svetra.test.sql` checks that the **database** enforces what `svetra.yaml` says, as real users. Run it against a local Supabase with `supabase test db`.
@@ -305,7 +339,7 @@ For the bookings app (two entities, two roles), people are `anon`, `alice`, `bob
 
 ## Not in version 0.1
 
-- Hole signature files: planned with the agent interface, M4.
+- Other hole kinds (scheduled jobs, triggers, webhooks) and holes that call external services: planned for M4b, as Supabase Edge Functions.
 - Configurable output paths.
 - Migrations: Supabase generates them from the declarative schema with `supabase db diff`.
 - Cascading deletes, and other foreign-key options.

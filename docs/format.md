@@ -244,6 +244,8 @@ A hole is a place where custom code is allowed, usually written by the user's ag
 | `output` | no | An entity name, an `Entity.field`, or a type. Omit it for no return value |
 | `reads` | no | Entities the hole may read |
 | `writes` | no | Entities the hole may write |
+| `as` | no | Who may call it: `authenticated` (default), `anyone` or `anon`, as for policies |
+| `when` | no | A condition on the inputs that must hold for the call to run, such as `source.owner == auth.user`. Default `true` |
 
 A parameter or output type is one of three things:
 - `Entity.field`, which gives the same type as that field. This is preferred, because the two can't drift apart.
@@ -251,6 +253,28 @@ A parameter or output type is one of three things:
 - A full field spec, such as `{ type: money, precision: 18, scale: 6 }`.
 
 Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002`). The code a hole runs gets access only to the entities it declares.
+
+**The body** is the one hand-written part: PL/pgSQL statements in `supabase/holes/<name>.sql`, next to `svetra.yaml`. Inputs are named `p_<input>`, such as `p_source`, so they never clash with column names. `compile` creates the file with a stub the first time and never overwrites it.
+
+**`when`** uses the expression language of policies, over the hole's inputs instead of a row's fields:
+- `p_` isn't written in expressions. `source` means the `source` input.
+- An input typed `Entity.<primary key>`, such as `source: Account.id`, also allows one hop to that row's fields: `source.owner` is the owner of the account whose id is `source`.
+- `auth.user` and `has_role(...)` work as in policies.
+- Errors are `SVT003`, as for policies.
+
+```yaml
+holes:
+  transfer:
+    kind: function
+    input:
+      source: Account.id
+      destination: Account.id
+      amount: Transaction.amount
+    output: Transaction
+    reads: [Account]
+    writes: [Account, Transaction]
+    when: "source.owner == auth.user"
+```
 
 ## Diagnostics
 
