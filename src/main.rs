@@ -11,6 +11,8 @@ Usage:
   svetra compile [FILE] [--check]   Write the SQL schema, TypeScript types and access tests next
                                     to FILE, and sign-in settings into supabase/config.toml;
                                     --check writes nothing and fails if they are out of date
+  svetra mcp                        Serve validate, compile, explain, context and graph to
+                                    agents over MCP (stdio)
   svetra --version                  Print the version
   svetra --help                     Print this help
 
@@ -41,6 +43,13 @@ fn main() -> ExitCode {
         Some("context") => view("context", &args[1..], |doc, _| {
             svetra::understand::context::context(doc)
         }),
+        Some("mcp") if args.len() == 1 => match svetra::mcp::serve() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("svetra: {e}");
+                ExitCode::from(1)
+            }
+        },
         Some(other) => usage(&format!("unknown argument '{other}'")),
     }
 }
