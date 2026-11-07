@@ -14,7 +14,7 @@ license = "MIT"
 repository = "https://github.com/555aaditya/Svetra"
 
 [dependencies]
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 saphyr = "0.3"
 sha2 = "0.10"
 

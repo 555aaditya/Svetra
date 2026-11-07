@@ -130,3 +130,93 @@ pub fn compile(file: &Path, check: bool) -> Result<Compiled, Failure> {
     }
     Ok(out)
 }
+
+/// The Svetra skill for Claude Code (docs/agents.md, The skill).
+pub const SKILL: &str = include_str!("skill.md");
+
+/// The `svetra.yaml` that `init` writes when there's none: one entity people own, its rule,
+/// and safe sign-in settings.
+pub const STARTER: &str = r#"# The design of your app. Your agent edits it with you; `svetra validate` checks every change.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+svetra: "0.1"
+system: App
+
+auth:
+  sign_in: [email]
+
+entities:
+  Note:
+    fields:
+      id:     { type: uuid, primary: true }
+      author: { type: user, required: true }
+      body:   { type: text, required: true }
+    indexes:
+      - [author]
+
+policies:
+  own_notes:
+    on: Note
+    allow: [select, insert, update, delete]
+    when: "author == auth.user"
+"#;
+
+/// What `init` did, one line per file.
+pub struct Initialised {
+    pub lines: Vec<String>,
+}
+
+/// `svetra init [DIR]` (docs/agents.md): the skill, the MCP server entry, and a starter file.
+pub fn init(dir: &Path) -> Result<Initialised, Failure> {
+    let mut lines = Vec::new();
+    let write = |rel: &str, contents: &str| {
+        write_atomic(&dir.join(rel), contents)
+            .map_err(|e| Failure::Write(format!("cannot write {rel}: {e}")))
+    };
+    write(".claude/skills/svetra/SKILL.md", SKILL)?;
+    lines.push("wrote .claude/skills/svetra/SKILL.md (the Svetra skill)".to_string());
+
+    // .mcp.json may list other servers: keep them, and add or update only `svetra`.
+    let server = serde_json::json!({ "command": "npx", "args": ["-y", "svetra", "mcp"] });
+    let path = dir.join(".mcp.json");
+    let mut config = match std::fs::read_to_string(&path) {
+        Ok(text) => serde_json::from_str::<serde_json::Value>(&text).map_err(|e| {
+            Failure::Write(format!(
+                ".mcp.json isn't valid JSON ({e}); fix it, or add the svetra server to it by hand"
+            ))
+        })?,
+        Err(_) => serde_json::json!({}),
+    };
+    let Some(servers) = config
+        .as_object_mut()
+        .map(|o| {
+            o.entry("mcpServers")
+                .or_insert_with(|| serde_json::json!({}))
+        })
+        .and_then(|s| s.as_object_mut())
+    else {
+        return Err(Failure::Write(".mcp.json doesn't hold an object with `mcpServers`; add the svetra server to it by hand".into()));
+    };
+    let existed = servers.insert("svetra".into(), server).is_some();
+    let pretty =
+        serde_json::to_string_pretty(&config).map_err(|e| Failure::Write(e.to_string()))?;
+    write(".mcp.json", &format!("{pretty}\n"))?;
+    lines.push(
+        if existed {
+            "updated the svetra server in .mcp.json"
+        } else {
+            "added the svetra server to .mcp.json"
+        }
+        .to_string(),
+    );
+
+    if dir.join("svetra.yaml").exists() {
+        lines.push("kept svetra.yaml (it's yours)".to_string());
+    } else {
+        write("svetra.yaml", STARTER)?;
+        lines.push(
+            "wrote svetra.yaml (a starting point: notes that only their author can see)"
+                .to_string(),
+        );
+    }
+    Ok(Initialised { lines })
+}
