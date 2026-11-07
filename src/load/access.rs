@@ -32,24 +32,7 @@ impl Cx {
         };
         let allow = self.actions(allow?, &format!("{path}.allow"))?;
         let when = self.string(when?, &format!("{path}.when"))?;
-        let role = match k.get("as") {
-            None => Role::Authenticated,
-            Some(v) => match self.string(v, &format!("{path}.as"))?.as_str() {
-                "authenticated" => Role::Authenticated,
-                "anon" => Role::Anon,
-                "anyone" => Role::Anyone,
-                _ => {
-                    self.report(
-                        Code::Svt029,
-                        &format!("{path}.as"),
-                        v,
-                        "`as` must be `authenticated`, `anyone` or `anon`.".into(),
-                        "Remove `as` to use authenticated.",
-                    );
-                    return None;
-                }
-            },
-        };
+        let role = self.role_as(k.get("as").copied(), &path)?;
         Some(Policy {
             name: pname,
             pos: pos(name),
@@ -58,6 +41,28 @@ impl Cx {
             when,
             role,
         })
+    }
+
+    /// The `as` key of a policy or hole: who it applies to. Authenticated when absent.
+    fn role_as(&mut self, node: Option<&Node>, path: &str) -> Option<Role> {
+        let Some(v) = node else {
+            return Some(Role::Authenticated);
+        };
+        match self.string(v, &format!("{path}.as"))?.as_str() {
+            "authenticated" => Some(Role::Authenticated),
+            "anon" => Some(Role::Anon),
+            "anyone" => Some(Role::Anyone),
+            _ => {
+                self.report(
+                    Code::Svt029,
+                    &format!("{path}.as"),
+                    v,
+                    "`as` must be `authenticated`, `anyone` or `anon`.".into(),
+                    "Remove `as` to use authenticated.",
+                );
+                None
+            }
+        }
     }
 
     fn actions(&mut self, node: &Node, path: &str) -> Option<Vec<Action>> {
@@ -125,7 +130,13 @@ impl Cx {
             output: None,
             reads: Vec::new(),
             writes: Vec::new(),
+            role: Role::Authenticated,
+            when: None,
         };
+        hole.role = self.role_as(k.get("as").copied(), &path)?;
+        if let Some(v) = k.get("when") {
+            hole.when = self.string(v, &format!("{path}.when"));
+        }
         if let Some(v) = k.get("input") {
             let ipath = format!("{path}.input");
             for (pn, pt) in self.map(v, &ipath).unwrap_or(&[]) {
