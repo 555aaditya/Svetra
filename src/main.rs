@@ -11,6 +11,8 @@ Usage:
   svetra compile [FILE] [--check]   Write the SQL schema, TypeScript types and access tests next
                                     to FILE, and sign-in settings into supabase/config.toml;
                                     --check writes nothing and fails if they are out of date
+  svetra init [DIR]                 Set up a project for agents: the Svetra skill, the MCP
+                                    server in .mcp.json, and a starter svetra.yaml
   svetra mcp                        Serve validate, compile, explain, context and graph to
                                     agents over MCP (stdio)
   svetra --version                  Print the version
@@ -34,6 +36,7 @@ fn main() -> ExitCode {
         }
         Some("validate") => validate(&args[1..]),
         Some("compile") => compile(&args[1..]),
+        Some("init") => init(&args[1..]),
         Some("explain") => view("explain", &args[1..], |doc, diags| {
             svetra::understand::explain::explain(doc, diags)
         }),
@@ -174,6 +177,28 @@ fn compile(args: &[String]) -> ExitCode {
         println!("updated the sign-in settings in {CONFIG}");
     }
     ExitCode::SUCCESS
+}
+
+fn init(args: &[String]) -> ExitCode {
+    let dir = match args {
+        [] => ".",
+        [d] if !d.starts_with('-') => d.as_str(),
+        _ => return usage("init takes one folder"),
+    };
+    match svetra::project::init(std::path::Path::new(dir)) {
+        Ok(done) => {
+            for l in &done.lines {
+                println!("{l}");
+            }
+            println!("Next: open your agent in this folder and describe the app you want.");
+            ExitCode::SUCCESS
+        }
+        Err(svetra::project::Failure::Write(e) | svetra::project::Failure::Read(e)) => {
+            eprintln!("svetra: {e}");
+            ExitCode::from(1)
+        }
+        Err(svetra::project::Failure::Invalid(_)) => unreachable!("init doesn't validate"),
+    }
 }
 
 fn usage(msg: &str) -> ExitCode {
