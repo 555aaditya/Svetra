@@ -235,16 +235,17 @@ fn field_line(f: &Field) -> String {
 enum Style {
     Constraint,
     Policy,
+    /// A hole's `when`: names are its inputs ("the source"), not a row's fields.
+    Hole,
 }
 
 fn english(e: &Expr, st: Style) -> String {
-    let field = |f: &str| {
-        if st == Style::Policy {
-            format!("its {}", label(f))
-        } else {
-            label(f)
-        }
+    let field = |f: &str| match st {
+        Style::Policy => format!("its {}", label(f)),
+        Style::Hole => format!("the {}", label(f)),
+        Style::Constraint => label(f),
     };
+    let its = if st == Style::Hole { "the" } else { "its" };
     match e {
         Expr::Num(n) => format!("{n}"),
         Expr::Str(s) => s.clone(),
@@ -259,7 +260,7 @@ fn english(e: &Expr, st: Style) -> String {
         Expr::Path(p) => match p.as_slice() {
             [f] => field(f),
             [a, b] if a == "auth" && b == "user" => "them".into(),
-            [r, f] => format!("the {} of its {}", label(f), label(r)),
+            [r, f] => format!("the {} of {its} {}", label(f), label(r)),
             _ => p.join("."),
         },
         Expr::Call(_, args) => match args.as_slice() {
@@ -268,7 +269,7 @@ fn english(e: &Expr, st: Style) -> String {
                 format!("they have the {role} role for it")
             }
             [Expr::Str(role), Expr::Path(p)] if p.len() == 1 => {
-                format!("they have the {role} role for its {}", label(&p[0]))
+                format!("they have the {role} role for {its} {}", label(&p[0]))
             }
             _ => "they have the required role".into(),
         },
@@ -523,6 +524,18 @@ fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
             .collect::<Vec<_>>()
             .join(", ")
     };
+    let who = match h.role {
+        Role::Authenticated => "signed-in people",
+        Role::Anon => "people who aren't signed in",
+        Role::Anyone => "anyone, signed in or not",
+    };
+    out.push(match h.when.as_deref().and_then(|w| expr::parse(w).ok()) {
+        Some(e) => format!(
+            "who can call it: {who}, only when {}",
+            english(&e, Style::Hole)
+        ),
+        None => format!("who can call it: {who}"),
+    });
     out.push(match (h.reads.is_empty(), h.writes.is_empty()) {
         (true, true) => "can't read or change any data".into(),
         (false, true) => format!("can read: {}. Can't change any data.", names(&h.reads)),
