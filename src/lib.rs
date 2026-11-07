@@ -4,6 +4,7 @@ pub mod diag;
 pub mod expr;
 pub mod load;
 pub mod model;
+pub mod project;
 pub mod report;
 pub mod typeck;
 pub mod understand;
