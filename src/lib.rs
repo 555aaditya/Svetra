@@ -3,6 +3,7 @@ pub mod compile;
 pub mod diag;
 pub mod expr;
 pub mod load;
+pub mod mcp;
 pub mod model;
 pub mod project;
 pub mod report;

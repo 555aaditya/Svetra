@@ -91,6 +91,8 @@ svetra compile svetra.yaml --check  # writes nothing; fails if they are stale or
 
 Roles work too: declare `admin`, or `staff` scoped to one location, and use `has_role('staff', location)` in a rule. `explain` then says "People with the staff role for a booking's location can see and change that booking."
 
+**Built for your agent.** `svetra mcp` serves `validate`, `compile`, `explain`, `context` and `graph` to any MCP agent, with JSON results it can act on. For Claude Code: `claude mcp add svetra -- npx svetra mcp`.
+
 **Custom code, fenced in.** Logic that a rule can't express, like moving money between accounts, goes in a *hole*: a Postgres function whose body your agent writes in `supabase/holes/transfer.sql`. Svetra writes everything around it. The function runs with access to only the tables the hole declares, and a `when` condition such as `source.owner == auth.user` refuses anyone else before the body runs. The access tests prove both, and `src/svetra.gen.ts` gets a typed `transfer(client, input)`.
 
 **Sign-in settings, safe by default.** Add `auth: { sign_in: [email, google] }` and `compile` sets Supabase's `supabase/config.toml`: 10-character passwords, confirmed emails, OAuth secrets kept in environment variables, and nothing else in the file touched. Mark a role `mfa: true` and it only counts once the person has verified an authenticator app.
