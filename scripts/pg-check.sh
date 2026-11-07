@@ -21,6 +21,9 @@ access_tests() {
 for name in finledger posts bookings clinic; do
   docker rm -f svetra-pg-check >/dev/null 2>&1 || true
   docker run -d --name svetra-pg-check -e POSTGRES_PASSWORD=pw "$image" >/dev/null
+  # The image runs a temporary server while it initialises, then restarts. Wait for the real one,
+  # or a command can land on the temporary server as it shuts down.
+  for _ in $(seq 1 90); do docker logs svetra-pg-check 2>&1 | grep -q "init process complete" && break; sleep 1; done
   for _ in $(seq 1 60); do docker exec svetra-pg-check pg_isready -U postgres >/dev/null 2>&1 && break; sleep 1; done
   mkdir -p "$work/$name" && cp "tests/fixtures/$name.yaml" "$work/$name/svetra.yaml"
   "$bin" compile "$work/$name/svetra.yaml" >/dev/null
