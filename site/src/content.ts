@@ -7,6 +7,9 @@ import bookingsExplain from "../../tests/golden/bookings.explain.txt?raw";
 import clinicExplain from "../../tests/golden/clinic.explain.txt?raw";
 import bookingsSql from "../../tests/golden/bookings.sql?raw";
 import bookingsContext from "../../tests/golden/bookings.context.txt?raw";
+import finledgerYaml from "../../tests/fixtures/finledger.yaml?raw";
+import finledgerExplain from "../../tests/golden/finledger.explain.txt?raw";
+import finledgerTs from "../../tests/golden/finledger.ts?raw";
 
 export type Line = { text: string; tone?: "cmd" | "dim" | "ok" | "bad" | "info" };
 
@@ -43,17 +46,34 @@ export const leakRun: Line[] = [
   { text: "Result: FAIL", tone: "bad" },
 ];
 
+/** `svetra init` in an empty folder, with the 0.4.0 release build (2026-11-09). */
+export const agentRun: Line[] = [
+  { text: "npx -y svetra init", tone: "cmd" },
+  { text: "wrote .claude/skills/svetra/SKILL.md (the Svetra skill)" },
+  { text: "added the svetra server to .mcp.json" },
+  { text: "wrote svetra.yaml (a starting point: notes that only their author can see)" },
+  { text: "Next: open your agent in this folder and describe the app you want.", tone: "ok" },
+];
+
 /** The policies section of the compiled schema. */
 const policies = bookingsSql.slice(bookingsSql.indexOf("-- Policies"));
 
 /** The sign-in part of `svetra explain` for the clinic example. */
 const signingIn = clinicExplain.slice(clinicExplain.indexOf("Signing in"), clinicExplain.indexOf("\nWho can see"));
 
+/** The `transfer` hole: its declaration, what `explain` says about it, and the typed call. */
+const hole = [
+  finledgerYaml.slice(finledgerYaml.indexOf("holes:")).trimEnd(),
+  finledgerExplain.slice(finledgerExplain.indexOf("Custom code")).trimEnd(),
+  finledgerTs.slice(finledgerTs.indexOf("/** Calls the `transfer` hole.")).trimEnd(),
+].join("\n\n");
+
 export const outputs = [
   { id: "yaml", label: "svetra.yaml", text: bookingsYaml.trimEnd() },
   { id: "explain", label: "explain", text: bookingsExplain.slice(bookingsExplain.indexOf("Who can see")).trimEnd() },
   { id: "sql", label: "SQL", text: policies.trimEnd() },
   { id: "context", label: "context", text: bookingsContext.trimEnd() },
+  { id: "hole", label: "custom code", text: hole },
   { id: "auth", label: "sign-in", text: `${clinicYaml.slice(clinicYaml.indexOf("auth:"), clinicYaml.indexOf("entities:")).trimEnd()}\n\n${signingIn.trimEnd()}` },
 ];
 
@@ -70,7 +90,7 @@ export const features = [
   { title: "Access tests", body: "Every person × action × row, as real users, never the service key. Expected results come from svetra.yaml, not from the SQL Svetra wrote.", code: "ok 57 - alice can't see Booking b" },
   { title: "Sign-in and second factors", body: "Safe defaults in supabase/config.toml, only Svetra's own keys touched. Roles marked mfa: true only count after an authenticator app.", code: "admin: { mfa: true }" },
   { title: "Plain English", body: "svetra explain says who can see and change what, including what nobody can do. A test fails if it ever says \"RLS\".", code: "Nobody can see bookings any other way." },
-  { title: "Context for agents", body: "The whole app in a few lines, so your agent reads the design instead of thousands of generated lines.", code: "auth email, google; signup invite_only; mfa admin" },
+  { title: "Custom code, fenced in", body: "Logic a rule can't express, like a money transfer, runs as a Postgres function whose own role reaches only the tables it declares. Svetra decides who may call it, and the access tests prove both.", code: "when: \"source.owner == auth.user\"" },
 ];
 
 export const roadmap = [
@@ -78,6 +98,7 @@ export const roadmap = [
   { when: "Nov 4", what: "Roles and teams · v0.1.0 · access tests in v0.2.0", done: true },
   { when: "Nov 5", what: "Sign-in settings and second factors in v0.3.0 · npm", done: true },
   { when: "Nov 7", what: "In your agent: svetra mcp, the Claude Code skill and svetra init · custom code as guarded Postgres functions, in v0.4.0", done: true },
-  { when: "Next", what: "A recorded design conversation · existing apps: svetra infer and svetra check", done: false },
-  { when: "Later", what: "svetra view: an interactive map of your app · safe changes with svetra plan", done: false },
+  { when: "Next", what: "A recorded design conversation · svetra view: an interactive map of who can see what", done: false },
+  { when: "Early 2027", what: "Measured: tokens and safety with and without Svetra · how many broken rules the access tests catch", done: false },
+  { when: "Later", what: "Existing apps: svetra infer and svetra check · safe changes with svetra plan", done: false },
 ];
