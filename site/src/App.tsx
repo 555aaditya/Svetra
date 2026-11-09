@@ -1,7 +1,7 @@
 import { Badge } from "@/components/base/badges/badge";
 import { ButtonLink } from "@/components/base/buttons/button";
 import { Tab, TabList, TabPanel, Tabs } from "@/components/base/tabs/tabs";
-import { features, heroRun, install, leakRun, outputs, roadmap } from "@/content";
+import { agentRun, features, heroRun, install, leakRun, outputs, roadmap } from "@/content";
 import { Copy } from "@/site/Copy";
 import { Terminal } from "@/site/Terminal";
 import { ThemeToggle } from "@/site/ThemeToggle";
@@ -40,6 +40,7 @@ function Nav() {
         </a>
         <div className="hidden items-center gap-5 text-body-2-medium text-text-tertiary md:flex">
           <a className="hover:text-text-primary" href="#how">How it works</a>
+          <a className="hover:text-text-primary" href="#agent">In your agent</a>
           <a className="hover:text-text-primary" href="#tests">Access tests</a>
           <a className="hover:text-text-primary" href="#install">Install</a>
           <a className="hover:text-text-primary" href={`${GITHUB}/tree/main/docs`}>Docs</a>
@@ -69,7 +70,7 @@ function Hero() {
           One small file, <code className="font-mono text-[16px] text-text-primary">svetra.yaml</code>, compiles to a locked-down Supabase backend, and writes the tests that prove it on your real database.
         </p>
         <div className="mt-8 max-w-xl">
-          <Copy cmd="npx svetra validate svetra.yaml" />
+          <Copy cmd="npx -y svetra init" />
         </div>
         <div className="mt-6 flex flex-wrap items-center gap-4">
           <ButtonLink href="#install">Get started</ButtonLink>
@@ -100,7 +101,7 @@ export function App() {
           <ol className="grid gap-4 md:grid-cols-3">
             {[
               ["Design", "You and your agent write svetra.yaml: the data, the rules, who can see what, and how people sign in."],
-              ["Compile", "Svetra checks it with 21 rules, then writes the Postgres schema, row-level security, types and access tests."],
+              ["Compile", "Svetra checks it with 21 rules, then writes the Postgres schema, row-level security, types, access tests and fenced-in custom code."],
               ["Prove", "supabase test db runs the access tests as real users. Every person, action and row, checked."],
             ].map(([t, b], i) => (
               <li key={t} className="rounded-xl border border-separator-border p-6">
@@ -122,6 +123,20 @@ export function App() {
               ))}
             </Tabs>
             <p className="mt-3 text-caption-1-regular text-text-tertiary">Real output from the bookings and clinic examples, taken from the repository's tests.</p>
+          </div>
+        </Section>
+
+        <Section id="agent" eyebrow="In your agent" title={<>Design it in a conversation. <Accent>Svetra checks every edit.</Accent></>}>
+          <div className="grid items-start gap-10 lg:grid-cols-[1fr_1.1fr]">
+            <div className="space-y-6 text-[17px] leading-7 text-text-secondary">
+              <p>One command sets up any folder for Claude Code. Cursor, Codex and other agents that speak MCP can run the same server.</p>
+              <ul className="space-y-4">
+                <li><strong className="text-text-primary">The skill</strong> teaches your agent one loop: design svetra.yaml with you, validate after every edit, compile, explain the result in your words, then prove it.</li>
+                <li><strong className="text-text-primary">The MCP server,</strong> <code className="font-mono text-[15px] text-text-primary">svetra mcp</code>, gives it five tools: validate, compile, explain, context and graph. None of them edit svetra.yaml: your agent makes the change, and Svetra checks it.</li>
+                <li><strong className="text-text-primary">The agent writes only custom code bodies.</strong> Policies, grants, types and tests all come from svetra.yaml, so nothing safety-critical is written by hand.</li>
+              </ul>
+            </div>
+            <Terminal lines={agentRun} title="an empty folder" />
           </div>
         </Section>
 
@@ -163,7 +178,7 @@ export function App() {
               </TabPanel>
             ))}
           </Tabs>
-          <Code className="mt-8 max-w-3xl" text={"svetra validate svetra.yaml   # check it, or --json for agents\nsvetra compile svetra.yaml    # schema, types, access tests, sign-in settings\nsvetra explain svetra.yaml    # the app in plain English\nsupabase test db              # prove it on your database"} />
+          <Code className="mt-8 max-w-3xl" text={"svetra validate svetra.yaml   # check it, or --json for agents\nsvetra compile svetra.yaml    # schema, types, access tests, sign-in settings\nsvetra explain svetra.yaml    # the app in plain English\nsvetra init                   # set the folder up for your agent\nsvetra mcp                    # the MCP server agents talk to\nsupabase test db              # prove it on your database"} />
         </Section>
 
         <Section eyebrow="Roadmap" title="Built in public, a release a day.">
