@@ -1,6 +1,6 @@
 //! Render diagnostics for people (default) or agents (`--json`). Columns are 1-based here.
 
-use crate::diag::{Diagnostic, Severity};
+use crate::diag::{Code, Diagnostic, Severity};
 
 /// Load and check `src`. Document rules run only when the file loaded without errors.
 pub fn validate(src: &str) -> Vec<Diagnostic> {
@@ -14,6 +14,16 @@ pub fn validate(src: &str) -> Vec<Diagnostic> {
 
 pub fn has_errors(diags: &[Diagnostic]) -> bool {
     diags.iter().any(|d| d.severity() == Severity::Error)
+}
+
+/// Whether `graph` and `context` can still draw a file with these errors: only errors that
+/// leave the design complete but unsafe, a table with no rule (SVT001) or money as `float`
+/// (SVT005). An agent then sees the design while it fixes them.
+pub fn drawable(diags: &[Diagnostic]) -> bool {
+    diags
+        .iter()
+        .filter(|d| d.severity() == Severity::Error)
+        .all(|d| matches!(d.code, Code::Svt001 | Code::Svt005))
 }
 
 fn severity(d: &Diagnostic) -> &'static str {

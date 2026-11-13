@@ -55,6 +55,8 @@ An MCP server over stdio: JSON-RPC 2.0, one message per line. It supports `initi
 | `context` | `svetra context` | `{"text": "..."}` |
 | `graph` | `svetra graph` | `{"mermaid": "..."}` |
 
+`explain` returns the diagnostics as a tool error when the file has errors. `context` and `graph` do too, except when the only errors are SVT001 or SVT005: then they return their output plus a `diagnostics` list, so the agent can see the design while it fixes it.
+
 - **No editing tools:** agents already edit files. Svetra's job is to check and compile what they wrote, and keeping it read-and-compile only keeps the server small and safe.
 - **Errors:** a tool that can't run, such as a missing file, returns an MCP tool error with one sentence saying what to do, never a stack trace.
 - **Protocol version:** the server answers with the version the client asks for if it supports it, and its own otherwise. Version 0.1 supports `2025-06-18`.
