@@ -9,7 +9,7 @@ Three read-only views of a valid `svetra.yaml`, each for a different reader:
 | `svetra context` | **Agents** | The whole system in as few tokens as possible |
 
 All three:
-- validate first, and print diagnostics instead of output when there are errors (exit `1`);
+- validate first, and print diagnostics instead of output when there are errors (exit `1`). One exception: `graph` and `context` still draw a file whose only errors are SVT001 (a table with no rule) or SVT005 (money as `float`), because the design is complete, just unsafe. They print the diagnostics on stderr and exit `1`, so an agent can see the design while it fixes them. `explain` always refuses, because people read it as the truth about the app;
 - are **deterministic**, giving the same text for the same file;
 - describe **only what the graph declares**. They never guess at intent, so they can't be wrong about what the compiled app does.
 

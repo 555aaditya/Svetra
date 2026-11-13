@@ -37,13 +37,13 @@ fn main() -> ExitCode {
         Some("validate") => validate(&args[1..]),
         Some("compile") => compile(&args[1..]),
         Some("init") => init(&args[1..]),
-        Some("explain") => view("explain", &args[1..], |doc, diags| {
+        Some("explain") => view("explain", &args[1..], false, |doc, diags| {
             svetra::understand::explain::explain(doc, diags)
         }),
-        Some("graph") => view("graph", &args[1..], |doc, _| {
+        Some("graph") => view("graph", &args[1..], true, |doc, _| {
             svetra::understand::graph::graph(doc)
         }),
-        Some("context") => view("context", &args[1..], |doc, _| {
+        Some("context") => view("context", &args[1..], true, |doc, _| {
             svetra::understand::context::context(doc)
         }),
         Some("mcp") if args.len() == 1 => match svetra::mcp::serve() {
@@ -103,10 +103,13 @@ fn validate(args: &[String]) -> ExitCode {
     }
 }
 
-/// A read-only view of a valid file: validate first, then print `render`'s output.
+/// A read-only view of a valid file: validate first, then print `render`'s output. With
+/// `drawable`, a file whose only errors leave the design complete (`report::drawable`) is still
+/// rendered, with its diagnostics on stderr and exit 1.
 fn view(
     command: &str,
     args: &[String],
+    drawable: bool,
     render: impl Fn(&svetra::model::Document, &[svetra::diag::Diagnostic]) -> String,
 ) -> ExitCode {
     let (file, _) = match file_and_flag(command, args, "--no-such-flag") {
@@ -118,13 +121,21 @@ fn view(
         Err(e) => return usage(&e),
     };
     let diags = report::validate(&src);
-    if report::has_errors(&diags) {
+    let errors = report::has_errors(&diags);
+    if errors && !(drawable && report::drawable(&diags)) {
         print!("{}", report::human(file, &diags));
         return ExitCode::from(1);
     }
+    if errors {
+        eprint!("{}", report::human(file, &diags));
+    }
     let (doc, _) = svetra::load::load(&src);
     print!("{}", render(&doc, &diags));
-    ExitCode::SUCCESS
+    if errors {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 fn compile(args: &[String]) -> ExitCode {

@@ -170,6 +170,43 @@ fn explain_refuses_invalid_files() {
 }
 
 #[test]
+fn graph_and_context_draw_a_complete_but_unsafe_design() {
+    let dir = std::env::temp_dir().join(format!("svetra-draw-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // No policy on Order (SVT001) and money as float (SVT005): the design is complete.
+    let unsafe_file = dir.join("unsafe.yaml");
+    std::fs::write(&unsafe_file, "svetra: \"0.1\"\nsystem: Shop\nentities:\n  Order:\n    fields:\n      id: { type: uuid, primary: true }\n      total: { type: float, required: true }\n").unwrap();
+    for cmd in ["graph", "context"] {
+        let out = svetra(&[cmd, unsafe_file.to_str().unwrap()]);
+        assert_eq!(out.status.code(), Some(1), "{cmd}");
+        assert!(
+            String::from_utf8_lossy(&out.stdout).contains("Order"),
+            "{cmd} draws it"
+        );
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            err.contains("SVT001") && err.contains("SVT005"),
+            "{cmd}: {err}"
+        );
+    }
+    let out = svetra(&["explain", unsafe_file.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("What your app stores"));
+    // A reference to nothing (SVT002) leaves the design incomplete: nothing is drawn.
+    let broken = dir.join("broken.yaml");
+    std::fs::write(&broken, "svetra: \"0.1\"\nsystem: Shop\nentities:\n  Order:\n    private: true\n    fields:\n      id: { type: uuid, primary: true }\n      item: { type: ref, entity: Item }\n").unwrap();
+    for cmd in ["graph", "context"] {
+        let out = svetra(&[cmd, broken.to_str().unwrap()]);
+        assert_eq!(out.status.code(), Some(1), "{cmd}");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.contains("SVT002") && !stdout.contains("flowchart"),
+            "{cmd}: {stdout}"
+        );
+    }
+}
+
+#[test]
 fn graph_and_context_match_golden_files() {
     for name in ["finledger", "posts", "bookings", "clinic"] {
         for (cmd, ext) in [("graph", "graph.mmd"), ("context", "context.txt")] {

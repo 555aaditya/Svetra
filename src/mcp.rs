@@ -143,24 +143,21 @@ fn call(name: &str, args: &Value) -> Option<Value> {
                 Err(_) => unreachable!("read only fails to read"),
             };
             let diags = crate::report::validate(&src);
-            if crate::report::has_errors(&diags) {
+            let errors = crate::report::has_errors(&diags);
+            if errors && (name == "explain" || !crate::report::drawable(&diags)) {
                 return Some(text(diagnostics(file, &diags), true));
             }
             let (doc, _) = crate::load::load(&src);
-            match name {
-                "explain" => text(
-                    json!({ "text": crate::understand::explain::explain(&doc, &diags) }),
-                    false,
-                ),
-                "context" => text(
-                    json!({ "text": crate::understand::context::context(&doc) }),
-                    false,
-                ),
-                _ => text(
-                    json!({ "mermaid": crate::understand::graph::graph(&doc) }),
-                    false,
-                ),
+            let mut out = match name {
+                "explain" => json!({ "text": crate::understand::explain::explain(&doc, &diags) }),
+                "context" => json!({ "text": crate::understand::context::context(&doc) }),
+                _ => json!({ "mermaid": crate::understand::graph::graph(&doc) }),
+            };
+            // Drawn despite errors: say so, with the errors to fix.
+            if errors {
+                out["diagnostics"] = diagnostics(file, &diags)["diagnostics"].clone();
             }
+            text(out, false)
         }
         _ => return None,
     })

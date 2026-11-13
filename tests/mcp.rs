@@ -106,6 +106,7 @@ fn tools_validate_compile_and_explain() {
             call(7, "graph", json!({})),
             call(8, "explain", json!({ "file": "leaky.yaml" })),
             call(9, "validate", json!({ "file": "missing.yaml" })),
+            call(10, "graph", json!({ "file": "leaky.yaml" })),
         ],
     );
     let (v, err) = result(&replies[0]);
@@ -136,6 +137,11 @@ fn tools_validate_compile_and_explain() {
     assert!(
         err && has_code(&v, "SVT001"),
         "an invalid file gets its diagnostics: {v}"
+    );
+    let (v, err) = result(&replies[9]);
+    assert!(
+        !err && v["mermaid"].as_str().unwrap().contains("Order") && has_code(&v, "SVT001"),
+        "a complete but unsafe design is still drawn, with its errors: {v}"
     );
     let (v, err) = result(&replies[8]);
     assert!(
