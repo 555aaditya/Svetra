@@ -56,6 +56,14 @@ npm install -g svetra             # or put `svetra` on your PATH
 npm install --save-dev svetra     # or pin it per project, then `npx svetra ...`
 ```
 
+**Behind a company proxy** that inspects HTTPS, such as Zscaler, the first run can't download the binary and says `unable to get local issuer certificate`. Point Node at the proxy's root certificate first, in the same terminal you start your agent from, because the MCP server downloads the same way:
+
+```sh
+export NODE_EXTRA_CA_CERTS=/path/to/proxy-root.pem
+```
+
+Your IT team can give you the certificate. On macOS it's usually in the System keychain: `security find-certificate -c "<proxy name>" -p /Library/Keychains/System.keychain > ~/proxy-root.pem`.
+
 Or with Rust 1.88+: `cargo install svetra`. Windows builds are also on the [releases page](https://github.com/555aaditya/Svetra/releases).
 
 ```sh

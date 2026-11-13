@@ -33,7 +33,7 @@ Use the `svetra` MCP tools (`validate`, `compile`, `explain`, `context`, `graph`
 - **Prefer a policy over a hole, and a hole over app code,** for anything about who can see or change data.
 - **App code calls holes** through the typed functions in `src/svetra.gen.ts`, such as `transfer(supabase, input)`.
 - **Read the design with `context`**, not by opening the generated files.
-- **When asked "who can see X?",** answer from `explain`, not from memory.
+- **When asked "who can see X?",** call `explain` again and answer from its lines, even if you called it earlier. Never answer from memory: the file may have changed since.
 
 ## The format, briefly
 
