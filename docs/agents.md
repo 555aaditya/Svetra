@@ -20,6 +20,8 @@ Sets a project up for agents. `DIR` defaults to the current folder. It writes:
 
 `init` prints what it wrote and the next step: "Open your agent and describe the app you want."
 
+**Behind a company proxy** that inspects HTTPS, `npx` can't download the binary until `NODE_EXTRA_CA_CERTS` points at the proxy's root certificate. Set it before `init`, and in the terminal the agent is started from: the agent starts `svetra mcp` with its own environment, so an agent opened another way (for example from an editor) needs the variable too, or the server fails to start.
+
 ## The skill
 
 `SKILL.md` teaches the agent one loop, plus the rules that keep it safe. Its content is fixed by this section:
@@ -35,7 +37,7 @@ And these rules:
 - **Never** use the service role key in app code, and never disable row-level security.
 - **Prefer a policy over a hole,** and a hole over app code, for anything about who can see or change data.
 - **Use `context`** to read the whole design compactly, instead of opening the generated files.
-- **When the person asks "who can see X?",** answer from `explain`, not from memory.
+- **When the person asks "who can see X?",** call `explain` again and answer from its lines, even if it ran earlier in the conversation. Never answer from memory: the file may have changed.
 
 ## The MCP server
 
