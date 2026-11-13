@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Stronger access tests, found by a mutation study.** `scripts/mutate.py` breaks the deployed database in 195 ways (policies dropped, widened or moved to another role, row-level security off, extra policies, weakened role checks and hole guards, extra grants) and counts what the generated tests catch. They now also check:
+  - **carol,** a signed-in person with a second factor who owns nothing and holds no role, so a rule open to every signed-in person, or a role check that forgets who holds the role, fails a check;
+  - **changing who owns a row or what it belongs to:** each signed-in person tries to set a row's `user` fields to themselves and point its `ref` fields at another row, and the rule must hold on the row as the update leaves it;
+  - **holes:** only the declared callers can run a hole's public function, and nobody can run the function inside `svetra_holes` directly, where the caller's id could be forged;
+  - **roles:** alice can't grant herself a role.
+
+  Recompile to get the new checks. The bookings example goes from 87 to 124 tests.
+
 ## 0.4.0 (2026-11-07)
 
 Svetra inside your agent: holes for custom code, an MCP server, and a Claude Code skill.

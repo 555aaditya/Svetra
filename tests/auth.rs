@@ -109,7 +109,9 @@ fn mfa_roles_need_a_second_factor_in_sql_and_in_the_access_tests() {
     // the same grant without one gets only what any signed-in person gets.
     assert!(tests.contains("$svetra$, 'aal2'), 'allowed', 'admin can delete Visit b');"));
     assert!(tests.contains("'admin without a second factor can''t see Visit a');"));
-    assert!(tests.contains("select plan(45);"));
+    // carol, who holds no role but signed in with a second factor, gets nothing extra.
+    assert!(tests.contains("$svetra$, 'aal2'), 'denied', 'carol can''t see Visit a');"));
+    assert!(tests.contains("select plan(64);"));
     assert_eq!(
         svetra::compile::ts::types(&doc),
         include_str!("golden/clinic.ts")

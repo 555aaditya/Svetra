@@ -291,6 +291,7 @@ It catches what the other outputs can't:
 | `anon` | No | |
 | `alice` | Yes | Owns the `a` rows: every `user` field on them is alice |
 | `bob` | Yes | Owns the `b` rows |
+| `carol` | Yes, **with a second factor** | Nothing: no rows, no role. Anyone can add a second factor to their own account, so a rule open to every signed-in person, or a role check that forgets who holds the role, shows up as carol getting something |
 | One per global role, named after it, e.g. `admin` | Yes | That role. Owns nothing |
 | One per scoped role, e.g. `staff at Location a` | Yes | That role for the scope entity's `a` row. Owns nothing |
 | One per role with `mfa: true`, e.g. `admin without a second factor` | Yes | The same grant, in a session without a second factor. Gets only what any signed-in person gets |
@@ -321,16 +322,22 @@ For every reachable entity and every person:
 | change `a`, change `b` | `update` the row, setting its primary key to itself | Some `select` rule **and** some `update` rule hold on the row. Postgres applies `select` rules to an update that finds rows with `where` |
 | delete `a`, delete `b` | `delete` the row by primary key | Some `select` rule **and** some `delete` rule hold on the row |
 | create `c`, create `d` | `insert` the candidate row | Some `insert` rule holds on the new row |
+| change who owns `a` or `b`, or what it belongs to | `update` one `user` or `ref` field of the row: a `user` field to the person themselves (or, on their own row, to the other owner), a `ref` to the target's other row. Signed-in people only | The row can be changed (as above), **and** some `update` rule and some `select` rule hold on the row as the update leaves it. This is how a person could take a row over, give it away, or move it out of their scope |
 
 - **Rules that apply to a person:** `anon` gets rules with `as: anon` or `as: anyone`. Everyone signed in gets `as: authenticated` (the default) or `as: anyone`.
 - **Private entities** get two checks for `anon` and for `alice`: see `a` and create `c`. Both must be denied, because the API has no grants on them.
+- **Fields a declared constraint names,** and a field alone in a `unique` rule when the new value is another row's, get no change-who-owns check, because the database could reject the value for that reason instead.
+- **Roles:** when there are roles, `alice can't give herself the <role> role` inserts a grant for herself into `svetra.role_grants`, which must be denied.
+- **Holes:** besides their table privileges and who gets past `when`, `anon` and signed-in people must be able to run the hole's public function exactly as its `as` says, and must never be able to run the function inside `svetra_holes` directly, because that one takes the caller's id as an argument.
 - **Results** are `allowed` when the statement touches the row, and `denied` when it touches nothing or is refused by row-level security (SQLSTATE `42501`). Anything else, such as a constraint error, is reported as `error <sqlstate>: <message>`, which never matches an expected result.
 
-**Test names** read as sentences: `ok 12 - bob can't see Booking a`, `ok 31 - staff at Location a can change Booking a`.
+**Test names** read as sentences: `ok 12 - bob can't see Booking a`, `ok 31 - staff at Location a can change Booking a`, `staff at Location a can't point the location of Booking a at Location b`.
 
 ### Example
 
-For the bookings app (two entities, two roles), people are `anon`, `alice`, `bob`, `admin` and `staff at Location a`. Each gets 8 checks on Booking and 8 on Location, so there are 80 checks, plus 7 test-data tests. A policy added by hand, such as `create policy leak on booking for select to authenticated using (true)`, makes `alice can't see Booking b`, `bob can't see Booking a` and `staff at Location a can't see Booking b` fail.
+For the bookings app (two entities, two roles), people are `anon`, `alice`, `bob`, `carol`, `admin` and `staff at Location a`. Each gets 8 checks on Booking and 8 on Location (96), the five signed-in people each get 4 change-who-owns checks on Booking (20), and alice can't give herself the admin role (1): 117 checks, plus 7 test-data tests. A policy added by hand, such as `create policy leak on booking for select to authenticated using (true)`, makes `alice can't see Booking b`, `bob can't see Booking a`, `carol can't see Booking a`, `carol can't see Booking b` and `staff at Location a can't see Booking b` fail.
+
+**How these checks were chosen:** a mutation study (`scripts/mutate.py`) breaks the deployed database in 195 ways and counts what the checks catch. carol, the change-who-owns checks and the hole function checks each come from a kind of break the earlier checks missed.
 
 ### Limits in version 0.1
 

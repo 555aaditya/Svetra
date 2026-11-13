@@ -1,29 +1,52 @@
-not ok 48 - anon can't see Booking a
-not ok 49 - anon can't see Booking b
-not ok 50 - anon can't change Booking a
-not ok 51 - anon can't change Booking b
-not ok 52 - anon can't delete Booking a
-not ok 53 - anon can't delete Booking b
-not ok 54 - anon can't create Booking c
-not ok 55 - anon can't create Booking d
-not ok 57 - alice can't see Booking b
-not ok 58 - alice can't change Booking a
-not ok 59 - alice can't change Booking b
-not ok 60 - alice can't delete Booking a
-not ok 61 - alice can't delete Booking b
-not ok 63 - alice can't create Booking d
-not ok 64 - bob can't see Booking a
-not ok 66 - bob can't change Booking a
-not ok 67 - bob can't change Booking b
-not ok 68 - bob can't delete Booking a
-not ok 69 - bob can't delete Booking b
-not ok 70 - bob can't create Booking c
-not ok 78 - admin can't create Booking c
-not ok 79 - admin can't create Booking d
-not ok 81 - staff at Location a can't see Booking b
-not ok 83 - staff at Location a can't change Booking b
-not ok 84 - staff at Location a can't delete Booking a
-not ok 85 - staff at Location a can't delete Booking b
-not ok 86 - staff at Location a can't create Booking c
-not ok 87 - staff at Location a can't create Booking d
-# Looks like you failed 28 tests of 87
+not ok 57 - anon can't see Booking a
+not ok 58 - anon can't see Booking b
+not ok 59 - anon can't change Booking a
+not ok 60 - anon can't change Booking b
+not ok 61 - anon can't delete Booking a
+not ok 62 - anon can't delete Booking b
+not ok 63 - anon can't create Booking c
+not ok 64 - anon can't create Booking d
+not ok 66 - alice can't see Booking b
+not ok 67 - alice can't change Booking a
+not ok 68 - alice can't change Booking b
+not ok 69 - alice can't delete Booking a
+not ok 70 - alice can't delete Booking b
+not ok 72 - alice can't create Booking d
+not ok 73 - alice can't set the customer of Booking a to bob
+not ok 74 - alice can't point the location of Booking a at Location b
+not ok 75 - alice can't set the customer of Booking b to themselves
+not ok 76 - alice can't point the location of Booking b at Location a
+not ok 77 - bob can't see Booking a
+not ok 79 - bob can't change Booking a
+not ok 80 - bob can't change Booking b
+not ok 81 - bob can't delete Booking a
+not ok 82 - bob can't delete Booking b
+not ok 83 - bob can't create Booking c
+not ok 85 - bob can't set the customer of Booking a to themselves
+not ok 86 - bob can't point the location of Booking a at Location b
+not ok 87 - bob can't set the customer of Booking b to alice
+not ok 88 - bob can't point the location of Booking b at Location a
+not ok 89 - carol can't see Booking a
+not ok 90 - carol can't see Booking b
+not ok 91 - carol can't change Booking a
+not ok 92 - carol can't change Booking b
+not ok 93 - carol can't delete Booking a
+not ok 94 - carol can't delete Booking b
+not ok 95 - carol can't create Booking c
+not ok 96 - carol can't create Booking d
+not ok 97 - carol can't set the customer of Booking a to themselves
+not ok 98 - carol can't point the location of Booking a at Location b
+not ok 99 - carol can't set the customer of Booking b to themselves
+not ok 100 - carol can't point the location of Booking b at Location a
+not ok 107 - admin can't create Booking c
+not ok 108 - admin can't create Booking d
+not ok 114 - staff at Location a can't see Booking b
+not ok 116 - staff at Location a can't change Booking b
+not ok 117 - staff at Location a can't delete Booking a
+not ok 118 - staff at Location a can't delete Booking b
+not ok 119 - staff at Location a can't create Booking c
+not ok 120 - staff at Location a can't create Booking d
+not ok 122 - staff at Location a can't point the location of Booking a at Location b
+not ok 123 - staff at Location a can't set the customer of Booking b to themselves
+not ok 124 - staff at Location a can't point the location of Booking b at Location a
+# Looks like you failed 51 tests of 124
