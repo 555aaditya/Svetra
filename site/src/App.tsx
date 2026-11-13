@@ -58,7 +58,7 @@ function Hero() {
   return (
     <div id="top" className="mx-auto grid max-w-6xl items-center gap-12 px-4 pt-16 pb-20 sm:px-6 sm:pt-24 lg:grid-cols-[1.05fr_1fr]">
       <div>
-        <Badge color="primary" className="mb-6">v0.4.0 · in your agent: MCP server, skill and safe custom code</Badge>
+        <Badge color="primary" className="mb-6">v0.4.1 · access tests checked by a mutation study</Badge>
         <h1 className="text-[40px] leading-[1.08] font-semibold tracking-tight text-text-primary sm:text-[52px] lg:text-[50px] xl:text-[54px]">
           You design the data.
           <br />

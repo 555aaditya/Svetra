@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 (2026-11-13)
+
+Stronger access tests, found by a mutation study, and fixes from running Svetra inside Claude Code.
 
 - **Stronger access tests, found by a mutation study.** `scripts/mutate.py` breaks the deployed database in 197 ways (policies dropped, widened or moved to another role, row-level security off, extra policies, weakened role checks and hole guards, extra grants) and counts what the generated tests catch. They now also check:
   - **carol,** a signed-in person with a second factor who owns nothing and holds no role, so a rule open to every signed-in person, or a role check that forgets who holds the role, fails a check;
@@ -10,6 +12,8 @@
 
   Recompile to get the new checks. The bookings example goes from 87 to 124 tests.
 - **`graph` and `context` draw a design that's complete but unsafe.** When the only errors are a table with no rule (SVT001) or money as `float` (SVT005), they still print their output, with the diagnostics on stderr and exit 1; over MCP, the output plus a `diagnostics` list. An agent fixing those errors can see the design instead of drawing it by hand. `explain` still refuses any file with errors.
+- **The Claude Code skill re-runs `explain`** before answering "who can see X?", instead of answering from an earlier call.
+- **Setup behind a company proxy** is documented: set `NODE_EXTRA_CA_CERTS` to the proxy's root certificate before `npx svetra`, and where the agent is started from, since the MCP server downloads the same way.
 
 ## 0.4.0 (2026-11-07)
 

@@ -98,6 +98,7 @@ export const roadmap = [
   { when: "Nov 4", what: "Roles and teams · v0.1.0 · access tests in v0.2.0", done: true },
   { when: "Nov 5", what: "Sign-in settings and second factors in v0.3.0 · npm", done: true },
   { when: "Nov 7", what: "In your agent: svetra mcp, the Claude Code skill and svetra init · custom code as guarded Postgres functions, in v0.4.0", done: true },
+  { when: "Nov 13", what: "Access tests checked by breaking the database 197 ways: four kinds of gap found and closed, in v0.4.1", done: true },
   { when: "Next", what: "A recorded design conversation · svetra view: an interactive map of who can see what", done: false },
   { when: "Early 2027", what: "Measured: tokens and safety with and without Svetra · how many broken rules the access tests catch", done: false },
   { when: "Later", what: "Existing apps: svetra infer and svetra check · safe changes with svetra plan", done: false },
