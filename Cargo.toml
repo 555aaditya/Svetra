@@ -1,6 +1,6 @@
 [package]
 name = "svetra"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 rust-version = "1.88"
 description = "You design the data, Svetra makes it safe: compiles a small svetra.yaml into locked-down Postgres, row-level security and Zod types for Supabase."

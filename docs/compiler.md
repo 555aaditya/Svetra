@@ -337,7 +337,7 @@ For every reachable entity and every person:
 
 For the bookings app (two entities, two roles), people are `anon`, `alice`, `bob`, `carol`, `admin` and `staff at Location a`. Each gets 8 checks on Booking and 8 on Location (96), the five signed-in people each get 4 change-who-owns checks on Booking (20), and alice can't give herself the admin role (1): 117 checks, plus 7 test-data tests. A policy added by hand, such as `create policy leak on booking for select to authenticated using (true)`, makes `alice can't see Booking b`, `bob can't see Booking a`, `carol can't see Booking a`, `carol can't see Booking b` and `staff at Location a can't see Booking b` fail.
 
-**How these checks were chosen:** a mutation study (`scripts/mutate.py`) breaks the deployed database in 195 ways and counts what the checks catch. carol, the change-who-owns checks and the hole function checks each come from a kind of break the earlier checks missed.
+**How these checks were chosen:** a mutation study (`scripts/mutate.py`) breaks the deployed database in 197 ways and counts what the checks catch. carol, the change-who-owns checks and the hole function checks each come from a kind of break the earlier checks missed.
 
 ### Limits in version 0.1
 
