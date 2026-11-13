@@ -33,8 +33,9 @@ fn access_tests_match_golden_files() {
 #[test]
 fn expected_results_follow_the_rules() {
     let t = generate(include_str!("fixtures/bookings.yaml"));
-    // 5 people x 2 entities x 8 checks, plus 7 test-data inserts.
-    assert!(t.contains("select plan(87);"));
+    // 7 test-data inserts; 6 people x 2 entities x 8 checks; alice granting herself a role; and
+    // 5 signed-in people x 2 bookings x 2 fields (customer, location) changed by an update.
+    assert!(t.contains("select plan(124);"));
     for name in [
         "alice can see Booking a",
         "alice can't see Booking b",
@@ -48,6 +49,13 @@ fn expected_results_follow_the_rules() {
         "staff at Location a can't change Booking b",
         "staff at Location a can see Location a",
         "staff at Location a can't see Location b",
+        "carol can't see Booking a",
+        "alice can't give herself the admin role",
+        "alice can't set the customer of Booking a to bob",
+        "carol can't set the customer of Booking a to themselves",
+        "staff at Location a can't point the location of Booking a at Location b",
+        "staff at Location a can set the customer of Booking a to themselves",
+        "admin can point the location of Booking b at Location a",
     ] {
         assert!(
             t.contains(&format!("'{}');", name.replace('\'', "''"))),
@@ -88,9 +96,14 @@ fn a_second_ref_to_the_same_entity_points_at_the_other_row() {
     assert!(t.contains(
         "'5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8001-00010000000b'"
     ));
-    // Both owners can see a transaction between their accounts.
+    // Both owners can see a transaction between their accounts, and carol, who owns neither, can't.
     assert!(t.contains("'alice can see Transaction a');"));
     assert!(t.contains("'bob can see Transaction a');"));
+    assert!(t.contains("'carol can''t see Transaction a');"));
+    // Only signed-in people reach transfer, and only through its public function.
+    assert!(t.contains("'transfer'), true, 'signed-in people can call transfer');"));
+    assert!(t.contains("'transfer'), false, 'anon can''t call transfer');"));
+    assert!(t.contains("'svetra_holes', 'transfer'), false, 'signed-in people can''t call the inside of transfer directly');"));
 }
 
 #[test]

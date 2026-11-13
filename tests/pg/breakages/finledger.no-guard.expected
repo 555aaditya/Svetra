@@ -1,3 +1,5 @@
-not ok 59 - alice can't call transfer on the b rows
-not ok 60 - bob can't call transfer on the a rows
-# Looks like you failed 2 tests of 61
+not ok 85 - alice can't call transfer on the b rows
+not ok 86 - bob can't call transfer on the a rows
+not ok 88 - carol can't call transfer on the a rows
+not ok 89 - carol can't call transfer on the b rows
+# Looks like you failed 4 tests of 89

@@ -1,3 +1,5 @@
 not ok 19 - alice can see Post b
-not ok 26 - bob can see Post a
-# Looks like you failed 2 tests of 41
+not ok 28 - bob can see Post a
+not ok 38 - carol can see Post a
+not ok 39 - carol can see Post b
+# Looks like you failed 4 tests of 61

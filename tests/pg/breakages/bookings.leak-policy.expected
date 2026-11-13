@@ -1,4 +1,6 @@
-not ok 57 - alice can't see Booking b
-not ok 64 - bob can't see Booking a
-not ok 81 - staff at Location a can't see Booking b
-# Looks like you failed 3 tests of 87
+not ok 66 - alice can't see Booking b
+not ok 77 - bob can't see Booking a
+not ok 89 - carol can't see Booking a
+not ok 90 - carol can't see Booking b
+not ok 114 - staff at Location a can't see Booking b
+# Looks like you failed 5 tests of 124
