@@ -1,0 +1,1473 @@
+{
+  "svetra": "0.1",
+  "system": "Teams",
+  "revision": "2987e16099b1",
+  "people": [
+    {
+      "id": "anon",
+      "label": "Someone not signed in"
+    },
+    {
+      "id": "alice",
+      "label": "A signed-in person"
+    },
+    {
+      "id": "bob",
+      "label": "Another signed-in person"
+    },
+    {
+      "id": "carol",
+      "label": "A signed-in person who owns nothing"
+    },
+    {
+      "id": "admin",
+      "label": "admin",
+      "role": "admin"
+    },
+    {
+      "id": "member at Team a",
+      "label": "member at a team",
+      "role": "member",
+      "scope": "Team"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Team",
+      "label": "Teams",
+      "private": false,
+      "fields": [
+        "name: text (required)"
+      ],
+      "links": []
+    },
+    {
+      "name": "Task",
+      "label": "Tasks",
+      "private": false,
+      "fields": [
+        "the team it belongs to (required)",
+        "the signed-in person who owns it (required)",
+        "title: text (required)"
+      ],
+      "links": [
+        {
+          "field": "team",
+          "to": "Team"
+        }
+      ]
+    }
+  ],
+  "cells": [
+    {
+      "person": "anon",
+      "entity": "Team",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see teams any other way."
+      ],
+      "rules": [
+        "People with the member role for a team can see that team.",
+        "People with the admin role can see teams."
+      ],
+      "tests": [
+        9,
+        10
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Team",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one team",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        15,
+        16
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Team",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        11,
+        12
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Team",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        13,
+        14
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Task",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see tasks any other way."
+      ],
+      "rules": [
+        "People with the member role for a task's team can see that task."
+      ],
+      "tests": [
+        57,
+        58
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Task",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's task",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a task when they have the member role for its team and its author is them."
+      ],
+      "tests": [
+        63,
+        64
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Task",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        59,
+        60
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Task",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        61,
+        62
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Team",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see teams any other way."
+      ],
+      "rules": [
+        "People with the member role for a team can see that team.",
+        "People with the admin role can see teams."
+      ],
+      "tests": [
+        17,
+        18
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Team",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one team",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        23,
+        24
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Team",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        19,
+        20
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Team",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        21,
+        22
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Task",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's task",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see tasks any other way."
+      ],
+      "rules": [
+        "People with the member role for a task's team can see that task."
+      ],
+      "tests": [
+        65,
+        66
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Task",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own task",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a task when they have the member role for its team and its author is them."
+      ],
+      "tests": [
+        71,
+        72
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Task",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        67,
+        68
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Task",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        69,
+        70
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Team",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see teams any other way."
+      ],
+      "rules": [
+        "People with the member role for a team can see that team.",
+        "People with the admin role can see teams."
+      ],
+      "tests": [
+        25,
+        26
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Team",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one team",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        31,
+        32
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Team",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        27,
+        28
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Team",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        29,
+        30
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Task",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own task",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see tasks any other way."
+      ],
+      "rules": [
+        "People with the member role for a task's team can see that task."
+      ],
+      "tests": [
+        77,
+        78
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Task",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's task",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a task when they have the member role for its team and its author is them."
+      ],
+      "tests": [
+        83,
+        84
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Task",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        79,
+        80
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Task",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        81,
+        82
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Team",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see teams any other way."
+      ],
+      "rules": [
+        "People with the member role for a team can see that team.",
+        "People with the admin role can see teams."
+      ],
+      "tests": [
+        33,
+        34
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Team",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one team",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        39,
+        40
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Team",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        35,
+        36
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Team",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        37,
+        38
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Task",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see tasks any other way."
+      ],
+      "rules": [
+        "People with the member role for a task's team can see that task."
+      ],
+      "tests": [
+        89,
+        90
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Task",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's task",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a task when they have the member role for its team and its author is them."
+      ],
+      "tests": [
+        95,
+        96
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Task",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        91,
+        92
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Task",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        93,
+        94
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Team",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "People with the admin role can see teams."
+      ],
+      "rules": [
+        "People with the member role for a team can see that team.",
+        "People with the admin role can see teams."
+      ],
+      "tests": [
+        41,
+        42
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Team",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one team",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        47,
+        48
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Team",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        43,
+        44
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Team",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        45,
+        46
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Task",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see tasks any other way."
+      ],
+      "rules": [
+        "People with the member role for a task's team can see that task."
+      ],
+      "tests": [
+        101,
+        102
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Task",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's task",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a task when they have the member role for its team and its author is them."
+      ],
+      "tests": [
+        107,
+        108
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Task",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        103,
+        104
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Task",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's task",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's task",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        105,
+        106
+      ]
+    },
+    {
+      "person": "member at Team a",
+      "entity": "Team",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their team",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "People with the member role for a team can see that team."
+      ],
+      "rules": [
+        "People with the member role for a team can see that team.",
+        "People with the admin role can see teams."
+      ],
+      "tests": [
+        49,
+        50
+      ]
+    },
+    {
+      "person": "member at Team a",
+      "entity": "Team",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their team",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        55,
+        56
+      ]
+    },
+    {
+      "person": "member at Team a",
+      "entity": "Team",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        51,
+        52
+      ]
+    },
+    {
+      "person": "member at Team a",
+      "entity": "Team",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete teams directly. Only custom code can change them: start_team."
+      ],
+      "rules": [],
+      "tests": [
+        53,
+        54
+      ]
+    },
+    {
+      "person": "member at Team a",
+      "entity": "Task",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "a task at their team",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "a task at another team",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "People with the member role for a task's team can see that task."
+      ],
+      "rules": [
+        "People with the member role for a task's team can see that task."
+      ],
+      "tests": [
+        113,
+        114
+      ]
+    },
+    {
+      "person": "member at Team a",
+      "entity": "Task",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: a task at their team",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: a task at another team",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a task when they have the member role for its team and its author is them."
+      ],
+      "tests": [
+        119,
+        120
+      ]
+    },
+    {
+      "person": "member at Team a",
+      "entity": "Task",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "a task at their team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "a task at another team",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        115,
+        116
+      ]
+    },
+    {
+      "person": "member at Team a",
+      "entity": "Task",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "a task at their team",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "a task at another team",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
+      ],
+      "tests": [
+        117,
+        118
+      ]
+    }
+  ],
+  "holes": [
+    {
+      "name": "start_team",
+      "lines": [
+        "takes: name (text)",
+        "returns: a team",
+        "who can call it: signed-in people",
+        "can change: teams.",
+        "can give people the member role, or take it away, and no other role."
+      ],
+      "callers": [
+        {
+          "person": "anon",
+          "access": "none",
+          "tests": [
+            134,
+            135
+          ]
+        },
+        {
+          "person": "alice",
+          "access": "all",
+          "tests": [
+            136,
+            137
+          ]
+        },
+        {
+          "person": "bob",
+          "access": "all",
+          "tests": [
+            138,
+            139
+          ]
+        },
+        {
+          "person": "carol",
+          "access": "all",
+          "tests": [
+            140,
+            141
+          ]
+        },
+        {
+          "person": "admin",
+          "access": "all",
+          "tests": [
+            142,
+            143
+          ]
+        },
+        {
+          "person": "member at Team a",
+          "access": "all",
+          "tests": [
+            144,
+            145
+          ]
+        }
+      ]
+    },
+    {
+      "name": "add_member",
+      "lines": [
+        "takes: team (a team), person (an id)",
+        "returns: nothing",
+        "who can call it: signed-in people, only when they have the member role for the team",
+        "can't read or change any data",
+        "can give people the member role, or take it away, and no other role."
+      ],
+      "callers": [
+        {
+          "person": "anon",
+          "access": "none",
+          "tests": [
+            155,
+            156
+          ]
+        },
+        {
+          "person": "alice",
+          "access": "none",
+          "tests": [
+            157,
+            158
+          ]
+        },
+        {
+          "person": "bob",
+          "access": "none",
+          "tests": [
+            159,
+            160
+          ]
+        },
+        {
+          "person": "carol",
+          "access": "none",
+          "tests": [
+            161,
+            162
+          ]
+        },
+        {
+          "person": "admin",
+          "access": "none",
+          "tests": [
+            163,
+            164
+          ]
+        },
+        {
+          "person": "member at Team a",
+          "access": "some",
+          "tests": [
+            165,
+            166
+          ]
+        }
+      ]
+    }
+  ],
+  "signing_in": [
+    "People sign in with email (a password or an emailed link).",
+    "Anyone can create an account.",
+    "People confirm their email address before they can sign in.",
+    "Passwords need at least 10 characters."
+  ],
+  "before_going_live": [
+    "Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.",
+    "Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in."
+  ]
+}

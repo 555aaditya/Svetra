@@ -353,3 +353,43 @@ fn hole_bodies_are_stubbed_once_compiled_in_and_never_overwritten() {
         String::from_utf8_lossy(&out.stdout)
     );
 }
+
+#[test]
+fn view_writes_one_page_and_ignores_its_folder() {
+    let dir = temp_project("view", include_str!("fixtures/bookings.yaml"));
+    std::fs::write(dir.join(".gitignore"), "target/").unwrap();
+    let file = dir.join("svetra.yaml");
+    let out = svetra(&["view", file.to_str().unwrap(), "--no-open"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let page = std::fs::read_to_string(dir.join(".svetra/view.html")).unwrap();
+    assert!(page.contains("<title>Bookings: who can see what</title>"));
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".gitignore")).unwrap(),
+        "target/\n.svetra/\n"
+    );
+    // Running it again doesn't add the line twice.
+    svetra(&["view", file.to_str().unwrap(), "--no-open"]);
+    assert_eq!(
+        std::fs::read_to_string(dir.join(".gitignore")).unwrap(),
+        "target/\n.svetra/\n"
+    );
+
+    let json = svetra(&["view", file.to_str().unwrap(), "--json"]);
+    assert_eq!(
+        String::from_utf8_lossy(&json.stdout),
+        include_str!("golden/bookings.view.json")
+    );
+
+    let bad = temp_project(
+        "view-bad",
+        "svetra: \"0.1\"\nsystem: App\nentities:\n  Note:\n    fields:\n      id: { type: uuid, primary: true }\n",
+    );
+    let out = svetra(&[
+        "view",
+        bad.join("svetra.yaml").to_str().unwrap(),
+        "--no-open",
+    ]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("SVT001"));
+    assert!(!bad.join(".svetra").exists());
+}

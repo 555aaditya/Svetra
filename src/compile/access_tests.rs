@@ -422,6 +422,79 @@ fn allowed(
     if unknown { None } else { Some(false) }
 }
 
+/// The names of the rules that let `person` do `action` on row `k` of entity `ei`.
+fn allowing(
+    doc: &Document,
+    world: &World,
+    person: &Person,
+    ei: usize,
+    k: usize,
+    a: Action,
+) -> Vec<String> {
+    let name = &world.entities[ei].name;
+    doc.policies
+        .iter()
+        .filter(|p| {
+            let applies = match p.role {
+                Role::Anyone => true,
+                Role::Anon => person.id.is_none(),
+                Role::Authenticated => person.id.is_some(),
+            };
+            applies && &p.on.name == name && p.allow.contains(&a)
+        })
+        .filter(|p| {
+            let unsure = Cell::new(false);
+            let env = Env {
+                world,
+                ei,
+                k,
+                person,
+                swap: None,
+                unsure: &unsure,
+            };
+            !unsure.get()
+                && eval(&expr::parse(&p.when).expect("validated"), &env) == Val::Bool(true)
+        })
+        .map(|p| p.name.clone())
+        .collect()
+}
+
+/// One check in the generated file, as data: what `svetra view` shows (docs/view.md).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Check {
+    /// The person's name in the tests: `anon`, `alice`, `admin`, `staff at Location a`, ...
+    pub person: String,
+    /// An entity, or for `call`, a hole.
+    pub entity: String,
+    /// `see`, `create`, `change`, `delete` or `call`.
+    pub action: &'static str,
+    /// `a` to `d`.
+    pub row: char,
+    /// Allowed, denied, or `None` when the evaluator can't decide and the check is skipped.
+    pub expected: Option<bool>,
+    /// Its number in the pgTAP output.
+    pub number: usize,
+    /// The rules that allow it.
+    pub because: Vec<String>,
+}
+
+/// The people the tests run as, in order, with what they hold.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TestPerson {
+    pub name: String,
+    pub signed_in: bool,
+    /// (role, scope entity) for a role holder.
+    pub role: Option<(String, Option<String>)>,
+    pub second_factor: bool,
+}
+
+/// The generated test file, and its checks as data.
+pub struct Analysis {
+    pub text: String,
+    pub people: Vec<TestPerson>,
+    pub checks: Vec<Check>,
+}
+
 /// Both must hold: `None` if either is unknown and the other doesn't already rule it out.
 fn both(x: Option<bool>, y: Option<bool>) -> Option<bool> {
     match (x, y) {
@@ -508,6 +581,11 @@ $$;
 
 /// The whole test file for a validated document.
 pub fn tests(doc: &Document) -> String {
+    analyse(doc).text
+}
+
+/// The test file, plus each check on a row and each hole call as data.
+pub fn analyse(doc: &Document) -> Analysis {
     let mut people = vec![
         Person {
             name: "anon".into(),
@@ -632,6 +710,7 @@ pub fn tests(doc: &Document) -> String {
     }
 
     let mut checks = Vec::new();
+    let mut found: Vec<Check> = Vec::new();
     // Giving alice a role, for the scope entity's `a` row when the role is scoped.
     let grant_to_alice = |r: &RoleDef| {
         let scope = match &r.scope {
@@ -658,15 +737,34 @@ pub fn tests(doc: &Document) -> String {
     }
     for (ei, e) in world.entities.iter().enumerate().take(tables) {
         for p in &people {
-            let mut check = |what: String, sql: String, ok: Option<bool>| {
-                let role = if p.id.is_some() {
-                    "authenticated"
-                } else {
-                    "anon"
-                };
-                let user = p.id.as_ref().map_or("null".into(), |id| format!("'{id}'"));
-                let aal = if p.aal2 { ", 'aal2'" } else { "" };
-                checks.push(match ok {
+            let mut check =
+                |what: String,
+                 sql: String,
+                 ok: Option<bool>,
+                 tag: Option<(&'static str, usize, Action)>| {
+                    if let Some((action, k, a)) = tag {
+                        found.push(Check {
+                            person: p.name.clone(),
+                            entity: e.name.clone(),
+                            action,
+                            row: ROWS[k],
+                            expected: ok,
+                            number: checks.len(),
+                            because: if e.private {
+                                vec![]
+                            } else {
+                                allowing(doc, &world, p, ei, k, a)
+                            },
+                        });
+                    }
+                    let role = if p.id.is_some() {
+                        "authenticated"
+                    } else {
+                        "anon"
+                    };
+                    let user = p.id.as_ref().map_or("null".into(), |id| format!("'{id}'"));
+                    let aal = if p.aal2 { ", 'aal2'" } else { "" };
+                    checks.push(match ok {
                     Some(ok) => format!(
                         "select is(svetra_test.try('{role}', {user}, $svetra${sql}$svetra${aal}), '{}', {});",
                         if ok { "allowed" } else { "denied" },
@@ -677,32 +775,43 @@ pub fn tests(doc: &Document) -> String {
                         lit(&format!("{} {what}: a rule compares a time with text that isn't an ISO time", p.name))
                     ),
                 });
-            };
+                };
             let row = |verb: &str, k: usize| format!("{verb} {} {}", e.name, ROWS[k]);
             if e.private {
                 if p.name == "anon" || p.name == "alice" {
-                    check(row("see", 0), select(&world, ei, 0), Some(false));
-                    check(row("create", 2), insert(&world, ei, 2), Some(false));
+                    let see = Some(("see", 0, Action::Select));
+                    check(row("see", 0), select(&world, ei, 0), Some(false), see);
+                    let create = Some(("create", 2, Action::Insert));
+                    check(row("create", 2), insert(&world, ei, 2), Some(false), create);
                 }
                 continue;
             }
             let can = |k, a| allowed(doc, &world, p, ei, k, a, None);
             for k in 0..2 {
-                check(row("see", k), select(&world, ei, k), can(k, Action::Select));
+                let tag = Some(("see", k, Action::Select));
+                check(
+                    row("see", k),
+                    select(&world, ei, k),
+                    can(k, Action::Select),
+                    tag,
+                );
             }
             for k in 0..2 {
                 let ok = both(can(k, Action::Select), can(k, Action::Update));
-                check(row("change", k), update(&world, ei, k), ok);
+                let tag = Some(("change", k, Action::Update));
+                check(row("change", k), update(&world, ei, k), ok, tag);
             }
             for k in 0..2 {
                 let ok = both(can(k, Action::Select), can(k, Action::Delete));
-                check(row("delete", k), delete(&world, ei, k), ok);
+                let tag = Some(("delete", k, Action::Delete));
+                check(row("delete", k), delete(&world, ei, k), ok, tag);
             }
             for k in 2..4 {
                 check(
                     row("create", k),
                     insert(&world, ei, k),
                     can(k, Action::Insert),
+                    Some(("create", k, Action::Insert)),
                 );
             }
             // Changing who owns a row, or what it belongs to: the rule must hold on the row as
@@ -776,6 +885,7 @@ pub fn tests(doc: &Document) -> String {
                         format!("{verb} the {} of {} {r} {words}", f.name, e.name),
                         sql,
                         both(before, after),
+                        None,
                     );
                 }
             }
@@ -907,6 +1017,15 @@ pub fn tests(doc: &Document) -> String {
                     .collect();
                 let sql = format!("select \"public\".{}({})", q(&h.name), args.join(", "));
                 let what = format!("call {} on the {r} rows", h.name);
+                found.push(Check {
+                    person: p.name.clone(),
+                    entity: h.name.clone(),
+                    action: "call",
+                    row: *r,
+                    expected: ok,
+                    number: checks.len(),
+                    because: vec![],
+                });
                 checks.push(match ok {
                     Some(ok) => format!(
                         "select is(svetra_test.call('{role}', {user}, $svetra${sql}$svetra${aal}), '{}', {});",
@@ -923,7 +1042,7 @@ pub fn tests(doc: &Document) -> String {
     }
 
     let names: Vec<&str> = people.iter().map(|p| p.name.as_str()).collect();
-    format!(
+    let text = format!(
         "-- Access tests: run with `supabase test db`. Every check runs as a real user, never the\n\
          -- service key, and the whole file rolls back. People: {}.\n\
          begin;\n\
@@ -938,7 +1057,33 @@ pub fn tests(doc: &Document) -> String {
         setup.len() + checks.len(),
         setup.join("\n"),
         checks.join("\n")
-    )
+    );
+    // Checks are numbered after the test data, from 1.
+    for c in &mut found {
+        c.number += setup.len() + 1;
+    }
+    let people = people
+        .iter()
+        .map(|p| TestPerson {
+            name: p.name.clone(),
+            signed_in: p.id.is_some(),
+            role: p.grants.first().map(|(r, scope)| {
+                let entity = scope.as_ref().and_then(|_| {
+                    doc.roles
+                        .iter()
+                        .find(|d| &d.name == r)
+                        .and_then(|d| d.scope.as_ref().map(|s| s.name.clone()))
+                });
+                (r.clone(), entity)
+            }),
+            second_factor: p.aal2,
+        })
+        .collect();
+    Analysis {
+        text,
+        people,
+        checks: found,
+    }
 }
 
 fn lives(sql: &str, what: &str) -> String {

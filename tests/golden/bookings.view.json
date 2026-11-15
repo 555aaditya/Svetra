@@ -1,0 +1,1376 @@
+{
+  "svetra": "0.1",
+  "system": "Bookings",
+  "revision": "645d3c2ac34a",
+  "people": [
+    {
+      "id": "anon",
+      "label": "Someone not signed in"
+    },
+    {
+      "id": "alice",
+      "label": "A signed-in person"
+    },
+    {
+      "id": "bob",
+      "label": "Another signed-in person"
+    },
+    {
+      "id": "carol",
+      "label": "A signed-in person who owns nothing"
+    },
+    {
+      "id": "admin",
+      "label": "admin",
+      "role": "admin"
+    },
+    {
+      "id": "staff at Location a",
+      "label": "staff at a location",
+      "role": "staff",
+      "scope": "Location"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Location",
+      "label": "Locations",
+      "private": false,
+      "fields": [
+        "name: text (required)"
+      ],
+      "links": []
+    },
+    {
+      "name": "Booking",
+      "label": "Bookings",
+      "private": false,
+      "fields": [
+        "customer: a signed-in person (required)",
+        "the location it belongs to (required)",
+        "starts: a date and time (required)"
+      ],
+      "links": [
+        {
+          "field": "location",
+          "to": "Location"
+        }
+      ]
+    }
+  ],
+  "cells": [
+    {
+      "person": "anon",
+      "entity": "Location",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see locations any other way."
+      ],
+      "rules": [
+        "People with the staff role for a location can see that location.",
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        9,
+        10
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Location",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one location",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        15,
+        16
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Location",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        11,
+        12
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Location",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can delete locations directly."
+      ],
+      "rules": [],
+      "tests": [
+        13,
+        14
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Booking",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's booking",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see bookings any other way."
+      ],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them.",
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        57,
+        58
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Booking",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's booking",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them."
+      ],
+      "tests": [
+        63,
+        64
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Booking",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        59,
+        60
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Booking",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        61,
+        62
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Location",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see locations any other way."
+      ],
+      "rules": [
+        "People with the staff role for a location can see that location.",
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        17,
+        18
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Location",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one location",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        23,
+        24
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Location",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        19,
+        20
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Location",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can delete locations directly."
+      ],
+      "rules": [],
+      "tests": [
+        21,
+        22
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Booking",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own booking",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's booking",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see and create a booking when its customer is them."
+      ],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them.",
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        65,
+        66
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Booking",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own booking",
+          "allowed": true
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's booking",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see and create a booking when its customer is them."
+      ],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them."
+      ],
+      "tests": [
+        71,
+        72
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Booking",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        67,
+        68
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Booking",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        69,
+        70
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Location",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see locations any other way."
+      ],
+      "rules": [
+        "People with the staff role for a location can see that location.",
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        25,
+        26
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Location",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one location",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        31,
+        32
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Location",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        27,
+        28
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Location",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can delete locations directly."
+      ],
+      "rules": [],
+      "tests": [
+        29,
+        30
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Booking",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own booking",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see and create a booking when its customer is them."
+      ],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them.",
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        77,
+        78
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Booking",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's booking",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own booking",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see and create a booking when its customer is them."
+      ],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them."
+      ],
+      "tests": [
+        83,
+        84
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Booking",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        79,
+        80
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Booking",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        81,
+        82
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Location",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see locations any other way."
+      ],
+      "rules": [
+        "People with the staff role for a location can see that location.",
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        33,
+        34
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Location",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one location",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        39,
+        40
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Location",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        35,
+        36
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Location",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can delete locations directly."
+      ],
+      "rules": [],
+      "tests": [
+        37,
+        38
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Booking",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's booking",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see bookings any other way."
+      ],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them.",
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        89,
+        90
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Booking",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's booking",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them."
+      ],
+      "tests": [
+        95,
+        96
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Booking",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        91,
+        92
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Booking",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's booking",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        93,
+        94
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Location",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "rules": [
+        "People with the staff role for a location can see that location.",
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        41,
+        42
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Location",
+      "action": "create",
+      "access": "all",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one location",
+          "allowed": true
+        },
+        {
+          "row": "d",
+          "label": "a new one: another location",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        47,
+        48
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Location",
+      "action": "change",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        43,
+        44
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Location",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can delete locations directly."
+      ],
+      "rules": [],
+      "tests": [
+        45,
+        46
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Booking",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's booking",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another person's booking",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them.",
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        101,
+        102
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Booking",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's booking",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's booking",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them."
+      ],
+      "tests": [
+        107,
+        108
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Booking",
+      "action": "change",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's booking",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another person's booking",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "rules": [
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        103,
+        104
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Booking",
+      "action": "delete",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's booking",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another person's booking",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "rules": [
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        105,
+        106
+      ]
+    },
+    {
+      "person": "staff at Location a",
+      "entity": "Location",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their location",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "People with the staff role for a location can see that location."
+      ],
+      "rules": [
+        "People with the staff role for a location can see that location.",
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        49,
+        50
+      ]
+    },
+    {
+      "person": "staff at Location a",
+      "entity": "Location",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their location",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        55,
+        56
+      ]
+    },
+    {
+      "person": "staff at Location a",
+      "entity": "Location",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, create and change locations."
+      ],
+      "tests": [
+        51,
+        52
+      ]
+    },
+    {
+      "person": "staff at Location a",
+      "entity": "Location",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can delete locations directly."
+      ],
+      "rules": [],
+      "tests": [
+        53,
+        54
+      ]
+    },
+    {
+      "person": "staff at Location a",
+      "entity": "Booking",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "a booking at their location",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "a booking at another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "People with the staff role for a booking's location can see and change that booking."
+      ],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them.",
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        113,
+        114
+      ]
+    },
+    {
+      "person": "staff at Location a",
+      "entity": "Booking",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: a booking at their location",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: a booking at another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see and create a booking when its customer is them."
+      ],
+      "tests": [
+        119,
+        120
+      ]
+    },
+    {
+      "person": "staff at Location a",
+      "entity": "Booking",
+      "action": "change",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "a booking at their location",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "a booking at another location",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "People with the staff role for a booking's location can see and change that booking."
+      ],
+      "rules": [
+        "People with the staff role for a booking's location can see and change that booking.",
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        115,
+        116
+      ]
+    },
+    {
+      "person": "staff at Location a",
+      "entity": "Booking",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "a booking at their location",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "a booking at another location",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete bookings."
+      ],
+      "tests": [
+        117,
+        118
+      ]
+    }
+  ],
+  "holes": [],
+  "signing_in": [],
+  "before_going_live": []
+}

@@ -29,6 +29,7 @@ The main part: a table.
 - **Rows are people,** the same people the access tests use, in the same order:
   - **Someone not signed in**
   - **A signed-in person** (alice in the tests) and **another signed-in person** (bob), so "their own" and "someone else's" both show
+  - **A signed-in person who owns nothing** (carol), so a rule open to every signed-in person shows
   - **one row per role:** "admin", or "staff at a location" for a scoped role
   - **for each role with `mfa: true`,** that role again "without a second factor"
 - **Columns are things and actions:** one group per entity, headed with its plain plural ("Bookings"), and four columns in each: **See, Create, Change, Delete**. Private entities are listed with every cell "No" and the note "not reachable from the app".
@@ -93,7 +94,9 @@ The entities as boxes with their links, the people and roles, and the custom cod
 ```
 
 - **`access`** is `all`, `some` or `none`, computed by the access tests' evaluator over the same rows for the same people. A cell the evaluator can't decide (the tests skip such a check) is `unknown`, shown as "Not checked", with the reason.
-- **`because`** holds sentences `explain` prints, never new wording.
+- **`because`** holds sentences `explain` prints, never new wording: the rules that allowed a row, or, when none did, the "Nobody can" lines that rule the action out.
+- **`rules`** holds every `explain` sentence that allows the action on the entity for anyone. For **No** cells where `because` is empty (rules exist, but none applies to this person), the page shows these as "only these rules let anyone…".
+- **Row labels** are from the person's side: "their own booking" and "someone else's booking" for alice and bob on entities with a `user` field; "a booking at their location" and "a booking at another location" for a scoped role; otherwise "one booking" and "another booking". Rows `c` and `d` (creating) start "a new one:".
 - **`tests`** are the numbers of the checks in `supabase/tests/svetra.test.sql` for this cell, so the page and the tests can be cross-checked.
 
 ## Implementation

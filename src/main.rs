@@ -8,6 +8,10 @@ Usage:
   svetra explain [FILE]             Describe the app in plain English: data, rules, who can see what
   svetra graph [FILE]               Draw the app as a Mermaid diagram
   svetra context [FILE]             Print the whole app compactly, for agents
+  svetra view [FILE] [--out PATH] [--no-open] [--json]
+                                    Write one page showing who can see and change what
+                                    (default .svetra/view.html) and open it; --json prints
+                                    the view model instead
   svetra compile [FILE] [--check]   Write the SQL schema, TypeScript types and access tests next
                                     to FILE, and sign-in settings into supabase/config.toml;
                                     --check writes nothing and fails if they are out of date
@@ -46,6 +50,7 @@ fn main() -> ExitCode {
         Some("context") => view("context", &args[1..], true, |doc, _| {
             svetra::understand::context::context(doc)
         }),
+        Some("view") => page(&args[1..]),
         Some("mcp") if args.len() == 1 => match svetra::mcp::serve() {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
@@ -210,6 +215,92 @@ fn init(args: &[String]) -> ExitCode {
         }
         Err(svetra::project::Failure::Invalid(_)) => unreachable!("init doesn't validate"),
     }
+}
+
+/// `svetra view` (docs/view.md): validate, then write the page, or print the model with `--json`.
+fn page(args: &[String]) -> ExitCode {
+    let (mut file, mut out, mut open, mut json) = (None, None, true, false);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--json" => json = true,
+            "--no-open" => open = false,
+            "--out" => match it.next() {
+                Some(p) => out = Some(p.clone()),
+                None => return usage("--out needs a path"),
+            },
+            f if f.starts_with('-') => return usage(&format!("unknown option '{f}'")),
+            f if file.is_none() => file = Some(f.to_string()),
+            _ => return usage("view takes one file"),
+        }
+    }
+    let file = file.unwrap_or_else(|| "svetra.yaml".into());
+    let src = match read(&file) {
+        Ok(s) => s,
+        Err(e) => return usage(&e),
+    };
+    let diags = report::validate(&src);
+    if report::has_errors(&diags) {
+        print!("{}", report::human(&file, &diags));
+        return ExitCode::from(1);
+    }
+    let (doc, _) = svetra::load::load(&src);
+    if json {
+        print!("{}", svetra::understand::view::json(&doc, &src));
+        return ExitCode::SUCCESS;
+    }
+    let dir = std::path::Path::new(&file)
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."))
+        .to_path_buf();
+    let path = out.map_or_else(|| dir.join(".svetra").join("view.html"), Into::into);
+    let written = path
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(&path, svetra::understand::view::page(&doc, &src)));
+    if let Err(e) = written {
+        eprintln!("svetra: cannot write {}: {e}", path.display());
+        return ExitCode::from(1);
+    }
+    ignore_scratch(&dir);
+    println!("wrote {}", path.display());
+    if open {
+        let opener = if cfg!(target_os = "macos") {
+            std::process::Command::new("open").arg(&path).status()
+        } else if cfg!(windows) {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", ""])
+                .arg(&path)
+                .status()
+        } else {
+            std::process::Command::new("xdg-open").arg(&path).status()
+        };
+        if !opener.is_ok_and(|s| s.success()) {
+            println!("Open it in a browser to see it.");
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+/// Add `.svetra/` to the project's .gitignore, when there is one that doesn't ignore it yet.
+fn ignore_scratch(dir: &std::path::Path) {
+    let gi = dir.join(".gitignore");
+    let Ok(text) = std::fs::read_to_string(&gi) else {
+        return;
+    };
+    if text
+        .lines()
+        .any(|l| matches!(l.trim(), ".svetra" | ".svetra/" | "/.svetra/"))
+    {
+        return;
+    }
+    let sep = if text.is_empty() || text.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
+    let _ = std::fs::write(&gi, format!("{text}{sep}.svetra/\n"));
 }
 
 fn usage(msg: &str) -> ExitCode {
