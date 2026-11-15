@@ -179,7 +179,11 @@ fn hole(
         if body.ends_with('\n') { "" } else { "\n" }
     ));
     out.push(format!("alter function {inner_sig} owner to {role};"));
-    out.push(format!("revoke all on function {inner_sig} from public;"));
+    // Supabase grants execute on new functions to anon and authenticated directly, not only
+    // through PUBLIC, so both are revoked by name.
+    out.push(format!(
+        "revoke all on function {inner_sig} from public, anon, authenticated;"
+    ));
     out.push(format!(
         "grant execute on function {inner_sig} to current_user;"
     ));
@@ -197,7 +201,9 @@ fn hole(
         q(&h.name),
         outer_params.join(", ")
     ));
-    out.push(format!("revoke all on function {outer_sig} from public;"));
+    out.push(format!(
+        "revoke all on function {outer_sig} from public, anon, authenticated;"
+    ));
     let callers = match h.role {
         Role::Authenticated => "authenticated",
         Role::Anon => "anon",

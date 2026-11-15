@@ -60,10 +60,10 @@ begin
 end
 $svetra$;
 alter function "svetra_holes"."write_audit"(uuid) owner to "svetra_hole_write_audit";
-revoke all on function "svetra_holes"."write_audit"(uuid) from public;
+revoke all on function "svetra_holes"."write_audit"(uuid) from public, anon, authenticated;
 grant execute on function "svetra_holes"."write_audit"(uuid) to current_user;
 create function "public"."write_audit"()
   returns void language plpgsql security definer set search_path = ''
   as $svetra$ begin perform "svetra_holes"."write_audit"((select auth.uid())); end $svetra$;
-revoke all on function "public"."write_audit"() from public;
+revoke all on function "public"."write_audit"() from public, anon, authenticated;
 grant execute on function "public"."write_audit"() to authenticated;
