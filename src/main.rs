@@ -16,6 +16,11 @@ Usage:
                                     The same, as a plan: exits 1 on destructive changes or
                                     wider access until they're accepted, then writes the
                                     migration for any declared renames
+  svetra check (--db URL | --local | --snapshot FILE) [--schema public,...] [--json]
+                                    Find the leaks in an existing database: tables anyone can
+                                    read, open policies, views and functions that skip
+                                    row-level security. --print-query prints the read-only
+                                    query, to run in the Supabase SQL editor without psql
   svetra view [FILE] [--out PATH] [--no-open] [--json]
                                     Write one page showing who can see and change what
                                     (default .svetra/view.html) and open it; --json prints
@@ -59,6 +64,7 @@ fn main() -> ExitCode {
             svetra::understand::context::context(doc)
         }),
         Some("view") => page(&args[1..]),
+        Some("check") => inspect(&args[1..]),
         Some(cmd @ ("diff" | "plan")) => change(cmd, &args[1..]),
         Some("mcp") if args.len() == 1 => match svetra::mcp::serve() {
             Ok(()) => ExitCode::SUCCESS,
@@ -290,6 +296,111 @@ fn page(args: &[String]) -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+/// `svetra check` (docs/check.md): find the leaks in an existing database.
+fn inspect(args: &[String]) -> ExitCode {
+    let (mut db, mut snapshot, mut json, mut print) = (None, None, false, false);
+    let mut schemas = vec!["public".to_string()];
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--json" => json = true,
+            "--print-query" => print = true,
+            "--local" => {
+                db = Some("postgresql://postgres:postgres@127.0.0.1:54322/postgres".to_string())
+            }
+            "--db" | "--snapshot" | "--schema" => {
+                let Some(v) = it.next() else {
+                    return usage(&format!("{a} needs a value"));
+                };
+                match a.as_str() {
+                    "--db" => db = Some(v.clone()),
+                    "--snapshot" => snapshot = Some(v.clone()),
+                    _ => {
+                        schemas = v
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect()
+                    }
+                }
+            }
+            other => return usage(&format!("unknown argument '{other}' for check")),
+        }
+    }
+    let query = svetra::inspect::query(&schemas);
+    if print {
+        println!("{query};");
+        return ExitCode::SUCCESS;
+    }
+    let (text, source) = match (&db, &snapshot) {
+        (Some(url), None) => {
+            let out = std::process::Command::new("psql")
+                .args([
+                    url.as_str(),
+                    "-X",
+                    "-A",
+                    "-t",
+                    "-q",
+                    "-v",
+                    "ON_ERROR_STOP=1",
+                    "-c",
+                    &query,
+                ])
+                .output();
+            match out {
+                Ok(o) if o.status.success() => (
+                    String::from_utf8_lossy(&o.stdout).to_string(),
+                    svetra::inspect::redact(url),
+                ),
+                Ok(o) => {
+                    eprintln!(
+                        "svetra: the database refused the query: {}",
+                        String::from_utf8_lossy(&o.stderr).trim()
+                    );
+                    return ExitCode::from(2);
+                }
+                Err(_) => {
+                    eprintln!(
+                        "svetra: psql isn't installed. Run `svetra check --print-query`, run the query in the Supabase SQL editor, save the JSON it returns to a file, then `svetra check --snapshot <file>`."
+                    );
+                    return ExitCode::from(2);
+                }
+            }
+        }
+        (None, Some(f)) => match read(f) {
+            Ok(t) => (t, f.clone()),
+            Err(e) => return usage(&e),
+        },
+        _ => return usage("check needs one of --db URL, --local or --snapshot FILE"),
+    };
+    let snap: serde_json::Value = match serde_json::from_str(text.trim()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!(
+                "svetra: that isn't the JSON the check query returns ({e}). Run `svetra check --print-query` for the query."
+            );
+            return ExitCode::from(2);
+        }
+    };
+    let found = svetra::inspect::findings(&snap);
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&svetra::inspect::json(&found)).unwrap_or_default()
+        );
+    } else {
+        print!("{}", svetra::inspect::human(&found, &schemas, &source));
+    }
+    if found
+        .iter()
+        .any(|f| f.severity == svetra::inspect::Severity::Critical)
+    {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 /// `svetra diff` and `svetra plan` (docs/change.md).

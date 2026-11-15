@@ -1,0 +1,86 @@
+{
+  "findings": [
+    {
+      "kind": "open_write",
+      "severity": "critical",
+      "object": "public.comments",
+      "message": "Anyone on the internet can change every row of public.comments (policy anyone_edits).",
+      "fix": "Replace `true` with a condition on who owns the row, such as owner = auth.uid()."
+    },
+    {
+      "kind": "rls_off",
+      "severity": "critical",
+      "object": "public.orders",
+      "message": "Anyone on the internet can read, add, change and delete every row of public.orders: row-level security is off.",
+      "fix": "alter table public.orders enable row level security; then add policies, or describe the table in svetra.yaml and let Svetra write and test them."
+    },
+    {
+      "kind": "view_bypass",
+      "severity": "critical",
+      "object": "public.user_emails",
+      "message": "public.user_emails exposes auth.users to the API, with its owner's rights: people's emails and sign-in details may be readable.",
+      "fix": "alter view public.user_emails set (security_invoker = true); or revoke select on it from anon and authenticated."
+    },
+    {
+      "kind": "open_read",
+      "severity": "warning",
+      "object": "public.comments",
+      "message": "Anyone on the internet can read every row of public.comments (policy anyone_edits). Fine for public data; a leak otherwise.",
+      "fix": "If the rows aren't public, replace `true` with a condition on who may see them."
+    },
+    {
+      "kind": "definer_function",
+      "severity": "warning",
+      "object": "public.make_admin(target uuid)",
+      "message": "Anyone on the internet can call public.make_admin(target uuid), which runs with its owner's rights. Check it validates the caller.",
+      "fix": "Revoke execute from roles that shouldn't call it, and check auth.uid() inside it."
+    },
+    {
+      "kind": "mutable_search_path",
+      "severity": "warning",
+      "object": "public.make_admin(target uuid)",
+      "message": "public.make_admin(target uuid) has no fixed search_path, so a caller can make it run their own code.",
+      "fix": "alter function public.make_admin(target uuid) set search_path = '';"
+    },
+    {
+      "kind": "signed_in_write",
+      "severity": "warning",
+      "object": "public.notes",
+      "message": "Every signed-in person can change every row of public.notes (policy notes_signed_in).",
+      "fix": "Limit it to the row's owner or a role, such as owner = auth.uid()."
+    },
+    {
+      "kind": "user_metadata",
+      "severity": "warning",
+      "object": "public.notes",
+      "message": "Policy admins_read on public.notes trusts user_metadata, which every person can change about themselves.",
+      "fix": "Decide roles from a table people can't write, such as Svetra's roles, or app_metadata."
+    },
+    {
+      "kind": "view_bypass",
+      "severity": "warning",
+      "object": "public.order_totals",
+      "message": "public.order_totals runs with its owner's rights, so it skips the row-level security of the tables it reads.",
+      "fix": "alter view public.order_totals set (security_invoker = true); or revoke select on it from anon and authenticated."
+    },
+    {
+      "kind": "open_read",
+      "severity": "warning",
+      "object": "public.posts",
+      "message": "Anyone on the internet can read every row of public.posts (policy public_read). Fine for public data; a leak otherwise.",
+      "fix": "If the rows aren't public, replace `true` with a condition on who may see them."
+    },
+    {
+      "kind": "no_policy",
+      "severity": "info",
+      "object": "public.audit",
+      "message": "Nobody can reach public.audit through the API: row-level security is on with no policies. Intended?",
+      "fix": "If the app should reach it, add policies; if not, revoke the API's privileges on it."
+    }
+  ],
+  "counts": {
+    "critical": 3,
+    "warning": 7,
+    "info": 1
+  }
+}

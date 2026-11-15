@@ -109,6 +109,8 @@ Roles work too: declare `admin`, or `staff` scoped to one location, and use `has
 
 It validates first and writes nothing if there are errors. The output is byte-identical for the same input. Every PR applies the generated SQL to a real PostgreSQL 16 and checks that each constraint and policy behaves as declared: who can see which rows, and what gets rejected. The full output is specified in [`docs/compiler.md`](docs/compiler.md).
 
+**Check an app you already have:** `svetra check --db <connection string>` (or `--local`) finds the leaks in any Supabase database, no `svetra.yaml` needed: tables anyone can read, open policies, views and functions that skip row-level security. Each finding comes in plain English with the fix ([spec](docs/check.md)).
+
 **See who can see what:** `svetra view` writes one page, `.svetra/view.html`, and opens it: a table of every person (signed out, signed in, each role) by every thing and action, answered All, Some or No. Select a cell to see which rows the tests tried, the rule behind it, and the test numbers that check it. The answers come from the same evaluator as the access tests, so the page can't disagree with them.
 
 **Editor support:** add this as the first line of `svetra.yaml` for autocomplete in VS Code, Zed or Neovim:
@@ -140,7 +142,7 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 | Automations | Scheduled jobs, triggers when data changes, and incoming webhooks | Planned |
 | Start fast | `svetra new` with templates | Planned |
 | Change safely | `svetra diff` and `svetra plan`: classify every change as safe, breaking or destructive, show whose access widens, and keep renamed data ([spec](docs/change.md)) | **Done** |
-| Existing apps | `svetra infer` and `svetra check` for apps you've already built | Planned |
+| Existing apps | `svetra check` finds the leaks in an app you've already built ([spec](docs/check.md)); `svetra infer` drafts its `svetra.yaml` | `check` **Built** (next release); `infer` planned |
 | Feature packs | `svetra add teams`, `svetra remove stripe` | Planned |
 
 ## Contributing

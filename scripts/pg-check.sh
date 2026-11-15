@@ -74,3 +74,14 @@ docker exec -i svetra-pg-check psql -U postgres -v ON_ERROR_STOP=1 -q < "$rename
 after="$(docker exec svetra-pg-check psql -U postgres -At -c 'select count(*) from public.task where creator is not null')"
 if [ "$before" -lt 1 ] || [ "$before" != "$after" ]; then echo "rename lost data: $before rows before, $after after"; exit 1; fi
 echo "ok: a declared rename keeps every value ($after rows)"
+
+# svetra check (docs/check.md) on a database it didn't design: an app with one of each leak.
+# Snapshot it through the printed query, and the findings must match the golden file exactly.
+psql -d template1 -c "create database leaky"
+# Roles belong to the whole server and already exist, so the stand-in runs without them here.
+grep -v "^create role" tests/pg/supabase_stub.sql | docker exec -i svetra-pg-check psql -U postgres -d leaky -v ON_ERROR_STOP=1 -q
+docker exec -i svetra-pg-check psql -U postgres -d leaky -v ON_ERROR_STOP=1 -q < tests/pg/check/leaky_app.sql
+"$bin" check --print-query | docker exec -i svetra-pg-check psql -U postgres -d leaky -X -A -t -q -v ON_ERROR_STOP=1 > "$work/leaky.json"
+if "$bin" check --snapshot "$work/leaky.json" --json > "$work/leaky.check.json"; then echo "check missed the critical leaks"; exit 1; fi
+if ! diff "$work/leaky.check.json" tests/golden/leaky_app.check.json; then echo "check findings differ from the golden file"; exit 1; fi
+echo "ok: svetra check finds every planted leak ($(grep -c '"kind"' "$work/leaky.check.json") findings)"
