@@ -35,6 +35,18 @@ jobs:
       - run: cargo build
       - run: scripts/pg-check.sh
 
+  supabase:
+    # The same access tests and breakages on a real local Supabase (its database image, roles and
+    # default privileges), where a stand-in can differ: this is how the anon hole bug was found.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: cargo build
+      - run: scripts/supabase-check.sh
+
   site:
     # The website builds (types, then Vite) with the real compiler output it imports.
     runs-on: ubuntu-latest

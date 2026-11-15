@@ -32,6 +32,7 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 | `site/` | The website: Vite, React, Tailwind v4 and BoardUI's free components (MIT, see `site/LICENSE-BOARDUI`). Shows only real output, imported from `tests/` at build time. `npm run build` in `site/`; deployed from `main` by `pages.yml` |
 | `npm/` | The npm wrapper: downloads, verifies and caches the release binary on first run |
 | `tests/pg/`, `scripts/pg-check.sh` | Compiles the fixtures, applies the SQL to PostgreSQL 16 with a Supabase stand-in, and asserts behaviour: who sees which rows, and what's rejected. Then runs the generated access tests with pgTAP, and each deliberate breakage in `tests/pg/breakages/` (a `.sql` change plus the exact `.expected` failures), on its own copy of the database |
+| `scripts/supabase-check.sh` | The generated access tests and every breakage again, on a real local Supabase started by the pinned Supabase CLI, run as Supabase's own `postgres` role. Catches differences between Supabase and the stand-in |
 
 ## Commands
 
@@ -43,6 +44,7 @@ cargo clippy --all-targets -- -D warnings
 cargo +1.88 check --all-targets      # the minimum supported Rust version
 cargo run -- validate tests/fixtures/finledger.yaml [--json]
 scripts/pg-check.sh                  # needs Docker: real-Postgres behaviour checks
+scripts/supabase-check.sh            # needs Docker and Node: the access tests on a real local Supabase
 ```
 
 CI runs all of these. A PR is ready when they pass locally.
