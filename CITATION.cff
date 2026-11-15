@@ -5,6 +5,7 @@ type: software
 authors:
   - given-names: Aaditya
     family-names: Sinha
+    orcid: "https://orcid.org/0009-0008-5201-3176"
 version: 0.6.0
 date-released: 2026-11-16
 license: MIT
