@@ -69,6 +69,7 @@ Constraints and policy conditions use the same translation:
 | `x in ['a', 'b']` | "x is a or b" |
 | `p and q`, `p or q`, `not p` | "p and q", "p, or q", "not (p)" |
 | `auth.user` | "them" (the signed-in person) |
+| `f == auth.user`, where `f` ends in `_by` or `_to` | "it was f them" or "it is f them", for example `paid_by` becomes "it was paid by them" and `assigned_to` "it is assigned to them"; with `!=`, "it was not" or "it is not" |
 | `ref.field` | "the field of its ref", for example `source.owner` becomes "the owner of its source" |
 | `has_role('admin')` | "they have the admin role" |
 | `has_role('staff', location)` | "they have the staff role for its location" |
