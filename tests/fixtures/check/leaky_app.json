@@ -1,0 +1,185 @@
+{
+    "tables": [
+        {
+            "schema": "public",
+            "name": "audit",
+            "rls": true,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        },
+        {
+            "schema": "public",
+            "name": "comments",
+            "rls": true,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        },
+        {
+            "schema": "public",
+            "name": "notes",
+            "rls": true,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        },
+        {
+            "schema": "public",
+            "name": "orders",
+            "rls": false,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        },
+        {
+            "schema": "public",
+            "name": "posts",
+            "rls": true,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        },
+        {
+            "schema": "public",
+            "name": "private_stuff",
+            "rls": false,
+            "anon": {
+                "select": false,
+                "insert": false,
+                "update": false,
+                "delete": false
+            },
+            "authenticated": {
+                "select": false,
+                "insert": false,
+                "update": false,
+                "delete": false
+            }
+        }
+    ],
+    "policies": [
+        {
+            "schema": "public",
+            "table": "comments",
+            "name": "anyone_edits",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "anon"
+            ],
+            "cmd": "ALL",
+            "using": "true",
+            "check": "true"
+        },
+        {
+            "schema": "public",
+            "table": "notes",
+            "name": "admins_read",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "SELECT",
+            "using": "(((auth.jwt() -> 'user_metadata'::text) ->> 'role'::text) = 'admin'::text)",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "notes",
+            "name": "notes_signed_in",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "UPDATE",
+            "using": "true",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "posts",
+            "name": "public_read",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "public"
+            ],
+            "cmd": "SELECT",
+            "using": "true",
+            "check": null
+        }
+    ],
+    "views": [
+        {
+            "schema": "public",
+            "name": "order_totals",
+            "security_invoker": false,
+            "anon_select": true,
+            "authenticated_select": true,
+            "definition": " SELECT customer,\n    sum(total) AS total\n   FROM orders\n  GROUP BY customer;"
+        },
+        {
+            "schema": "public",
+            "name": "user_emails",
+            "security_invoker": false,
+            "anon_select": true,
+            "authenticated_select": true,
+            "definition": " SELECT id,\n    email\n   FROM auth.users;"
+        }
+    ],
+    "functions": [
+        {
+            "schema": "public",
+            "name": "make_admin",
+            "args": "target uuid",
+            "security_definer": true,
+            "search_path_set": false,
+            "anon_execute": true,
+            "authenticated_execute": true
+        }
+    ]
+}

@@ -59,5 +59,10 @@ for name in $fixtures; do
     echo "  caught: $what ($(grep -c '^not ok' <<<"$out") checks)"
     load "$name"
   done
-  echo "ok: $name passes its access tests on a real Supabase"
+  # Svetra's own output, checked by svetra check on a real Supabase: no critical finding.
+  "$bin" check --print-query | docker exec -i "$db" psql -U postgres -d postgres -X -A -t -q -v ON_ERROR_STOP=1 > "$work/$name.snapshot.json"
+  if ! "$bin" check --snapshot "$work/$name.snapshot.json" > "$work/$name.check.txt"; then
+    echo "svetra check reports a critical finding in Svetra's own $name:"; cat "$work/$name.check.txt"; exit 1
+  fi
+  echo "ok: $name passes its access tests on a real Supabase, and svetra check finds nothing critical"
 done
