@@ -68,10 +68,10 @@ begin
 end
 $svetra$;
 alter function "svetra_holes"."transfer"(uuid, uuid, uuid, numeric(18, 6)) owner to "svetra_hole_transfer";
-revoke all on function "svetra_holes"."transfer"(uuid, uuid, uuid, numeric(18, 6)) from public;
+revoke all on function "svetra_holes"."transfer"(uuid, uuid, uuid, numeric(18, 6)) from public, anon, authenticated;
 grant execute on function "svetra_holes"."transfer"(uuid, uuid, uuid, numeric(18, 6)) to current_user;
 create function "public"."transfer"(source uuid, destination uuid, amount numeric(18, 6))
   returns "public"."transaction" language plpgsql security definer set search_path = ''
   as $svetra$ begin return "svetra_holes"."transfer"((select auth.uid()), source, destination, amount); end $svetra$;
-revoke all on function "public"."transfer"(uuid, uuid, numeric(18, 6)) from public;
+revoke all on function "public"."transfer"(uuid, uuid, numeric(18, 6)) from public, anon, authenticated;
 grant execute on function "public"."transfer"(uuid, uuid, numeric(18, 6)) to authenticated;

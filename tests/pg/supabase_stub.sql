@@ -11,3 +11,6 @@ create function auth.jwt() returns jsonb language sql stable
 grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated;
+-- Supabase also lets anon and authenticated run every new function in public, directly rather
+-- than through PUBLIC, so `revoke ... from public` alone doesn't take it away.
+alter default privileges in schema public grant all on functions to anon, authenticated;

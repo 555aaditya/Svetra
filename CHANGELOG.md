@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Security fix: logged-out visitors could call holes meant for signed-in people,** on a real Supabase. Supabase grants execute on every new function in `public` to `anon` directly, and the generated `revoke ... from public` left that grant in place. A hole with a `when` guard still refused them, but a hole without one, such as `write_audit` in the posts example, ran for anyone. Both hole functions now revoke execute from `anon` and `authenticated` by name before granting it to the hole's `as` roles. **Recompile and apply the schema.** The CI stand-in for Supabase now has the same default privileges, so this is checked on every PR; the generated access test `anon can't call <hole>` caught it on a real Supabase.
+
 ## 0.4.1 (2026-11-13)
 
 Stronger access tests, found by a mutation study, and fixes from running Svetra inside Claude Code.
