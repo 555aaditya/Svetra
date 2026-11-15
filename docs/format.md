@@ -199,7 +199,17 @@ policies:
 insert into svetra.role_grants (user_id, role, scope_id) values ('<user id>', 'staff', '<location id>');
 ```
 
-A generated, admin-only way to grant roles from the app comes with the agent tools (M4). Until then, granting is deliberately not possible from the client.
+**From the app,** roles are given and taken away by a hole that lists them in `grants` (see [Holes](#holes)), such as one that starts a team and makes its creator a member, or one that lets a member add someone else. The client can never write grants directly, and a hole can only reach the roles it lists.
+
+```yaml
+holes:
+  start_team:
+    kind: function
+    input: { name: Team.name }
+    output: Team
+    writes: [Team]
+    grants: [member]
+```
 
 ## Authentication
 
@@ -244,6 +254,7 @@ A hole is a place where custom code is allowed, usually written by the user's ag
 | `output` | no | An entity name, an `Entity.field`, or a type. Omit it for no return value |
 | `reads` | no | Entities the hole may read |
 | `writes` | no | Entities the hole may write |
+| `grants` | no | Roles the hole may give people and take away, such as `[member]`. No other role is reachable from it |
 | `as` | no | Who may call it: `authenticated` (default), `anyone` or `anon`, as for policies |
 | `when` | no | A condition on the inputs that must hold for the call to run, such as `source.owner == auth.user`. Default `true` |
 
@@ -252,7 +263,9 @@ A parameter or output type is one of three things:
 - A bare type name, for types without options: `text`, `int`, `float`, `bool`, `uuid`, `timestamp`, `date`, `json`.
 - A full field spec, such as `{ type: money, precision: 18, scale: 6 }`.
 
-Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002`). The code a hole runs gets access only to the entities it declares.
+Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002`). Every role named in `grants` must be declared under `roles` (`SVT006`). The code a hole runs gets access only to the entities it declares, and to grants of the roles it lists.
+
+**Giving a role** in a body is an insert into `"svetra"."role_grants"` (`"user_id"`, `"role"`, `"scope_id"`), with the scope row's id for a scoped role and `null` for a global one; taking it away is a delete. For example, `insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values (p_caller, 'member', v_team."id");`. Who may call the hole is still decided by `as` and `when`: a hole that adds members usually has `when: "has_role('member', team)"`.
 
 **The body** is the one hand-written part: PL/pgSQL statements in `supabase/holes/<name>.sql`, next to `svetra.yaml`.
 - **Inputs** are named `p_<input>`, such as `p_source`, so they never clash with column names. **`p_caller`** is the signed-in person's id, or `null` for a logged-out visitor.
@@ -301,7 +314,7 @@ holes:
 | `SVT003` | error | Expression has a type error, or uses a path form not allowed where it appears | `fix_expression` |
 | `SVT004` | warning | Entity has no write path: no policy allows `insert` or `update`, and no hole lists it in `writes` | `add_write_path` |
 | `SVT005` | error | Field whose name suggests money (`amount`, `price`, `balance`, `cost`, `total`, `fee`) uses `float` | `use_money` |
-| `SVT006` | error | `has_role` names an undeclared role, has the wrong number of arguments, or its scope argument doesn't point at the role's scope entity; or a role's `scope` entity doesn't have a `uuid` primary key | `fix_role` |
+| `SVT006` | error | `has_role` names an undeclared role, has the wrong number of arguments, or its scope argument doesn't point at the role's scope entity; or a role's `scope` entity doesn't have a `uuid` primary key; or a hole's `grants` names an undeclared role | `fix_role` |
 | `SVT007` | warning | A policy with `as: anon` gives people who aren't signed in access that signed-in people may not get. No policy for signed-in people covers the same action on the same entity with the same condition or with `true`, so signing in could take access away. Usually you meant `as: anyone` | `use_anyone` |
 | `SVT008` | error | Invalid sign-in settings: an unknown method or value, a method listed twice, a password shorter than 8, or password or `confirm_email` settings without `email` sign-in | `fix_auth` |
 | `SVT009` | info | No `auth` section, so Supabase's defaults apply: passwords of 6 characters and no email confirmation | `add_auth` |

@@ -179,6 +179,8 @@ pub struct Hole {
     pub output: Option<ParamType>,
     pub reads: Vec<NameRef>,
     pub writes: Vec<NameRef>,
+    /// Roles the hole may give and take away, by writing `svetra.role_grants`.
+    pub grants: Vec<NameRef>,
     /// Who may call it, as for policies.
     pub role: Role,
     /// A condition over the inputs that must hold for the call to run.

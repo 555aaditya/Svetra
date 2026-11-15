@@ -546,6 +546,17 @@ fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
             names(&h.writes)
         ),
     });
+    if !h.grants.is_empty() {
+        let roles: Vec<&str> = h.grants.iter().map(|g| g.name.as_str()).collect();
+        out.push(if let [only] = roles.as_slice() {
+            format!("can give people the {only} role, or take it away, and no other role.")
+        } else {
+            format!(
+                "can give people the {} roles, or take them away, and no other role.",
+                roles.join(" or ")
+            )
+        });
+    }
     out
 }
 

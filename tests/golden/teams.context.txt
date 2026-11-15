@@ -1,0 +1,12 @@
+Teams (svetra 0.1)
+roles admin; member(Team)
+auth email; signup open; confirm email; password 10
+Team: id uuid pk; name text!
+Task: id uuid pk; team ref(Team)!; author user!; title text! | index (team); (author)
+policy members_see_team: Team select authenticated when has_role('member', id)
+policy admins_see_teams: Team select authenticated when has_role('admin')
+policy members_see_tasks: Task select authenticated when has_role('member', team)
+policy members_add_tasks: Task insert authenticated when has_role('member', team) and author == auth.user
+policy authors_edit_tasks: Task update,delete authenticated when author == auth.user and has_role('member', team)
+hole start_team: (name Team.name) -> Team; writes Team; grants member
+hole add_member: (team Team.id, person uuid) -> none; grants member; when has_role('member', team)

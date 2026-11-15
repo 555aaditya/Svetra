@@ -1,0 +1,49 @@
+Teams
+
+What your app stores
+  Teams
+    - name: text (required)
+  Tasks
+    - the team it belongs to (required)
+    - the signed-in person who owns it (required)
+    - title: text (required)
+
+Roles
+  - admin: runs the service
+  - member: belongs to one team (held for one team at a time)
+
+Signing in
+  - People sign in with email (a password or an emailed link).
+  - Anyone can create an account.
+  - People confirm their email address before they can sign in.
+  - Passwords need at least 10 characters.
+
+Who can see and change what
+  Teams
+    - People with the member role for a team can see that team.
+    - People with the admin role can see teams.
+    - Nobody can see teams any other way.
+    - Nobody can create, change or delete teams directly. Only custom code can change them: start_team.
+  Tasks
+    - People with the member role for a task's team can see that task.
+    - Signed-in people can create a task when they have the member role for its team and its author is them.
+    - Signed-in people can change and delete a task when its author is them and they have the member role for its team.
+    - Nobody can see tasks any other way.
+
+Custom code
+  start_team
+    - takes: name (text)
+    - returns: a team
+    - who can call it: signed-in people
+    - can change: teams.
+    - can give people the member role, or take it away, and no other role.
+  add_member
+    - takes: team (a team), person (an id)
+    - returns: nothing
+    - who can call it: signed-in people, only when they have the member role for the team
+    - can't read or change any data
+    - can give people the member role, or take it away, and no other role.
+
+Before going live
+  - Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.
+  - Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in.

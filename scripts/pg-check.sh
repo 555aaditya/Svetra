@@ -18,7 +18,7 @@ access_tests() {
   if grep -E '^(not ok|# Looks like|ERROR)' <<<"$out"; then return 1; fi
 }
 
-for name in finledger posts bookings clinic; do
+for name in finledger posts bookings clinic teams; do
   docker rm -f svetra-pg-check >/dev/null 2>&1 || true
   docker run -d --name svetra-pg-check -e POSTGRES_PASSWORD=pw "$image" >/dev/null
   # The image runs a temporary server while it initialises, then restarts. Wait for the real one,

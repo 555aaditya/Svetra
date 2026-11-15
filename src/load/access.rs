@@ -130,6 +130,7 @@ impl Cx {
             output: None,
             reads: Vec::new(),
             writes: Vec::new(),
+            grants: Vec::new(),
             role: Role::Authenticated,
             when: None,
         };
@@ -156,7 +157,11 @@ impl Cx {
         if let Some(v) = k.get("output") {
             hole.output = self.param_type(v, &format!("{path}.output"), true);
         }
-        for (key, out) in [("reads", &mut hole.reads), ("writes", &mut hole.writes)] {
+        for (key, out) in [
+            ("reads", &mut hole.reads),
+            ("writes", &mut hole.writes),
+            ("grants", &mut hole.grants),
+        ] {
             if let Some(v) = k.get(key) {
                 *out = self.name_list(v, &format!("{path}.{key}"));
             }

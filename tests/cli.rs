@@ -127,7 +127,7 @@ fn compile_with_errors_writes_nothing() {
 
 #[test]
 fn explain_matches_golden_files() {
-    for name in ["finledger", "posts", "bookings", "clinic"] {
+    for name in ["finledger", "posts", "bookings", "clinic", "teams"] {
         let out = svetra(&["explain", &format!("tests/fixtures/{name}.yaml")]);
         assert_eq!(out.status.code(), Some(0));
         let want = std::fs::read_to_string(format!("tests/golden/{name}.explain.txt")).unwrap();
@@ -137,7 +137,7 @@ fn explain_matches_golden_files() {
 
 #[test]
 fn explain_never_uses_jargon() {
-    for name in ["finledger", "posts", "bookings", "clinic"] {
+    for name in ["finledger", "posts", "bookings", "clinic", "teams"] {
         let text = String::from_utf8_lossy(
             &svetra(&["explain", &format!("tests/fixtures/{name}.yaml")]).stdout,
         )
@@ -208,7 +208,7 @@ fn graph_and_context_draw_a_complete_but_unsafe_design() {
 
 #[test]
 fn graph_and_context_match_golden_files() {
-    for name in ["finledger", "posts", "bookings", "clinic"] {
+    for name in ["finledger", "posts", "bookings", "clinic", "teams"] {
         for (cmd, ext) in [("graph", "graph.mmd"), ("context", "context.txt")] {
             let out = svetra(&[cmd, &format!("tests/fixtures/{name}.yaml")]);
             assert_eq!(out.status.code(), Some(0));
@@ -220,7 +220,7 @@ fn graph_and_context_match_golden_files() {
 
 #[test]
 fn context_is_smaller_than_the_yaml() {
-    for name in ["finledger", "posts", "bookings", "clinic"] {
+    for name in ["finledger", "posts", "bookings", "clinic", "teams"] {
         let yaml = std::fs::read_to_string(format!("tests/fixtures/{name}.yaml")).unwrap();
         let out = svetra(&["context", &format!("tests/fixtures/{name}.yaml")]);
         assert!(

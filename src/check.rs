@@ -436,6 +436,21 @@ impl<'a> Checker<'a> {
             for r in h.reads.iter().chain(&h.writes) {
                 self.reference(r, &hp);
             }
+            for g in &h.grants {
+                if !doc.roles.iter().any(|r| r.name == g.name) {
+                    let msg = format!(
+                        "Hole `{}` grants `{}`, which isn't a declared role.",
+                        h.name, g.name
+                    );
+                    self.d(
+                        Code::Svt006,
+                        format!("{hp}.grants"),
+                        g.pos,
+                        msg,
+                        "Declare the role under `roles`, or fix its name.",
+                    );
+                }
+            }
             let params = h
                 .input
                 .iter()

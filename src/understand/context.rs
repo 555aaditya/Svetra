@@ -144,6 +144,9 @@ pub fn context(doc: &Document) -> String {
         if !h.writes.is_empty() {
             line += &format!("; writes {}", names(&h.writes));
         }
+        if !h.grants.is_empty() {
+            line += &format!("; grants {}", names(&h.grants));
+        }
         match h.role {
             Role::Authenticated => {}
             Role::Anon => line += "; as anon",
