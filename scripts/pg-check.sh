@@ -59,3 +59,18 @@ for name in finledger posts bookings clinic teams; do
   done
   echo "ok: $name compiles, applies to $image, and behaves as declared"
 done
+
+# A declared rename keeps the data (docs/change.md). The last database, teams, still has the rows
+# its checks inserted: rename Task.author to creator with `was`, let `svetra plan` write the
+# migration, apply it, and every value must still be there under the new name.
+renamed="$work/teams-renamed"
+mkdir -p "$renamed" && cp -r "$work/teams/." "$renamed/"
+sed -e 's/      author: { type: user, required: true }/      creator: { type: user, required: true, was: author }/' \
+    -e 's/author == auth.user/creator == auth.user/g' -e 's/      - \[author\]/      - [creator]/' \
+    tests/fixtures/teams.yaml > "$renamed/svetra.yaml"
+"$bin" plan "$renamed/svetra.yaml" --from tests/fixtures/teams.yaml --at 20260101000000 >/dev/null
+before="$(docker exec svetra-pg-check psql -U postgres -At -c 'select count(*) from public.task where author is not null')"
+docker exec -i svetra-pg-check psql -U postgres -v ON_ERROR_STOP=1 -q < "$renamed/supabase/migrations/20260101000000_svetra_rename.sql"
+after="$(docker exec svetra-pg-check psql -U postgres -At -c 'select count(*) from public.task where creator is not null')"
+if [ "$before" -lt 1 ] || [ "$before" != "$after" ]; then echo "rename lost data: $before rows before, $after after"; exit 1; fi
+echo "ok: a declared rename keeps every value ($after rows)"

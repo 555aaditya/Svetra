@@ -31,6 +31,8 @@ pub enum Code {
     Svt027,
     Svt028,
     Svt029,
+    Svt030,
+    Svt031,
 }
 
 impl Code {
@@ -59,6 +61,8 @@ impl Code {
             Code::Svt027 => ("SVT027", Warning, "policy", "remove_policy"),
             Code::Svt028 => ("SVT028", Error, "syntax", "add_key"),
             Code::Svt029 => ("SVT029", Error, "type", "fix_value"),
+            Code::Svt030 => ("SVT030", Error, "change", "fix_rename"),
+            Code::Svt031 => ("SVT031", Info, "change", "remove_was"),
         }
     }
 

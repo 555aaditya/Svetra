@@ -56,6 +56,7 @@ pub fn check(doc: &Document) -> Vec<Diagnostic> {
     ck.anon_only(doc);
     ck.expressions(doc);
     ck.auth(doc);
+    ck.renames(doc);
     ck.out
 }
 
@@ -426,6 +427,45 @@ impl<'a> Checker<'a> {
                     msg,
                     "Remove the policy, or make the entity public.",
                 );
+            }
+        }
+    }
+
+    /// SVT030: `was` must name something that's gone from this design, or it can't be a rename.
+    fn renames(&mut self, doc: &Document) {
+        for e in &doc.entities {
+            let path = format!("entities.{}", e.name);
+            if let Some(w) = &e.was
+                && doc.entities.iter().any(|x| x.name == w.name)
+            {
+                let msg = format!(
+                    "{} says `was: {}`, but {} is still in this design.",
+                    e.name, w.name, w.name
+                );
+                self.d(
+                    Code::Svt030,
+                    format!("{path}.was"),
+                    w.pos,
+                    msg,
+                    "Remove `was`, or remove the old entity: a rename replaces it.",
+                );
+            }
+            for f in &e.fields {
+                if let Some(w) = &f.was
+                    && e.fields.iter().any(|x| x.name == w.name)
+                {
+                    let msg = format!(
+                        "{}.{} says `was: {}`, but {} is still a field of {}.",
+                        e.name, f.name, w.name, w.name, e.name
+                    );
+                    self.d(
+                        Code::Svt030,
+                        format!("{path}.fields.{}.was", f.name),
+                        w.pos,
+                        msg,
+                        "Remove `was`, or remove the old field: a rename replaces it.",
+                    );
+                }
             }
         }
     }

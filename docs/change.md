@@ -2,7 +2,7 @@
 
 This document specifies how Svetra tells a person, and their agent, what a change to `svetra.yaml` will do to a running app **before** it reaches the database: which data could be lost, which existing rows or clients could break, and who gains or loses access. When the code and this document disagree, that's a bug in one of them.
 
-**Status: draft for review.** The decisions marked **Open** below need the maintainer's answer before building.
+**Status: built in 0.6 (unreleased).** The open decisions took the recommendations: `--from` defaults to git `HEAD` (C1); the rename migration's file name uses the clock, or `--at` (C2); `compile` doesn't refuse (C3); the GitHub Action comes later (C4). The MCP `plan` tool is read-only: it never writes the rename migration, which needs `svetra plan --accept` after the person agrees.
 
 **Done when:** a person renames a field and removes an entity on a database that has data, and loses nothing they didn't explicitly agree to lose; every change is classified before it's applied.
 

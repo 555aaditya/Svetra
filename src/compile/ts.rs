@@ -128,6 +128,7 @@ fn hole(h: &Hole, inputs: &Entity, entities: &std::collections::HashMap<&str, &E
                 unique: false,
                 default: None,
                 auto_now: false,
+                was: None,
             },
         ),
     };

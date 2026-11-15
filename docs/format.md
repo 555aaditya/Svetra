@@ -48,6 +48,7 @@ Version 0.1 covers one target: Supabase (PostgreSQL with row-level security and 
 | `unique` | no | list of field lists | Each list becomes a named unique constraint |
 | `indexes` | no | list of field lists | Each list becomes an index, in the given column order |
 | `private` | no | bool, default `false` | A private entity is not exposed through the generated API |
+| `was` | no | name | What this entity was called in the design the database has: declares a rename, so `svetra plan` keeps its rows ([change.md](change.md)) |
 
 Each entity has exactly one field with `primary: true` (`SVT022`).
 
@@ -64,6 +65,7 @@ Each entity has exactly one field with `primary: true` (`SVT022`).
 | `values` | `enum` | Required for `enum`. Non-empty list of distinct strings |
 | `precision`, `scale` | `decimal`, `money` | Required. `0 < precision <= 38`, `0 <= scale <= precision` |
 | `entity` | `ref` | Required for `ref`. The referenced entity |
+| `was` | all | What this field was called in the design the database has: declares a rename, so `svetra plan` keeps its values ([change.md](change.md)) |
 
 ## Types
 
@@ -309,6 +311,8 @@ holes:
 | `SVT027` | warning | Policy on a private entity has no effect | `remove_policy` |
 | `SVT028` | error | A required key is missing | `add_key` |
 | `SVT029` | error | A value has the wrong kind, such as a string where a list or bool is expected | `fix_value` |
+| `SVT030` | error | A rename can't be right: `was` names an entity or field that is still in this design, or (in `svetra plan`) nothing in the design the database has | `fix_rename` |
+| `SVT031` | info | In `svetra plan`: `was` names a rename that's already applied, because the design the database has already uses the new name. Remove it | `remove_was` |
 | `SVT001` | error | Entity exposed through the API has no policy. Mark it `private: true` or add a policy | `add_policy` |
 | `SVT002` | error | Reference to an entity or field that doesn't exist | `fix_reference` |
 | `SVT003` | error | Expression has a type error, or uses a path form not allowed where it appears | `fix_expression` |

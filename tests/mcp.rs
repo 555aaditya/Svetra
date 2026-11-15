@@ -81,7 +81,7 @@ fn handshake_lists_the_five_tools() {
         .collect();
     assert_eq!(
         names,
-        ["validate", "compile", "explain", "context", "graph"]
+        ["validate", "compile", "explain", "context", "graph", "plan"]
     );
     assert_eq!(replies[2]["result"], json!({}));
     assert_eq!(
