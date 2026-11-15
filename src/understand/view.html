@@ -59,6 +59,16 @@ svg .box { fill: var(--card); stroke: var(--line); }
 svg .edge { stroke: var(--muted); fill: none; }
 svg .arrow { fill: var(--muted); }
 .lists ul { padding-left: 20px; }
+@media print {
+  main { max-width: none; padding: 0; }
+  .wrap { overflow: visible; border: 0; }
+  table { font-size: 10px; }
+  th, td { padding: 3px 4px; white-space: normal; }
+  th[scope=row] { position: static; }
+  button.cell { min-width: 0; padding: 1px 4px; }
+  .ask, #panel { display: none; }
+  .card, .wrap, tr { break-inside: avoid; }
+}
 </style>
 </head>
 <body>
@@ -201,7 +211,7 @@ if (M.holes.length) {
     return n;
   };
   const W = 180, H = 44, GAP = 70, n = M.entities.length;
-  const width = Math.max(n * W + (n - 1) * GAP + 40, 300), height = 200;
+  const width = Math.max(n * W + (n - 1) * GAP + 40, 300), height = 134;
   const svg = s("svg", { viewBox: "0 0 " + width + " " + height, width: "100%", role: "img", "aria-label": "How the data links up" });
   const defs = s("defs", {});
   const m = s("marker", { id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
