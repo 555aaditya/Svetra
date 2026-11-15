@@ -18,7 +18,14 @@ pub const TOP_KEYS: &[&str] = &[
 pub const ROLE_KEYS: &[&str] = &["description", "scope", "mfa"];
 pub const AUTH_KEYS: &[&str] = &["sign_in", "signup", "confirm_email", "password"];
 pub const PASSWORD_KEYS: &[&str] = &["min_length", "require"];
-pub const ENTITY_KEYS: &[&str] = &["fields", "constraints", "unique", "indexes", "private"];
+pub const ENTITY_KEYS: &[&str] = &[
+    "fields",
+    "constraints",
+    "unique",
+    "indexes",
+    "private",
+    "was",
+];
 pub const FIELD_KEYS: &[&str] = &[
     "type",
     "required",
@@ -30,6 +37,7 @@ pub const FIELD_KEYS: &[&str] = &[
     "precision",
     "scale",
     "entity",
+    "was",
 ];
 pub const POLICY_KEYS: &[&str] = &["on", "allow", "when", "as"];
 pub const HOLE_KEYS: &[&str] = &[
@@ -401,6 +409,7 @@ impl Cx {
             unique: Vec::new(),
             indexes: Vec::new(),
             private: false,
+            was: None,
         };
         if let Some(v) = self.need(&k, "fields", &path, name) {
             let fpath = format!("{path}.fields");
@@ -435,6 +444,11 @@ impl Cx {
             if let Some(v) = k.get(key) {
                 *out = self.field_lists(v, &format!("{path}.{key}"));
             }
+        }
+        if let Some(v) = k.get("was") {
+            entity.was = self
+                .string(v, &format!("{path}.was"))
+                .map(|name| NameRef { name, pos: pos(v) });
         }
         if let Some(v) = k.get("private") {
             entity.private = self.boolean(v, &format!("{path}.private"));

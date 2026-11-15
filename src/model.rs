@@ -90,6 +90,8 @@ pub struct Entity {
     pub unique: Vec<FieldList>,
     pub indexes: Vec<FieldList>,
     pub private: bool,
+    /// What it was called in the design the database has: declares a rename (docs/change.md).
+    pub was: Option<NameRef>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -115,6 +117,8 @@ pub struct Field {
     pub unique: bool,
     pub default: Option<Literal>,
     pub auto_now: bool,
+    /// What it was called in the design the database has: declares a rename (docs/change.md).
+    pub was: Option<NameRef>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -100,6 +100,7 @@ pub fn hole_entity(h: &Hole, entities: &HashMap<&str, &Entity>) -> Entity {
                 unique: false,
                 default: None,
                 auto_now: false,
+                was: None,
             })
         })
         .collect();
@@ -111,6 +112,7 @@ pub fn hole_entity(h: &Hole, entities: &HashMap<&str, &Entity>) -> Entity {
         unique: Vec::new(),
         indexes: Vec::new(),
         private: false,
+        was: None,
     }
 }
 

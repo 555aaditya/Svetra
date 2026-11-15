@@ -28,10 +28,11 @@ Sets a project up for agents. `DIR` defaults to the current folder. It writes:
 
 1. **Design first.** Turn the person's request into `svetra.yaml`: entities, fields, policies, roles, `auth`, and holes only for logic that can't be a policy. Ask at most three questions, each with a recommended default.
 2. **Validate after every edit,** with the `validate` tool, or `svetra validate --json`. Fix every error using its `remediation.hint` before going on. Don't move on with errors.
-3. **Compile,** with the `compile` tool. Never edit the generated files (`supabase/schemas/svetra.sql`, `src/svetra.gen.ts`, `supabase/tests/svetra.test.sql`), or the keys Svetra owns in `supabase/config.toml`.
-4. **Write only hole bodies,** in `supabase/holes/<name>.sql`. Use the `p_` inputs, touch only the declared entities, and never add a check that `when` already makes.
-5. **Explain,** with the `explain` tool. Show the person the "Who can see and change what" section, and "Before going live" if there is one, in their words, not SQL.
-6. **Prove it,** with `supabase test db` when a local Supabase is running. Report failures as they are, and never weaken a policy to make a test pass.
+3. **Plan a change,** when `svetra.yaml` already exists in git: call `plan`. Show the person every destructive line and every wider-access line, in their words, and get an explicit yes before running `svetra plan --accept <kinds>`. Declare renames with `was:`, never by removing and adding.
+4. **Compile,** with the `compile` tool. Never edit the generated files (`supabase/schemas/svetra.sql`, `src/svetra.gen.ts`, `supabase/tests/svetra.test.sql`), or the keys Svetra owns in `supabase/config.toml`.
+5. **Write only hole bodies,** in `supabase/holes/<name>.sql`. Use the `p_` inputs, touch only the declared entities, and never add a check that `when` already makes.
+6. **Explain,** with the `explain` tool. Show the person the "Who can see and change what" section, and "Before going live" if there is one, in their words, not SQL.
+7. **Prove it,** with `supabase test db` when a local Supabase is running. Report failures as they are, and never weaken a policy to make a test pass.
 
 And these rules:
 - **Never** use the service role key in app code, and never disable row-level security.
@@ -54,6 +55,7 @@ An MCP server over stdio: JSON-RPC 2.0, one message per line. It supports `initi
 | `explain` | `svetra explain` | `{"text": "..."}` |
 | `context` | `svetra context` | `{"text": "..."}` |
 | `graph` | `svetra graph` | `{"mermaid": "..."}` |
+| `plan` | `svetra plan --json`, read-only: compares `file` with `from`, or with `file` as committed in git `HEAD` | The plan: each change's `kind`, `data` (safe, breaking, destructive), `access` (wider, narrower), message, hint and `because`; `needs_yes`; `renames`. Never writes the rename migration: that's `svetra plan --accept`, after the person agrees |
 
 `explain` returns the diagnostics as a tool error when the file has errors. `context` and `graph` do too, except when the only errors are SVT001 or SVT005: then they return their output plus a `diagnostics` list, so the agent can see the design while it fixes it.
 

@@ -25,8 +25,14 @@ impl Cx {
             unique: flag(self, "unique"),
             default: None,
             auto_now: false,
+            was: None,
             ty,
         };
+        if let Some(v) = k.get("was") {
+            field.was = self
+                .string(v, &format!("{path}.was"))
+                .map(|name| NameRef { name, pos: pos(v) });
+        }
         if let Some(v) = k.get("default") {
             field.default = self.default(v, &field.ty, &format!("{path}.default"));
         }

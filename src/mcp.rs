@@ -87,6 +87,11 @@ fn tools() -> Value {
         { "name": "explain", "description": "The app in plain English: what it stores, who can see and change what, sign-in, custom code. Use it to answer the person's questions.", "inputSchema": only_file },
         { "name": "context", "description": "The whole design in a few lines, for reading it compactly instead of the generated files.", "inputSchema": only_file },
         { "name": "graph", "description": "The design as a Mermaid diagram.", "inputSchema": only_file },
+        { "name": "plan", "description": "What a change to svetra.yaml does to the running app, before it's applied: every change classified as safe, breaking or destructive for the data, and whose access widens or narrows, compared with the committed design (git HEAD) or `from`. Read-only. Show every destructive and wider line to the person in their words; only after their explicit yes, run `svetra plan --accept <kinds>` to write any rename migration.", "inputSchema": {
+            "type": "object",
+            "properties": { "file": file, "from": { "type": "string", "description": "Path to the design the database has. Default: file as committed in git HEAD" } },
+            "additionalProperties": false
+        } },
     ])
 }
 
@@ -156,6 +161,40 @@ fn call(name: &str, args: &Value) -> Option<Value> {
             // Drawn despite errors: say so, with the errors to fix.
             if errors {
                 out["diagnostics"] = diagnostics(file, &diags)["diagnostics"].clone();
+            }
+            text(out, false)
+        }
+        "plan" => {
+            let src = match project::read(Path::new(file)) {
+                Ok(s) => s,
+                Err(Failure::Read(e)) => return Some(unreadable(e)),
+                Err(_) => unreachable!("read only fails to read"),
+            };
+            let old = match args.get("from").and_then(Value::as_str) {
+                Some(f) => project::read(Path::new(f))
+                    .map(|s| (s, f.to_string()))
+                    .map_err(|_| format!("cannot read {f}")),
+                None => crate::change::committed(Path::new(file)),
+            };
+            let (old_src, from) = match old {
+                Ok(v) => v,
+                Err(e) => return Some(text(json!({ "error": e }), true)),
+            };
+            for (name, s) in [(from.as_str(), &old_src), (file, &src)] {
+                let d = crate::report::validate(s);
+                if crate::report::has_errors(&d) {
+                    return Some(text(diagnostics(name, &d), true));
+                }
+            }
+            let (old_doc, _) = crate::load::load(&old_src);
+            let (new_doc, _) = crate::load::load(&src);
+            let plan = crate::change::plan(&old_doc, &old_src, &new_doc, &src);
+            if crate::report::has_errors(&plan.diagnostics) {
+                return Some(text(diagnostics(file, &plan.diagnostics), true));
+            }
+            let mut out = crate::change::json(&plan, &from, &[]);
+            if !plan.diagnostics.is_empty() {
+                out["diagnostics"] = diagnostics(file, &plan.diagnostics)["diagnostics"].clone();
             }
             text(out, false)
         }

@@ -111,6 +111,11 @@
         "private": {
           "description": "Keep this entity out of the generated API.",
           "type": "boolean"
+        },
+        "was": {
+          "description": "Its name in the design the database has: declares a rename, so `svetra plan` keeps the data.",
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
         }
       }
     },
@@ -252,6 +257,11 @@
           "description": "The entity a ref points to.",
           "type": "string",
           "pattern": "^[A-Z][A-Za-z0-9]*$"
+        },
+        "was": {
+          "description": "Its name in the design the database has: declares a rename, so `svetra plan` keeps the data.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
         }
       }
     },

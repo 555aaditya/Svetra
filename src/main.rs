@@ -8,6 +8,14 @@ Usage:
   svetra explain [FILE]             Describe the app in plain English: data, rules, who can see what
   svetra graph [FILE]               Draw the app as a Mermaid diagram
   svetra context [FILE]             Print the whole app compactly, for agents
+  svetra diff [FILE] [--from OLD] [--json]
+                                    List the changes since OLD (default: FILE in git HEAD),
+                                    classified: safe, breaking or destructive, and whose
+                                    access widens or narrows
+  svetra plan [FILE] [--from OLD] [--json] [--accept KIND,...] [--at YYYYMMDDHHMMSS]
+                                    The same, as a plan: exits 1 on destructive changes or
+                                    wider access until they're accepted, then writes the
+                                    migration for any declared renames
   svetra view [FILE] [--out PATH] [--no-open] [--json]
                                     Write one page showing who can see and change what
                                     (default .svetra/view.html) and open it; --json prints
@@ -51,6 +59,7 @@ fn main() -> ExitCode {
             svetra::understand::context::context(doc)
         }),
         Some("view") => page(&args[1..]),
+        Some(cmd @ ("diff" | "plan")) => change(cmd, &args[1..]),
         Some("mcp") if args.len() == 1 => match svetra::mcp::serve() {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
@@ -281,6 +290,165 @@ fn page(args: &[String]) -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+/// `svetra diff` and `svetra plan` (docs/change.md).
+fn change(command: &str, args: &[String]) -> ExitCode {
+    let (mut file, mut from, mut json, mut accept, mut at) = (None, None, false, Vec::new(), None);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--json" => json = true,
+            "--from" | "--accept" | "--at" if command == "plan" || a == "--from" => {
+                let Some(v) = it.next() else {
+                    return usage(&format!("{a} needs a value"));
+                };
+                match a.as_str() {
+                    "--from" => from = Some(v.clone()),
+                    "--accept" => accept.extend(v.split(',').map(|k| k.trim().to_string())),
+                    _ => at = Some(v.clone()),
+                }
+            }
+            f if f.starts_with('-') => return usage(&format!("unknown option '{f}'")),
+            f if file.is_none() => file = Some(f.to_string()),
+            _ => return usage(&format!("{command} takes one file")),
+        }
+    }
+    let file = file.unwrap_or_else(|| "svetra.yaml".into());
+    let path = std::path::Path::new(&file);
+    let dir = path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."))
+        .to_path_buf();
+    let new_src = match read(&file) {
+        Ok(s) => s,
+        Err(e) => return usage(&e),
+    };
+    let (old_src, from_name) = match &from {
+        Some(f) => match read(f) {
+            Ok(s) => (s, f.clone()),
+            Err(e) => return usage(&e),
+        },
+        None => match svetra::change::committed(path) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("svetra: {e}.");
+                return ExitCode::from(2);
+            }
+        },
+    };
+    for (name, src) in [(&from_name, &old_src), (&file, &new_src)] {
+        let diags = report::validate(src);
+        if report::has_errors(&diags) {
+            print!("{}", report::human(name, &diags));
+            return ExitCode::from(1);
+        }
+    }
+    let (old, _) = svetra::load::load(&old_src);
+    let (new, _) = svetra::load::load(&new_src);
+    let plan = svetra::change::plan(&old, &old_src, &new, &new_src);
+    if !plan.diagnostics.is_empty() {
+        let text = report::human(&file, &plan.diagnostics);
+        if report::has_errors(&plan.diagnostics) {
+            print!("{text}");
+            return ExitCode::from(1);
+        }
+        eprint!("{text}");
+    }
+    let waiting: Vec<&str> = plan
+        .needs_yes()
+        .into_iter()
+        .filter(|k| !accept.iter().any(|a| a == k))
+        .collect();
+    let blocked = command == "plan" && !waiting.is_empty();
+    // The rename migration runs before `supabase db diff`, so the diff sees the new names and
+    // writes nothing destructive for them. Only once nothing is waiting for a yes.
+    let mut writes = Vec::new();
+    if command == "plan" && !blocked && !plan.renames.is_empty() {
+        let migrations = dir.join("supabase").join("migrations");
+        let body = format!(
+            "-- Written by svetra plan: renames declared with `was`, before supabase db diff.\n{}\n",
+            plan.renames.join("\n")
+        );
+        let done = std::fs::read_dir(&migrations).ok().is_some_and(|d| {
+            d.flatten().any(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .ends_with("_svetra_rename.sql")
+                    && std::fs::read_to_string(e.path()).is_ok_and(|s| s == body)
+            })
+        });
+        if !done {
+            let stamp = at.unwrap_or_else(utc_stamp);
+            let target = migrations.join(format!("{stamp}_svetra_rename.sql"));
+            if let Err(e) =
+                std::fs::create_dir_all(&migrations).and_then(|()| std::fs::write(&target, &body))
+            {
+                eprintln!("svetra: cannot write {}: {e}", target.display());
+                return ExitCode::from(1);
+            }
+            writes.push(target.display().to_string());
+        }
+    }
+    if json {
+        let v = svetra::change::json(&plan, &from_name, &writes);
+        println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
+    } else {
+        print!(
+            "{}",
+            svetra::change::human(&plan, &new.system.name, &from_name)
+        );
+        for w in &writes {
+            println!("\nwrote {w} (run it before supabase db diff: it keeps the renamed data)");
+        }
+        if command == "plan" {
+            if blocked {
+                println!(
+                    "\nNot ready: {} need{} a yes from the person who owns the data.",
+                    waiting.join(", "),
+                    if waiting.len() == 1 { "s" } else { "" }
+                );
+                println!(
+                    "Once they agree, run again with --accept {}",
+                    waiting.join(",")
+                );
+            } else if !plan.changes.is_empty() {
+                println!(
+                    "\nNext: svetra compile, then supabase db diff -f <name>, then supabase db push."
+                );
+            }
+        }
+    }
+    if blocked {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+/// The current UTC time as YYYYMMDDHHMMSS, for a migration's file name only.
+fn utc_stamp() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let (days, rest) = (secs / 86_400, secs % 86_400);
+    // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
+    let z = days as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!(
+        "{y:04}{m:02}{d:02}{:02}{:02}{:02}",
+        rest / 3600,
+        rest % 3600 / 60,
+        rest % 60
+    )
 }
 
 /// Add `.svetra/` to the project's .gitignore, when there is one that doesn't ignore it yet.

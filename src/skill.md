@@ -15,16 +15,20 @@ Use the `svetra` MCP tools (`validate`, `compile`, `explain`, `context`, `graph`
 
 1. **Design first.** Turn the request into a change to `svetra.yaml`: entities, fields, policies, roles, `auth`, and holes only for logic that a policy can't express. Ask at most three questions, each with a recommended default, and only when the answer changes the design.
 2. **Validate after every edit.** Fix every error using its `remediation.hint` before doing anything else. Never move on with errors. Warnings and info are worth reading: they usually point at a real gap.
-3. **Compile.** Never edit what Svetra generates:
+3. **Plan a change** to an app that already exists (`svetra.yaml` is committed in git): call `plan` before compiling.
+   - Tell the person every **destructive** line (data that would be deleted) and every **wider** line (people who'd see or change more), in their words.
+   - Get their explicit yes in this conversation, then run `npx -y svetra plan --accept <kinds>`. Never accept on their behalf.
+   - A rename is `was: <old name>` on the renamed entity or field, never a removal and an addition: that deletes every value.
+4. **Compile.** Never edit what Svetra generates:
    - `supabase/schemas/svetra.sql`
    - `src/svetra.gen.ts`
    - `supabase/tests/svetra.test.sql`
    - the sign-in keys Svetra sets in `supabase/config.toml`
 
    Change `svetra.yaml` and compile again instead.
-4. **Write only hole bodies,** in `supabase/holes/<name>.sql` (PL/pgSQL). Inputs are `p_<input>`, and `p_caller` is the signed-in person's id. A hole can touch only the entities in its `reads` and `writes`, and its `when` already decides who may call it, so don't repeat that check in the body. To let people join a team or start one, give the hole `grants: [<role>]` and insert into `"svetra"."role_grants"` in the body; never grant roles from app code.
-5. **Explain.** Call `explain` and tell the person what changed in their words: who can see and change what, and "Before going live" when there is one. Never paste SQL at them.
-6. **Prove it.** If a local Supabase is running, `supabase test db` runs the access tests as real users. Report failures exactly as they are.
+5. **Write only hole bodies,** in `supabase/holes/<name>.sql` (PL/pgSQL). Inputs are `p_<input>`, and `p_caller` is the signed-in person's id. A hole can touch only the entities in its `reads` and `writes`, and its `when` already decides who may call it, so don't repeat that check in the body. To let people join a team or start one, give the hole `grants: [<role>]` and insert into `"svetra"."role_grants"` in the body; never grant roles from app code.
+6. **Explain.** Call `explain` and tell the person what changed in their words: who can see and change what, and "Before going live" when there is one. Never paste SQL at them.
+7. **Prove it.** If a local Supabase is running, `supabase test db` runs the access tests as real users. Report failures exactly as they are.
 
 ## Rules
 
