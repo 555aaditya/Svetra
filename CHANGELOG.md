@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.4.2 (2026-11-16)
+
+A security fix for holes, and holes that can give people roles.
 
 - **Security fix: logged-out visitors could call holes meant for signed-in people,** on a real Supabase. Supabase grants execute on every new function in `public` to `anon` directly, and the generated `revoke ... from public` left that grant in place. A hole with a `when` guard still refused them, but a hole without one, such as `write_audit` in the posts example, ran for anyone. Both hole functions now revoke execute from `anon` and `authenticated` by name before granting it to the hole's `as` roles. **Recompile and apply the schema.** The CI stand-in for Supabase now has the same default privileges, so this is checked on every PR; the generated access test `anon can't call <hole>` caught it on a real Supabase.
 - **Holes can give people roles,** so people can start a team and invite others. A hole with `grants: [member]` may add and remove grants of the roles it lists, and no other: a row-level security policy on `svetra.role_grants` keeps every other role, such as `admin`, out of its reach. An undeclared role in `grants` is SVT006. `explain`, `context` and `graph` show what each hole can give.
