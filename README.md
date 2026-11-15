@@ -107,6 +107,8 @@ Roles work too: declare `admin`, or `staff` scoped to one location, and use `has
 
 It validates first and writes nothing if there are errors. The output is byte-identical for the same input. Every PR applies the generated SQL to a real PostgreSQL 16 and checks that each constraint and policy behaves as declared: who can see which rows, and what gets rejected. The full output is specified in [`docs/compiler.md`](docs/compiler.md).
 
+**See who can see what:** `svetra view` writes one page, `.svetra/view.html`, and opens it: a table of every person (signed out, signed in, each role) by every thing and action, answered All, Some or No. Select a cell to see which rows the tests tried, the rule behind it, and the test numbers that check it. The answers come from the same evaluator as the access tests, so the page can't disagree with them.
+
 **Editor support:** add this as the first line of `svetra.yaml` for autocomplete in VS Code, Zed or Neovim:
 
 ```yaml
@@ -132,10 +134,10 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 | Access tests | Generated pgTAP tests: every person × action × row, as real users, with every failure reported | **Done** |
 | Sign-in settings | `auth:` (methods, signup, email confirmation, password rules) compiled into `supabase/config.toml`, and `mfa: true` roles that need a second factor | **Done** |
 | Agents | The Svetra skill for Claude Code, `svetra init`, an MCP server for any agent, and holes: custom code as guarded Postgres functions | **Done** |
-| See who can see what | `svetra view`: one page with a table of every person × thing × action, in words, and a diagram ([spec](docs/view.md)) | **Built** (next release) |
+| See who can see what | `svetra view`: one page with a table of every person × thing × action, in words, and a diagram ([spec](docs/view.md)) | **Done** |
 | Automations | Scheduled jobs, triggers when data changes, and incoming webhooks | Planned |
 | Start fast | `svetra new` with templates | Planned |
-| Change safely | `svetra plan` (classifies changes as safe, breaking or destructive), `svetra undo` | Planned |
+| Change safely | `svetra diff` and `svetra plan`: classify every change as safe, breaking or destructive, and show whose access widens ([spec](docs/change.md)) | Specified |
 | Existing apps | `svetra infer` and `svetra check` for apps you've already built | Planned |
 | Feature packs | `svetra add teams`, `svetra remove stripe` | Planned |
 

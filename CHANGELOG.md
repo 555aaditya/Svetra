@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-11-16)
 
+See who can see what: `svetra view`, clearer `explain`, and every release now tested on a real Supabase.
+
+- **Tested on a real Supabase:** CI now runs every example's access tests and deliberate breakages on a real local Supabase, not only on PostgreSQL with a stand-in. That's the check that found the 0.4.2 security bug.
 - **`explain` reads fields named for an action as that action:** `paid_by == auth.user` is now "it was paid by them", not "its paid by is them", and `assigned_to` reads "it is assigned to them".
 - **`svetra view`: who can see and change what, as one page.** A table of every person (signed out, two signed-in people, one who owns nothing, each role) by every thing and action, answered All, Some or No in words. Select a cell to see which rows the tests tried, the `explain` sentences that allow or rule it out, and the access test numbers that check it. A question box answers "who can see orders?" directly, and the page also shows custom code, a diagram of the links, and sign-in notes. The answers come from the access tests' own evaluator, so the page and the tests can't disagree, and a test checks every cell against the generated test file. It's one self-contained HTML file (`.svetra/view.html`, added to `.gitignore`) with no network access; `--json` prints the view model instead.
 
