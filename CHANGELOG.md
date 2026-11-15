@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-11-16)
 
+Change safely: `svetra diff` and `svetra plan` say what a change does to the data and to who can see what, before it reaches the database.
+
+- **Citable:** a `CITATION.cff`, and every release from now on is archived on Zenodo with a DOI.
 - **Safe change: `svetra diff` and `svetra plan`.** They compare `svetra.yaml` with the design the database has (by default, the version committed in git `HEAD`; or `--from`) and classify every change: **safe**, **breaking** (existing rows or app code may fail, such as a new required field with no default) or **destructive** (data is deleted, such as removing a field). They also say whose access widens or narrows, person by person, from the same evaluator as the access tests: "A signed-in person who owns nothing can now see all customers (was: none)." `plan` exits 1 on destructive changes and wider access until they're accepted with `--accept`.
 - **Renames keep the data.** Declare one with `was: <old name>` on an entity or field. `plan` writes the `alter ... rename` migration to run before `supabase db diff`, which would otherwise drop the column and add an empty one. An undeclared rename is reported as destructive, with a hint to add `was`. New codes: SVT030 (a `was` that can't be a rename) and SVT031 (a rename that's already applied).
 - **Agents:** a read-only `plan` tool in `svetra mcp`, and a skill step: show the person every destructive and wider line, and get their yes before `--accept`.

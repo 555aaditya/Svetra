@@ -101,6 +101,7 @@ export const roadmap = [
   { when: "Nov 13", what: "Access tests checked by breaking the database 197 ways: four kinds of gap found and closed, in v0.4.1", done: true },
   { when: "Nov 16", what: "Holes can give people roles, so people can start teams and invite others; and a fix so logged-out visitors can't call holes meant for signed-in people, in v0.4.2", done: true },
   { when: "Nov 16", what: "svetra view: who can see and change what, on one page, checked by the access tests; every release tested on a real Supabase, in v0.5.0", done: true },
+  { when: "Nov 16", what: "Change safely: svetra plan says what a change does to the data and to who can see what, and renames keep their data, in v0.6.0", done: true },
   { when: "Next", what: "A recorded design conversation · svetra view: an interactive map of who can see what", done: false },
   { when: "Early 2027", what: "Measured: tokens and safety with and without Svetra · how many broken rules the access tests catch", done: false },
   { when: "Later", what: "Existing apps: svetra infer and svetra check · safe changes with svetra plan", done: false },

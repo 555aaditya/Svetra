@@ -137,7 +137,7 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 | See who can see what | `svetra view`: one page with a table of every person × thing × action, in words, and a diagram ([spec](docs/view.md)) | **Done** |
 | Automations | Scheduled jobs, triggers when data changes, and incoming webhooks | Planned |
 | Start fast | `svetra new` with templates | Planned |
-| Change safely | `svetra diff` and `svetra plan`: classify every change as safe, breaking or destructive, show whose access widens, and keep renamed data ([spec](docs/change.md)) | **Built** (next release) |
+| Change safely | `svetra diff` and `svetra plan`: classify every change as safe, breaking or destructive, show whose access widens, and keep renamed data ([spec](docs/change.md)) | **Done** |
 | Existing apps | `svetra infer` and `svetra check` for apps you've already built | Planned |
 | Feature packs | `svetra add teams`, `svetra remove stripe` | Planned |
 
