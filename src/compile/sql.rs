@@ -136,6 +136,18 @@ fn hole(
             "grant execute on function \"svetra\".\"has_role\"(text, uuid) to {role};"
         ));
     }
+    // A hole that grants roles may add and remove grants of those roles only: the policy keeps
+    // every other role, such as admin, out of its reach.
+    if !h.grants.is_empty() {
+        let listed: Vec<String> = h.grants.iter().map(|g| lit(&g.name)).collect();
+        let only = format!("\"role\" in ({})", listed.join(", "));
+        out.push(format!(
+            "grant select, insert, delete on table \"svetra\".\"role_grants\" to {role};"
+        ));
+        out.push(format!(
+            "create policy {role} on \"svetra\".\"role_grants\" for all to {role} using ({only}) with check ({only});"
+        ));
+    }
     let returns = h
         .output
         .as_ref()

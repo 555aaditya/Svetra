@@ -238,6 +238,7 @@ The list holds every role with `mfa: true`. Without any, the line is left out.
 Each hole compiles to two functions, plus a role that holds exactly its declared access. All of it is in the SQL schema, in a `-- Holes` section after `-- Policies`.
 
 1. **A role per hole,** `svetra_hole_<name>`, which can't log in. It gets `select` on each entity in `reads` and `writes`, and `insert`, `update` and `delete` on each entity in `writes`, nothing else, plus a permissive policy on each of those tables that lets it through row-level security. Those grants are the only thing a hole's code can touch.
+   - **With `grants`,** the role also gets `select`, `insert` and `delete` on `svetra.role_grants`, and a policy that limits all three to the listed roles: `using ("role" in ('member')) with check ("role" in ('member'))`. It can give and take away those roles, for anyone, and can't see or touch any other role's grants.
 2. **The body function,** `svetra_holes.<name>(p_caller, p_<input>, …)`, in a schema the API doesn't expose. It's `security definer` and owned by the hole's role, so its statements run with that role's access and no more, and it has `set search_path = ''`. Svetra writes the signature, then:
    - **the `when` guard first,** left out when there's no `when`: if the condition isn't true, it raises SQLSTATE `42501` (insufficient privilege), so a refused call looks like any other refusal. `auth.user` in the guard is `p_caller`.
    - **then the body** from `supabase/holes/<name>.sql`, verbatim
@@ -263,6 +264,7 @@ export async function transfer(client: Rpc, input: TransferInput): Promise<Trans
 
 For each hole:
 - **Access:** a check that the hole's role can do exactly what `reads` and `writes` declare on every entity, and nothing on the others (`has_table_privilege`).
+- **Role grants,** when there are roles: the hole's role has `select, insert, delete` on `svetra.role_grants` if it has `grants`, and no privilege otherwise. A hole with `grants` then tries, as its own role, to give alice each declared role: allowed for the roles it lists, denied for every other.
 - **The guard,** for every person and the test rows:
   - a call with inputs that point at the `a` rows, and one with inputs that point at the `b` rows
   - each is expected to be refused (`42501`) or let through, as the evaluator works out from `when`

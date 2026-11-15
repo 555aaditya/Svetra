@@ -1,0 +1,17 @@
+flowchart LR
+  person(("👤 Signed-in person"))
+  r_admin(("🎭 admin"))
+  r_member(("🎭 member"))
+  e_Team["Team<br/>name: text!"]
+  e_Task["Task<br/>team: → Team!<br/>author: user!<br/>title: text!"]
+  h_start_team(["⚙️ start_team"])
+  h_add_member(["⚙️ add_member"])
+  e_Task -- team --> e_Team
+  e_Task -- author --> person
+  person -. "creates, changes, deletes" .-> e_Task
+  r_admin -. "sees" .-> e_Team
+  r_member -. "sees" .-> e_Team
+  r_member -. "sees" .-> e_Task
+  h_start_team == changes ==> e_Team
+  h_start_team == gives ==> r_member
+  h_add_member == gives ==> r_member

@@ -25,6 +25,10 @@ fn access_tests_match_golden_files() {
             include_str!("fixtures/bookings.yaml"),
             include_str!("golden/bookings.test.sql"),
         ),
+        (
+            include_str!("fixtures/teams.yaml"),
+            include_str!("golden/teams.test.sql"),
+        ),
     ] {
         assert_eq!(generate(src), golden);
     }

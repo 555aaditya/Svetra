@@ -1,0 +1,228 @@
+-- Access tests: run with `supabase test db`. Every check runs as a real user, never the
+-- service key, and the whole file rolls back. People: anon, alice, bob, carol, admin, member at Team a.
+begin;
+create extension if not exists pgtap;
+-- Run one statement as one person, then undo it. Returns allowed, denied or the error.
+create schema svetra_test;
+create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
+language plpgsql as $$
+declare n bigint;
+begin
+  begin
+    perform set_config('role', p_role, true);
+    perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
+    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
+    execute p_sql;
+    get diagnostics n = row_count;
+    raise exception 'svetra_undo';
+  exception when others then
+    if sqlerrm = 'svetra_undo' then
+      return case when n > 0 then 'allowed' else 'denied' end;
+    elsif sqlstate = '42501' then
+      return 'denied';
+    end if;
+    return 'error ' || sqlstate || ': ' || sqlerrm;
+  end;
+end $$;
+-- Call a hole as one person, then undo it. Refused means SQLSTATE 42501; anything else, even an
+-- error from the hole's own code, means the call got past who-may-call-it.
+create function svetra_test.call(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
+language plpgsql as $$
+begin
+  begin
+    perform set_config('role', p_role, true);
+    perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
+    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
+    execute p_sql;
+    raise exception 'svetra_undo';
+  exception when others then
+    return case when sqlstate = '42501' then 'refused' else 'let through' end;
+  end;
+end $$;
+-- What a role may do on a table, as "select, insert, update, delete" or "none".
+create function svetra_test.privileges(p_role text, p_table text) returns text language sql as $$
+  select coalesce(string_agg(v.p, ', ' order by v.o), 'none')
+  from (values (1, 'select'), (2, 'insert'), (3, 'update'), (4, 'delete')) v(o, p)
+  where has_table_privilege(p_role, p_table, v.p)
+$$;
+-- Whether a role may run some function with this name in this schema.
+create function svetra_test.executes(p_role text, p_schema text, p_name text) returns boolean language sql as $$
+  select coalesce(bool_or(has_function_privilege(p_role, p.oid, 'execute')), false)
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = p_schema and p.proname = p_name
+$$;
+
+select plan(166);
+
+-- Test data, inserted as the database owner
+select lives_ok($svetra$insert into auth.users (id, email) values ('5e7a0000-0000-4000-8000-000000000001', 'alice@svetra.test'), ('5e7a0000-0000-4000-8000-000000000002', 'bob@svetra.test'), ('5e7a0000-0000-4000-8000-000000000003', 'carol@svetra.test'), ('5e7a0000-0000-4000-8000-000000000004', 'admin@svetra.test'), ('5e7a0000-0000-4000-8000-000000000005', 'member.at.Team.a@svetra.test')$svetra$, 'test data: people');
+select lives_ok($svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000004', 'admin', null)$svetra$, 'test data: admin holds admin');
+select lives_ok($svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000005', 'member', '5e7a0000-0000-4000-8001-00010000000a')$svetra$, 'test data: member at Team a holds member');
+select lives_ok($svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000a', 'svetra a')$svetra$, 'test data: Team a');
+select lives_ok($svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000b', 'svetra b')$svetra$, 'test data: Team b');
+select lives_ok($svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000a', '5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8000-000000000001', 'svetra a')$svetra$, 'test data: Task a');
+select lives_ok($svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000b', '5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8000-000000000002', 'svetra b')$svetra$, 'test data: Task b');
+
+-- Checks
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'denied', 'alice can''t give herself the admin role');
+select is(svetra_test.try('anon', null, $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'anon can''t see Team a');
+select is(svetra_test.try('anon', null, $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'anon can''t see Team b');
+select is(svetra_test.try('anon', null, $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'anon can''t change Team a');
+select is(svetra_test.try('anon', null, $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'anon can''t change Team b');
+select is(svetra_test.try('anon', null, $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'anon can''t delete Team a');
+select is(svetra_test.try('anon', null, $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'anon can''t delete Team b');
+select is(svetra_test.try('anon', null, $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000c', 'svetra c')$svetra$), 'denied', 'anon can''t create Team c');
+select is(svetra_test.try('anon', null, $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000d', 'svetra d')$svetra$), 'denied', 'anon can''t create Team d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'alice can''t see Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'alice can''t see Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'alice can''t change Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'alice can''t change Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'alice can''t delete Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'alice can''t delete Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000c', 'svetra c')$svetra$), 'denied', 'alice can''t create Team c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000d', 'svetra d')$svetra$), 'denied', 'alice can''t create Team d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'bob can''t see Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'bob can''t see Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'bob can''t change Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'bob can''t change Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'bob can''t delete Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'bob can''t delete Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000c', 'svetra c')$svetra$), 'denied', 'bob can''t create Team c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000d', 'svetra d')$svetra$), 'denied', 'bob can''t create Team d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$, 'aal2'), 'denied', 'carol can''t see Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2'), 'denied', 'carol can''t see Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$, 'aal2'), 'denied', 'carol can''t change Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2'), 'denied', 'carol can''t change Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$, 'aal2'), 'denied', 'carol can''t delete Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2'), 'denied', 'carol can''t delete Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000c', 'svetra c')$svetra$, 'aal2'), 'denied', 'carol can''t create Team c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000d', 'svetra d')$svetra$, 'aal2'), 'denied', 'carol can''t create Team d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'allowed', 'admin can see Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'allowed', 'admin can see Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'admin can''t change Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'admin can''t change Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'admin can''t delete Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'admin can''t delete Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000c', 'svetra c')$svetra$), 'denied', 'admin can''t create Team c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000d', 'svetra d')$svetra$), 'denied', 'admin can''t create Team d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'allowed', 'member at Team a can see Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$select 1 from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'member at Team a can''t see Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'member at Team a can''t change Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$update "public"."team" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'member at Team a can''t change Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'member at Team a can''t delete Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$delete from "public"."team" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'member at Team a can''t delete Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000c', 'svetra c')$svetra$), 'denied', 'member at Team a can''t create Team c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$insert into "public"."team" ("id", "name") values ('5e7a0000-0000-4000-8001-00010000000d', 'svetra d')$svetra$), 'denied', 'member at Team a can''t create Team d');
+select is(svetra_test.try('anon', null, $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'anon can''t see Task a');
+select is(svetra_test.try('anon', null, $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'anon can''t see Task b');
+select is(svetra_test.try('anon', null, $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'anon can''t change Task a');
+select is(svetra_test.try('anon', null, $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'anon can''t change Task b');
+select is(svetra_test.try('anon', null, $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'anon can''t delete Task a');
+select is(svetra_test.try('anon', null, $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'anon can''t delete Task b');
+select is(svetra_test.try('anon', null, $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000c', '5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8000-000000000001', 'svetra c')$svetra$), 'denied', 'anon can''t create Task c');
+select is(svetra_test.try('anon', null, $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000d', '5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8000-000000000002', 'svetra d')$svetra$), 'denied', 'anon can''t create Task d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'alice can''t see Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'alice can''t see Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'alice can''t change Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'alice can''t change Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'alice can''t delete Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'alice can''t delete Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000c', '5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8000-000000000001', 'svetra c')$svetra$), 'denied', 'alice can''t create Task c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000d', '5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8000-000000000002', 'svetra d')$svetra$), 'denied', 'alice can''t create Task d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."task" set "team" = '5e7a0000-0000-4000-8001-00010000000b' where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'alice can''t point the team of Task a at Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."task" set "author" = '5e7a0000-0000-4000-8000-000000000002' where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'alice can''t set the author of Task a to bob');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."task" set "team" = '5e7a0000-0000-4000-8001-00010000000a' where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'alice can''t point the team of Task b at Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."task" set "author" = '5e7a0000-0000-4000-8000-000000000001' where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'alice can''t set the author of Task b to themselves');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'bob can''t see Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'bob can''t see Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'bob can''t change Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'bob can''t change Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'bob can''t delete Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'bob can''t delete Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000c', '5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8000-000000000001', 'svetra c')$svetra$), 'denied', 'bob can''t create Task c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000d', '5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8000-000000000002', 'svetra d')$svetra$), 'denied', 'bob can''t create Task d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."task" set "team" = '5e7a0000-0000-4000-8001-00010000000b' where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'bob can''t point the team of Task a at Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."task" set "author" = '5e7a0000-0000-4000-8000-000000000002' where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'bob can''t set the author of Task a to themselves');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."task" set "team" = '5e7a0000-0000-4000-8001-00010000000a' where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'bob can''t point the team of Task b at Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."task" set "author" = '5e7a0000-0000-4000-8000-000000000001' where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'bob can''t set the author of Task b to alice');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$, 'aal2'), 'denied', 'carol can''t see Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$, 'aal2'), 'denied', 'carol can''t see Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$, 'aal2'), 'denied', 'carol can''t change Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$, 'aal2'), 'denied', 'carol can''t change Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$, 'aal2'), 'denied', 'carol can''t delete Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$, 'aal2'), 'denied', 'carol can''t delete Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000c', '5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8000-000000000001', 'svetra c')$svetra$, 'aal2'), 'denied', 'carol can''t create Task c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000d', '5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8000-000000000002', 'svetra d')$svetra$, 'aal2'), 'denied', 'carol can''t create Task d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."task" set "team" = '5e7a0000-0000-4000-8001-00010000000b' where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$, 'aal2'), 'denied', 'carol can''t point the team of Task a at Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."task" set "author" = '5e7a0000-0000-4000-8000-000000000003' where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$, 'aal2'), 'denied', 'carol can''t set the author of Task a to themselves');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."task" set "team" = '5e7a0000-0000-4000-8001-00010000000a' where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$, 'aal2'), 'denied', 'carol can''t point the team of Task b at Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."task" set "author" = '5e7a0000-0000-4000-8000-000000000003' where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$, 'aal2'), 'denied', 'carol can''t set the author of Task b to themselves');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'admin can''t see Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'admin can''t see Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'admin can''t change Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'admin can''t change Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'admin can''t delete Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'admin can''t delete Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000c', '5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8000-000000000001', 'svetra c')$svetra$), 'denied', 'admin can''t create Task c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000d', '5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8000-000000000002', 'svetra d')$svetra$), 'denied', 'admin can''t create Task d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$update "public"."task" set "team" = '5e7a0000-0000-4000-8001-00010000000b' where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'admin can''t point the team of Task a at Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$update "public"."task" set "author" = '5e7a0000-0000-4000-8000-000000000004' where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'admin can''t set the author of Task a to themselves');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$update "public"."task" set "team" = '5e7a0000-0000-4000-8001-00010000000a' where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'admin can''t point the team of Task b at Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$update "public"."task" set "author" = '5e7a0000-0000-4000-8000-000000000004' where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'admin can''t set the author of Task b to themselves');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'allowed', 'member at Team a can see Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$select 1 from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'member at Team a can''t see Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'member at Team a can''t change Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$update "public"."task" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'member at Team a can''t change Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'member at Team a can''t delete Task a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$delete from "public"."task" where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'member at Team a can''t delete Task b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000c', '5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8000-000000000001', 'svetra c')$svetra$), 'denied', 'member at Team a can''t create Task c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$insert into "public"."task" ("id", "team", "author", "title") values ('5e7a0000-0000-4000-8001-00020000000d', '5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8000-000000000002', 'svetra d')$svetra$), 'denied', 'member at Team a can''t create Task d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$update "public"."task" set "team" = '5e7a0000-0000-4000-8001-00010000000b' where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'member at Team a can''t point the team of Task a at Team b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$update "public"."task" set "author" = '5e7a0000-0000-4000-8000-000000000005' where "id" = '5e7a0000-0000-4000-8001-00020000000a'$svetra$), 'denied', 'member at Team a can''t set the author of Task a to themselves');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$update "public"."task" set "team" = '5e7a0000-0000-4000-8001-00010000000a' where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'member at Team a can''t point the team of Task b at Team a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$update "public"."task" set "author" = '5e7a0000-0000-4000-8000-000000000005' where "id" = '5e7a0000-0000-4000-8001-00020000000b'$svetra$), 'denied', 'member at Team a can''t set the author of Task b to themselves');
+select is(svetra_test.privileges('svetra_hole_start_team', '"public"."team"'), 'select, insert, update, delete', 'start_team can change Team');
+select is(svetra_test.privileges('svetra_hole_start_team', '"public"."task"'), 'none', 'start_team can''t touch Task');
+select is(svetra_test.privileges('svetra_hole_start_team', '"svetra"."role_grants"'), 'select, insert, delete', 'start_team can give and take away roles');
+select is(svetra_test.try('svetra_hole_start_team', null, $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'denied', 'start_team can''t give the admin role');
+select is(svetra_test.try('svetra_hole_start_team', null, $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'member', '5e7a0000-0000-4000-8001-00010000000a')$svetra$), 'allowed', 'start_team can give the member role');
+select is(svetra_test.executes('anon', 'public', 'start_team'), false, 'anon can''t call start_team');
+select is(svetra_test.executes('anon', 'svetra_holes', 'start_team'), false, 'anon can''t call the inside of start_team directly');
+select is(svetra_test.executes('authenticated', 'public', 'start_team'), true, 'signed-in people can call start_team');
+select is(svetra_test.executes('authenticated', 'svetra_holes', 'start_team'), false, 'signed-in people can''t call the inside of start_team directly');
+select is(svetra_test.call('anon', null, $svetra$select "public"."start_team"('svetra a')$svetra$), 'refused', 'anon can''t call start_team on the a rows');
+select is(svetra_test.call('anon', null, $svetra$select "public"."start_team"('svetra b')$svetra$), 'refused', 'anon can''t call start_team on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."start_team"('svetra a')$svetra$), 'let through', 'alice can call start_team on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."start_team"('svetra b')$svetra$), 'let through', 'alice can call start_team on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select "public"."start_team"('svetra a')$svetra$), 'let through', 'bob can call start_team on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select "public"."start_team"('svetra b')$svetra$), 'let through', 'bob can call start_team on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select "public"."start_team"('svetra a')$svetra$, 'aal2'), 'let through', 'carol can call start_team on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select "public"."start_team"('svetra b')$svetra$, 'aal2'), 'let through', 'carol can call start_team on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$select "public"."start_team"('svetra a')$svetra$), 'let through', 'admin can call start_team on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$select "public"."start_team"('svetra b')$svetra$), 'let through', 'admin can call start_team on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$select "public"."start_team"('svetra a')$svetra$), 'let through', 'member at Team a can call start_team on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$select "public"."start_team"('svetra b')$svetra$), 'let through', 'member at Team a can call start_team on the b rows');
+select is(svetra_test.privileges('svetra_hole_add_member', '"public"."team"'), 'none', 'add_member can''t touch Team');
+select is(svetra_test.privileges('svetra_hole_add_member', '"public"."task"'), 'none', 'add_member can''t touch Task');
+select is(svetra_test.privileges('svetra_hole_add_member', '"svetra"."role_grants"'), 'select, insert, delete', 'add_member can give and take away roles');
+select is(svetra_test.try('svetra_hole_add_member', null, $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'denied', 'add_member can''t give the admin role');
+select is(svetra_test.try('svetra_hole_add_member', null, $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'member', '5e7a0000-0000-4000-8001-00010000000a')$svetra$), 'allowed', 'add_member can give the member role');
+select is(svetra_test.executes('anon', 'public', 'add_member'), false, 'anon can''t call add_member');
+select is(svetra_test.executes('anon', 'svetra_holes', 'add_member'), false, 'anon can''t call the inside of add_member directly');
+select is(svetra_test.executes('authenticated', 'public', 'add_member'), true, 'signed-in people can call add_member');
+select is(svetra_test.executes('authenticated', 'svetra_holes', 'add_member'), false, 'signed-in people can''t call the inside of add_member directly');
+select is(svetra_test.call('anon', null, $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8002-00040002000a')$svetra$), 'refused', 'anon can''t call add_member on the a rows');
+select is(svetra_test.call('anon', null, $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8002-00040002000b')$svetra$), 'refused', 'anon can''t call add_member on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8002-00040002000a')$svetra$), 'refused', 'alice can''t call add_member on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8002-00040002000b')$svetra$), 'refused', 'alice can''t call add_member on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8002-00040002000a')$svetra$), 'refused', 'bob can''t call add_member on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8002-00040002000b')$svetra$), 'refused', 'bob can''t call add_member on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8002-00040002000a')$svetra$, 'aal2'), 'refused', 'carol can''t call add_member on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8002-00040002000b')$svetra$, 'aal2'), 'refused', 'carol can''t call add_member on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8002-00040002000a')$svetra$), 'refused', 'admin can''t call add_member on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000004', $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8002-00040002000b')$svetra$), 'refused', 'admin can''t call add_member on the b rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000a', '5e7a0000-0000-4000-8002-00040002000a')$svetra$), 'let through', 'member at Team a can call add_member on the a rows');
+select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$select "public"."add_member"('5e7a0000-0000-4000-8001-00010000000b', '5e7a0000-0000-4000-8002-00040002000b')$svetra$), 'refused', 'member at Team a can''t call add_member on the b rows');
+
+select * from finish();
+rollback;

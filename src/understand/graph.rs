@@ -112,6 +112,9 @@ pub fn graph(doc: &Document) -> String {
         for w in &h.writes {
             out += &format!("  h_{} == changes ==> e_{}\n", h.name, w.name);
         }
+        for g in &h.grants {
+            out += &format!("  h_{} == gives ==> r_{}\n", h.name, g.name);
+        }
     }
     out
 }

@@ -1,0 +1,44 @@
+svetra: "0.1"
+system: Teams
+
+auth:
+  sign_in: [email]
+
+roles:
+  admin:  { description: "Runs the service" }
+  member: { description: "Belongs to one team", scope: Team }
+
+entities:
+  Team:
+    fields:
+      id:   { type: uuid, primary: true }
+      name: { type: text, required: true }
+  Task:
+    fields:
+      id:     { type: uuid, primary: true }
+      team:   { type: ref, entity: Team, required: true }
+      author: { type: user, required: true }
+      title:  { type: text, required: true }
+    indexes:
+      - [team]
+      - [author]
+
+policies:
+  members_see_team:   { on: Team, allow: [select], when: "has_role('member', id)" }
+  admins_see_teams:   { on: Team, allow: [select], when: "has_role('admin')" }
+  members_see_tasks:  { on: Task, allow: [select], when: "has_role('member', team)" }
+  members_add_tasks:  { on: Task, allow: [insert], when: "has_role('member', team) and author == auth.user" }
+  authors_edit_tasks: { on: Task, allow: [update, delete], when: "author == auth.user and has_role('member', team)" }
+
+holes:
+  start_team:
+    kind: function
+    input: { name: Team.name }
+    output: Team
+    writes: [Team]
+    grants: [member]
+  add_member:
+    kind: function
+    input: { team: Team.id, person: uuid }
+    when: "has_role('member', team)"
+    grants: [member]

@@ -106,3 +106,39 @@ fn access_tests_check_each_holes_grants_and_guard() {
     assert!(t.contains("'bob can call write_audit on the a rows');"));
     assert!(t.contains("'none', 'write_audit can''t touch Post');"));
 }
+
+#[test]
+fn grants_load_and_must_name_declared_roles() {
+    let src = include_str!("fixtures/teams.yaml");
+    assert!(codes(src).is_empty(), "{:?}", codes(src));
+    let (doc, _) = load(src);
+    let names: Vec<&str> = doc.holes[0]
+        .grants
+        .iter()
+        .map(|g| g.name.as_str())
+        .collect();
+    assert_eq!(names, ["member"]);
+
+    let bad = src.replacen("grants: [member]", "grants: [owner]", 1);
+    let found = codes(&bad);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].0, "SVT006");
+    assert!(found[0].1.contains("`owner`"), "{found:?}");
+    let d = validate(&bad)
+        .into_iter()
+        .find(|d| d.code.id() == "SVT006")
+        .unwrap();
+    assert_eq!((d.line, d.path.as_str()), (39, "holes.start_team.grants"));
+}
+
+#[test]
+fn a_hole_that_grants_one_role_cannot_reach_the_others() {
+    let (doc, _) = load(include_str!("fixtures/teams.yaml"));
+    let sql = svetra::compile::sql::schema(&doc);
+    assert!(sql.contains(
+        "create policy \"svetra_hole_add_member\" on \"svetra\".\"role_grants\" for all to \"svetra_hole_add_member\" using (\"role\" in ('member')) with check (\"role\" in ('member'));"
+    ));
+    let tests = svetra::compile::access_tests::tests(&doc);
+    assert!(tests.contains("'add_member can''t give the admin role'"));
+    assert!(tests.contains("'add_member can give the member role'"));
+}

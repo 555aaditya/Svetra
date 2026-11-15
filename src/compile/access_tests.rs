@@ -632,8 +632,8 @@ pub fn tests(doc: &Document) -> String {
     }
 
     let mut checks = Vec::new();
-    // Roles are granted by the app's owner, never by the person holding them.
-    if let Some(r) = doc.roles.first() {
+    // Giving alice a role, for the scope entity's `a` row when the role is scoped.
+    let grant_to_alice = |r: &RoleDef| {
         let scope = match &r.scope {
             None => "null".to_string(),
             Some(s) => {
@@ -641,11 +641,18 @@ pub fn tests(doc: &Document) -> String {
                 world.value(si, primary(se), 0).0
             }
         };
+        format!(
+            "insert into \"svetra\".\"role_grants\" (\"user_id\", \"role\", \"scope_id\") values ('{}', {}, {scope})",
+            world.alice,
+            lit(&r.name)
+        )
+    };
+    // Roles are granted by the app's owner or a hole, never by the person holding them.
+    if let Some(r) = doc.roles.first() {
         checks.push(format!(
-            "select is(svetra_test.try('authenticated', '{}', $svetra$insert into \"svetra\".\"role_grants\" (\"user_id\", \"role\", \"scope_id\") values ('{}', {}, {scope})$svetra$), 'denied', {});",
+            "select is(svetra_test.try('authenticated', '{}', $svetra${}$svetra$), 'denied', {});",
             world.alice,
-            world.alice,
-            lit(&r.name),
+            grant_to_alice(r),
             lit(&format!("alice can't give herself the {} role", r.name))
         ));
     }
@@ -794,6 +801,37 @@ pub fn tests(doc: &Document) -> String {
                 lit(want),
                 lit(&format!("{} {words} {}", h.name, e.name))
             ));
+        }
+        // Role grants: only a hole with `grants` reaches them, and only for the roles it lists.
+        if !doc.roles.is_empty() {
+            let (want, words) = if h.grants.is_empty() {
+                ("none", "can't give anyone a role")
+            } else {
+                ("select, insert, delete", "can give and take away roles")
+            };
+            checks.push(format!(
+                "select is(svetra_test.privileges({}, '\"svetra\".\"role_grants\"'), {}, {});",
+                lit(&role),
+                lit(want),
+                lit(&format!("{} {words}", h.name))
+            ));
+        }
+        if !h.grants.is_empty() {
+            for r in &doc.roles {
+                let ok = h.grants.iter().any(|g| g.name == r.name);
+                checks.push(format!(
+                    "select is(svetra_test.try({}, null, $svetra${}$svetra$), '{}', {});",
+                    lit(&role),
+                    grant_to_alice(r),
+                    if ok { "allowed" } else { "denied" },
+                    lit(&format!(
+                        "{} {} give the {} role",
+                        h.name,
+                        if ok { "can" } else { "can't" },
+                        r.name
+                    ))
+                ));
+            }
         }
         // Only the declared callers reach the hole, and only through its public function: the
         // inner one takes the caller's id as an argument, so calling it directly could forge it.
