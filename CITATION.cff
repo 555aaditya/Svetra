@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use Svetra in research, please cite it as below."
+title: "Svetra: a compiler from a declarative specification to PostgreSQL row-level security, with spec-derived access tests"
+type: software
+authors:
+  - given-names: Aaditya
+    family-names: Sinha
+version: 0.6.0
+date-released: 2026-11-16
+license: MIT
+repository-code: "https://github.com/555aaditya/Svetra"
+url: "https://555aaditya.github.io/Svetra/"
+abstract: >-
+  Svetra compiles a small typed design, svetra.yaml, into a PostgreSQL schema with row-level
+  security on every table, TypeScript and Zod types, sign-in settings, and pgTAP access tests
+  whose expected results come from evaluating the design itself rather than the generated SQL.
+  It explains the design in plain English, shows who can see and change what, and classifies
+  every change to the design as safe, breaking or destructive before it reaches the database.
+keywords:
+  - postgresql
+  - row-level security
+  - supabase
+  - access control
+  - compiler
+  - testing
+  - mutation testing
