@@ -1,0 +1,957 @@
+{
+  "svetra": "0.1",
+  "system": "FinLedger",
+  "revision": "5dcacd476533",
+  "people": [
+    {
+      "id": "anon",
+      "label": "Someone not signed in"
+    },
+    {
+      "id": "alice",
+      "label": "A signed-in person"
+    },
+    {
+      "id": "bob",
+      "label": "Another signed-in person"
+    },
+    {
+      "id": "carol",
+      "label": "A signed-in person who owns nothing"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Account",
+      "label": "Accounts",
+      "private": false,
+      "fields": [
+        "the signed-in person who owns it (required)",
+        "currency: one of USD, EUR, GBP or INR (required)",
+        "balance: an amount of money, up to 12 digits before the point and 6 after (required)",
+        "status: one of active, frozen or closed (starts as active)",
+        "created at: a date and time, set automatically when created"
+      ],
+      "links": []
+    },
+    {
+      "name": "Transaction",
+      "label": "Transactions",
+      "private": false,
+      "fields": [
+        "source: a linked account (required)",
+        "destination: a linked account (required)",
+        "amount: an amount of money, up to 12 digits before the point and 6 after (required)",
+        "status: one of pending, committed, failed or reversed",
+        "created at: a date and time, set automatically when created"
+      ],
+      "links": [
+        {
+          "field": "source",
+          "to": "Account"
+        },
+        {
+          "field": "destination",
+          "to": "Account"
+        }
+      ]
+    }
+  ],
+  "cells": [
+    {
+      "person": "anon",
+      "entity": "Account",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see accounts any other way."
+      ],
+      "rules": [
+        "Signed-in people can see an account when its owner is them."
+      ],
+      "tests": [
+        6,
+        7
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Account",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's account",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        12,
+        13
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Account",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        8,
+        9
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Account",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        10,
+        11
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Transaction",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see transactions any other way."
+      ],
+      "rules": [
+        "Signed-in people can see a transaction when the owner of its source is them, or the owner of its destination is them."
+      ],
+      "tests": [
+        44,
+        45
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Transaction",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one transaction",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        50,
+        51
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Transaction",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        46,
+        47
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Transaction",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        48,
+        49
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Account",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own account",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see an account when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see an account when its owner is them."
+      ],
+      "tests": [
+        14,
+        15
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Account",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own account",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        20,
+        21
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Account",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        16,
+        17
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Account",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        18,
+        19
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Transaction",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see a transaction when the owner of its source is them, or the owner of its destination is them."
+      ],
+      "rules": [
+        "Signed-in people can see a transaction when the owner of its source is them, or the owner of its destination is them."
+      ],
+      "tests": [
+        52,
+        53
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Transaction",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one transaction",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        58,
+        59
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Transaction",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        54,
+        55
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Transaction",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        56,
+        57
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Account",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own account",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see an account when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see an account when its owner is them."
+      ],
+      "tests": [
+        24,
+        25
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Account",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's account",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        30,
+        31
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Account",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        26,
+        27
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Account",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        28,
+        29
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Transaction",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see a transaction when the owner of its source is them, or the owner of its destination is them."
+      ],
+      "rules": [
+        "Signed-in people can see a transaction when the owner of its source is them, or the owner of its destination is them."
+      ],
+      "tests": [
+        60,
+        61
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Transaction",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one transaction",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        66,
+        67
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Transaction",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        62,
+        63
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Transaction",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        64,
+        65
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Account",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see accounts any other way."
+      ],
+      "rules": [
+        "Signed-in people can see an account when its owner is them."
+      ],
+      "tests": [
+        34,
+        35
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Account",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's account",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        40,
+        41
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Account",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        36,
+        37
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Account",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's account",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's account",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete accounts directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        38,
+        39
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Transaction",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see transactions any other way."
+      ],
+      "rules": [
+        "Signed-in people can see a transaction when the owner of its source is them, or the owner of its destination is them."
+      ],
+      "tests": [
+        68,
+        69
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Transaction",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one transaction",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        74,
+        75
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Transaction",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        70,
+        71
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Transaction",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one transaction",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another transaction",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete transactions directly. Only custom code can change them: transfer."
+      ],
+      "rules": [],
+      "tests": [
+        72,
+        73
+      ]
+    }
+  ],
+  "holes": [
+    {
+      "name": "transfer",
+      "lines": [
+        "takes: source (an account), destination (an account), amount (an amount of money, up to 12 digits before the point and 6 after)",
+        "returns: a transaction",
+        "who can call it: signed-in people, only when the owner of the source is them",
+        "can read: accounts. Can change: accounts, transactions."
+      ],
+      "callers": [
+        {
+          "person": "anon",
+          "access": "none",
+          "tests": [
+            82,
+            83
+          ]
+        },
+        {
+          "person": "alice",
+          "access": "some",
+          "tests": [
+            84,
+            85
+          ]
+        },
+        {
+          "person": "bob",
+          "access": "some",
+          "tests": [
+            86,
+            87
+          ]
+        },
+        {
+          "person": "carol",
+          "access": "none",
+          "tests": [
+            88,
+            89
+          ]
+        }
+      ]
+    }
+  ],
+  "signing_in": [],
+  "before_going_live": []
+}

@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<title>{{title}}: who can see what</title>
+<style>
+:root {
+  --bg: #fbfbfa; --fg: #1c1c1a; --muted: #6b6b66; --line: #e3e2de; --card: #ffffff;
+  --all: #dff3e4; --all-fg: #1d5c2e; --some: #fbf0d6; --some-fg: #6b4a00;
+  --none: #f1f0ed; --none-fg: #55554f; --unknown: #e8e6f6; --unknown-fg: #3d3780;
+  --accent: #2f5bd3; --focus: #2f5bd3;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --fg: #ecebe7; --muted: #a3a29c; --line: #2f2f2c; --card: #1e1e1c;
+    --all: #18351f; --all-fg: #a8e3b6; --some: #3a2f12; --some-fg: #f2d48c;
+    --none: #262624; --none-fg: #b9b8b2; --unknown: #26234a; --unknown-fg: #c9c4ff;
+    --accent: #8aa6ff; --focus: #8aa6ff;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+main { max-width: 1200px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 4px; }
+h2 { font-size: 19px; margin: 40px 0 12px; }
+.muted { color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.ask { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 20px 0 8px; }
+select { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--card); color: var(--fg); }
+.answer { list-style: none; padding: 0; margin: 8px 0 0; }
+.answer li { padding: 6px 0; border-top: 1px solid var(--line); display: flex; gap: 12px; }
+.answer li:first-child { border-top: 0; }
+.answer .who { min-width: 260px; font-weight: 600; }
+.wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: center; white-space: nowrap; }
+th[scope=row] { text-align: left; position: sticky; left: 0; background: var(--card); font-weight: 600; }
+thead th { font-weight: 600; }
+thead tr:first-child th { border-bottom: 0; }
+.group { border-left: 1px solid var(--line); }
+button.cell { font: inherit; border: 0; border-radius: 6px; padding: 3px 10px; cursor: pointer; min-width: 64px; }
+button.cell:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.all { background: var(--all); color: var(--all-fg); }
+.some { background: var(--some); color: var(--some-fg); }
+.none { background: var(--none); color: var(--none-fg); }
+.unknown { background: var(--unknown); color: var(--unknown-fg); }
+#panel { margin-top: 12px; }
+#panel h3 { margin: 0 0 8px; font-size: 16px; }
+#panel ul { margin: 6px 0; padding-left: 20px; }
+.holes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.holes h3 { margin: 0 0 6px; font-size: 16px; font-family: ui-monospace, Menlo, monospace; }
+.holes ul { margin: 0; padding-left: 20px; }
+svg text { fill: var(--fg); font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+svg .box { fill: var(--card); stroke: var(--line); }
+svg .edge { stroke: var(--muted); fill: none; }
+svg .arrow { fill: var(--muted); }
+.lists ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title"></h1>
+  <p class="muted" id="sub"></p>
+
+  <h2>Who can see and change what</h2>
+  <div class="card">
+    <div class="ask">
+      <label for="q-entity">Who can</label>
+      <select id="q-action"></select>
+      <select id="q-entity" aria-label="thing"></select>
+      <span>?</span>
+    </div>
+    <ul class="answer" id="answer"></ul>
+  </div>
+  <p class="muted">Every cell is checked by the app's access tests, run as real people on the database. <b>All</b>: every one the tests try. <b>Some</b>: some, not others. <b>No</b>: none. Select a cell to see why.</p>
+  <div class="wrap"><table id="table"></table></div>
+  <div class="card" id="panel" hidden></div>
+
+  <section id="holes-section" hidden>
+    <h2>Custom code</h2>
+    <div class="holes" id="holes"></div>
+  </section>
+
+  <h2>How the data links up</h2>
+  <div class="card" id="diagram"></div>
+
+  <section class="lists" id="lists"></section>
+</main>
+<script type="application/json" id="model">{{data}}</script>
+<script>
+"use strict";
+const M = JSON.parse(document.getElementById("model").textContent);
+const WORD = { all: "All", some: "Some", none: "No", unknown: "Not checked" };
+const ACTIONS = ["see", "create", "change", "delete"];
+const el = (tag, attrs, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") n.className = v; else n.setAttribute(k, v);
+  }
+  for (const k of kids) n.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return n;
+};
+const person = id => M.people.find(p => p.id === id);
+const entity = name => M.entities.find(e => e.name === name);
+const cell = (p, e, a) => M.cells.find(c => c.person === p && c.entity === e && c.action === a);
+const lower = s => s.charAt(0).toLowerCase() + s.slice(1);
+
+document.title = M.system + ": who can see what";
+document.getElementById("title").textContent = M.system;
+document.getElementById("sub").textContent = "Generated by Svetra from svetra.yaml (revision " + M.revision + "). Nothing here is written by hand.";
+
+// The question box: a filter of the same table.
+const qa = document.getElementById("q-action"), qe = document.getElementById("q-entity");
+for (const a of ACTIONS) qa.append(el("option", { value: a }, a));
+for (const e of M.entities) qe.append(el("option", { value: e.name }, lower(e.label)));
+function answer() {
+  const ul = document.getElementById("answer");
+  ul.replaceChildren();
+  for (const p of M.people) {
+    const c = cell(p.id, qe.value, qa.value);
+    ul.append(el("li", {}, el("span", { class: "who" }, p.label),
+      el("span", { class: c.access }, WORD[c.access]),
+      el("span", { class: "muted" }, c.because[0] || (c.rules.length ? "Only when: " + c.rules.map(lower).join(" Or: ") : ""))));
+  }
+}
+qa.value = ACTIONS[0];
+qe.value = M.entities[0].name;
+qa.onchange = qe.onchange = answer;
+answer();
+
+// The table: people down, things and actions across.
+const t = document.getElementById("table");
+const head = el("thead"), r1 = el("tr"), r2 = el("tr");
+r1.append(el("th", { rowspan: 2, scope: "col" }, "Who"));
+for (const e of M.entities) {
+  r1.append(el("th", { colspan: 4, scope: "colgroup", class: "group" }, e.label + (e.private ? " (not reachable from the app)" : "")));
+  ACTIONS.forEach((a, i) => r2.append(el("th", { scope: "col", class: i === 0 ? "group" : "" }, a.charAt(0).toUpperCase() + a.slice(1))));
+}
+head.append(r1, r2);
+const body = el("tbody");
+for (const p of M.people) {
+  const tr = el("tr", {}, el("th", { scope: "row" }, p.label));
+  for (const e of M.entities) ACTIONS.forEach((a, i) => {
+    const c = cell(p.id, e.name, a);
+    const b = el("button", { class: "cell " + c.access, "aria-label": p.label + " " + a + " " + lower(e.label) + ": " + WORD[c.access] }, WORD[c.access]);
+    b.onclick = () => explainCell(c);
+    tr.append(el("td", { class: i === 0 ? "group" : "" }, b));
+  });
+  body.append(tr);
+}
+t.append(head, body);
+
+function explainCell(c) {
+  const panel = document.getElementById("panel");
+  const p = person(c.person), e = entity(c.entity);
+  panel.replaceChildren(el("h3", {}, p.label + ": " + c.action + " " + lower(e.label) + "? " + WORD[c.access]));
+  if (c.rows.length) {
+    const ul = el("ul");
+    for (const r of c.rows) ul.append(el("li", {}, r.label + ": " + (r.allowed === true ? "yes" : r.allowed === false ? "no" : "not checked")));
+    panel.append(el("div", {}, "What the tests tried:"), ul);
+  }
+  if (c.because.length) {
+    const ul = el("ul");
+    for (const s of c.because) ul.append(el("li", {}, s));
+    panel.append(el("div", {}, "Why:"), ul);
+  }
+  if (c.access === "none" && c.rules.length) {
+    const ul = el("ul");
+    for (const s of c.rules) ul.append(el("li", {}, s));
+    panel.append(el("div", {}, "Only these rules let anyone " + c.action + " " + lower(e.label) + ", and none applies here:"), ul);
+  }
+  if (c.tests.length) panel.append(el("p", { class: "muted" }, "Checked by tests " + c.tests.join(", ") + " in supabase/tests/svetra.test.sql."));
+  panel.hidden = false;
+  panel.scrollIntoView({ block: "nearest" });
+}
+
+// Custom code.
+if (M.holes.length) {
+  document.getElementById("holes-section").hidden = false;
+  const box = document.getElementById("holes");
+  for (const h of M.holes) {
+    const ul = el("ul");
+    for (const l of h.lines) ul.append(el("li", {}, l));
+    const who = el("ul");
+    for (const c of h.callers) who.append(el("li", {}, person(c.person).label + ": ", el("span", { class: c.access }, WORD[c.access])));
+    box.append(el("div", { class: "card" }, el("h3", {}, h.name), ul, el("div", { class: "muted" }, "Who can call it, as the tests found:"), who));
+  }
+}
+
+// The diagram: entities as boxes, links as arrows, drawn here so the page needs no network.
+(function diagram() {
+  const NS = "http://www.w3.org/2000/svg";
+  const s = (tag, attrs, text) => {
+    const n = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    if (text !== undefined) n.textContent = text;
+    return n;
+  };
+  const W = 180, H = 44, GAP = 70, n = M.entities.length;
+  const width = Math.max(n * W + (n - 1) * GAP + 40, 300), height = 200;
+  const svg = s("svg", { viewBox: "0 0 " + width + " " + height, width: "100%", role: "img", "aria-label": "How the data links up" });
+  const defs = s("defs", {});
+  const m = s("marker", { id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
+  m.append(s("path", { d: "M0,0 L10,5 L0,10 z", class: "arrow" }));
+  defs.append(m); svg.append(defs);
+  const pos = {};
+  M.entities.forEach((e, i) => { pos[e.name] = { x: 20 + i * (W + GAP), y: 70 }; });
+  let bend = 0;
+  for (const e of M.entities) for (const l of e.links) {
+    const a = pos[e.name], b = pos[l.to];
+    if (a === b) continue;
+    const y = a.y - 20 - 14 * (bend++ % 3);
+    const x1 = a.x + W / 2, x2 = b.x + W / 2;
+    svg.append(s("path", { d: "M" + x1 + "," + a.y + " C" + x1 + "," + (y - 30) + " " + x2 + "," + (y - 30) + " " + x2 + "," + b.y, class: "edge", "marker-end": "url(#arrow)" }));
+    svg.append(s("text", { x: (x1 + x2) / 2, y: y - 18, "text-anchor": "middle" }, l.field));
+  }
+  for (const e of M.entities) {
+    const p = pos[e.name];
+    svg.append(s("rect", { x: p.x, y: p.y, width: W, height: H, rx: 8, class: "box" }));
+    svg.append(s("text", { x: p.x + W / 2, y: p.y + 27, "text-anchor": "middle" }, e.label + (e.private ? " (private)" : "")));
+  }
+  document.getElementById("diagram").append(svg);
+})();
+
+// Signing in, and before going live.
+const lists = document.getElementById("lists");
+for (const [title, items] of [["Signing in", M.signing_in], ["Before going live", M.before_going_live]]) {
+  if (!items.length) continue;
+  const ul = el("ul");
+  for (const i of items) ul.append(el("li", {}, i));
+  lists.append(el("h2", {}, title), ul);
+}
+</script>
+</body>
+</html>

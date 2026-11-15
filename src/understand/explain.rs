@@ -95,6 +95,44 @@ pub fn explain(doc: &Document, diags: &[Diagnostic]) -> String {
     out
 }
 
+/// The pieces of `explain`, for `svetra view`, which shows the same sentences.
+pub mod parts {
+    use super::*;
+
+    fn entities(doc: &Document) -> HashMap<&str, &Entity> {
+        doc.entities.iter().map(|e| (e.name.as_str(), e)).collect()
+    }
+
+    /// "What your app stores" for one entity.
+    pub fn fields(e: &Entity) -> Vec<String> {
+        e.fields
+            .iter()
+            .filter(|f| !(f.primary && f.ty == FieldType::Uuid))
+            .map(field_line)
+            .collect()
+    }
+
+    /// "Who can see and change what" for one entity. For an entity the app can reach, the first
+    /// lines are one per policy on it, in file order; then the "Nobody can" lines.
+    pub fn access(doc: &Document, e: &Entity) -> Vec<String> {
+        super::access(e, doc, &entities(doc))
+    }
+
+    pub fn hole(doc: &Document, h: &Hole) -> Vec<String> {
+        super::hole(h, &entities(doc))
+    }
+
+    pub fn signing_in(doc: &Document) -> Vec<String> {
+        doc.auth
+            .as_ref()
+            .map_or(vec![], |a| super::signing_in(a, &doc.roles))
+    }
+
+    pub fn before_going_live(doc: &Document) -> Vec<String> {
+        doc.auth.as_ref().map_or(vec![], super::before_live)
+    }
+}
+
 /// A sign-in method's usual name.
 fn method(m: &str) -> String {
     match m {

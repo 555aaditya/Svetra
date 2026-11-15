@@ -1,0 +1,758 @@
+{
+  "svetra": "0.1",
+  "system": "App",
+  "revision": "792a0572eb4a",
+  "people": [
+    {
+      "id": "anon",
+      "label": "Someone not signed in"
+    },
+    {
+      "id": "alice",
+      "label": "A signed-in person"
+    },
+    {
+      "id": "bob",
+      "label": "Another signed-in person"
+    },
+    {
+      "id": "carol",
+      "label": "A signed-in person who owns nothing"
+    }
+  ],
+  "entities": [
+    {
+      "name": "AuditLog",
+      "label": "Audit logs",
+      "private": true,
+      "fields": [
+        "note: text"
+      ],
+      "links": []
+    },
+    {
+      "name": "Post",
+      "label": "Posts",
+      "private": false,
+      "fields": [
+        "the signed-in person who owns it (required)",
+        "body: text"
+      ],
+      "links": []
+    }
+  ],
+  "cells": [
+    {
+      "person": "anon",
+      "entity": "AuditLog",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one audit log",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": [
+        6
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "AuditLog",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one audit log",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": [
+        7
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "AuditLog",
+      "action": "change",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "anon",
+      "entity": "AuditLog",
+      "action": "delete",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "anon",
+      "entity": "Post",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's post",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another person's post",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Anyone, signed in or not, can see posts."
+      ],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them.",
+        "Anyone, signed in or not, can see posts."
+      ],
+      "tests": [
+        10,
+        11
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Post",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's post",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's post",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        16,
+        17
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Post",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's post",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's post",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        12,
+        13
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Post",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's post",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's post",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        14,
+        15
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "AuditLog",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one audit log",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": [
+        8
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "AuditLog",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one audit log",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": [
+        9
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "AuditLog",
+      "action": "change",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "alice",
+      "entity": "AuditLog",
+      "action": "delete",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "alice",
+      "entity": "Post",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own post",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's post",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see, create, change and delete a post when its author is them.",
+        "Anyone, signed in or not, can see posts."
+      ],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them.",
+        "Anyone, signed in or not, can see posts."
+      ],
+      "tests": [
+        18,
+        19
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Post",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own post",
+          "allowed": true
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's post",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        24,
+        25
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Post",
+      "action": "change",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own post",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's post",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        20,
+        21
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Post",
+      "action": "delete",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own post",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's post",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        22,
+        23
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "AuditLog",
+      "action": "see",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "bob",
+      "entity": "AuditLog",
+      "action": "create",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "bob",
+      "entity": "AuditLog",
+      "action": "change",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "bob",
+      "entity": "AuditLog",
+      "action": "delete",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "bob",
+      "entity": "Post",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's post",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "their own post",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Anyone, signed in or not, can see posts.",
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them.",
+        "Anyone, signed in or not, can see posts."
+      ],
+      "tests": [
+        28,
+        29
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Post",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's post",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own post",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        34,
+        35
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Post",
+      "action": "change",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's post",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own post",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        30,
+        31
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Post",
+      "action": "delete",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's post",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own post",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        32,
+        33
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "AuditLog",
+      "action": "see",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "carol",
+      "entity": "AuditLog",
+      "action": "create",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "carol",
+      "entity": "AuditLog",
+      "action": "change",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "carol",
+      "entity": "AuditLog",
+      "action": "delete",
+      "access": "none",
+      "rows": [],
+      "because": [
+        "Audit logs are private: the app can't reach them at all. Only custom code can change them: write_audit."
+      ],
+      "rules": [],
+      "tests": []
+    },
+    {
+      "person": "carol",
+      "entity": "Post",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's post",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another person's post",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Anyone, signed in or not, can see posts."
+      ],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them.",
+        "Anyone, signed in or not, can see posts."
+      ],
+      "tests": [
+        38,
+        39
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Post",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's post",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's post",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        44,
+        45
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Post",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's post",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's post",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        40,
+        41
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Post",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's post",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's post",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see, create, change and delete a post when its author is them."
+      ],
+      "tests": [
+        42,
+        43
+      ]
+    }
+  ],
+  "holes": [
+    {
+      "name": "write_audit",
+      "lines": [
+        "returns: nothing",
+        "who can call it: signed-in people",
+        "can change: audit logs."
+      ],
+      "callers": [
+        {
+          "person": "anon",
+          "access": "none",
+          "tests": [
+            54,
+            55
+          ]
+        },
+        {
+          "person": "alice",
+          "access": "all",
+          "tests": [
+            56,
+            57
+          ]
+        },
+        {
+          "person": "bob",
+          "access": "all",
+          "tests": [
+            58,
+            59
+          ]
+        },
+        {
+          "person": "carol",
+          "access": "all",
+          "tests": [
+            60,
+            61
+          ]
+        }
+      ]
+    }
+  ],
+  "signing_in": [],
+  "before_going_live": []
+}

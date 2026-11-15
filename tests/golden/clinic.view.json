@@ -1,0 +1,710 @@
+{
+  "svetra": "0.1",
+  "system": "Clinic",
+  "revision": "b9501ca04832",
+  "people": [
+    {
+      "id": "anon",
+      "label": "Someone not signed in"
+    },
+    {
+      "id": "alice",
+      "label": "A signed-in person"
+    },
+    {
+      "id": "bob",
+      "label": "Another signed-in person"
+    },
+    {
+      "id": "carol",
+      "label": "A signed-in person who owns nothing"
+    },
+    {
+      "id": "admin",
+      "label": "admin",
+      "role": "admin"
+    },
+    {
+      "id": "admin without a second factor",
+      "label": "admin without a second factor",
+      "role": "admin"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Visit",
+      "label": "Visits",
+      "private": false,
+      "fields": [
+        "patient: a signed-in person (required)",
+        "notes: text"
+      ],
+      "links": []
+    }
+  ],
+  "cells": [
+    {
+      "person": "anon",
+      "entity": "Visit",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see visits any other way."
+      ],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them.",
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        7,
+        8
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Visit",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them."
+      ],
+      "tests": [
+        13,
+        14
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Visit",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        9,
+        10
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Visit",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        11,
+        12
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Visit",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own visit",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's visit",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see and create a visit when its patient is them."
+      ],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them.",
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        15,
+        16
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Visit",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own visit",
+          "allowed": true
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's visit",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see and create a visit when its patient is them."
+      ],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them."
+      ],
+      "tests": [
+        21,
+        22
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Visit",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        17,
+        18
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Visit",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        19,
+        20
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Visit",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own visit",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see and create a visit when its patient is them."
+      ],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them.",
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        25,
+        26
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Visit",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's visit",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own visit",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see and create a visit when its patient is them."
+      ],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them."
+      ],
+      "tests": [
+        31,
+        32
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Visit",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        27,
+        28
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Visit",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        29,
+        30
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Visit",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see visits any other way."
+      ],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them.",
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        35,
+        36
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Visit",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them."
+      ],
+      "tests": [
+        41,
+        42
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Visit",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        37,
+        38
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Visit",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        39,
+        40
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Visit",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them.",
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        45,
+        46
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Visit",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them."
+      ],
+      "tests": [
+        51,
+        52
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Visit",
+      "action": "change",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        47,
+        48
+      ]
+    },
+    {
+      "person": "admin",
+      "entity": "Visit",
+      "action": "delete",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        49,
+        50
+      ]
+    },
+    {
+      "person": "admin without a second factor",
+      "entity": "Visit",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see visits any other way."
+      ],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them.",
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        55,
+        56
+      ]
+    },
+    {
+      "person": "admin without a second factor",
+      "entity": "Visit",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can see and create a visit when its patient is them."
+      ],
+      "tests": [
+        61,
+        62
+      ]
+    },
+    {
+      "person": "admin without a second factor",
+      "entity": "Visit",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        57,
+        58
+      ]
+    },
+    {
+      "person": "admin without a second factor",
+      "entity": "Visit",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's visit",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's visit",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "People with the admin role can see, change and delete visits."
+      ],
+      "tests": [
+        59,
+        60
+      ]
+    }
+  ],
+  "holes": [],
+  "signing_in": [
+    "People sign in with email (a password or an emailed link) or Google.",
+    "Only people you invite can create an account.",
+    "People confirm their email address before they can sign in.",
+    "Passwords need at least 12 characters, with lowercase and uppercase letters and digits.",
+    "The admin role only counts after a second factor, an authenticator app."
+  ],
+  "before_going_live": [
+    "Create a Google sign-in app, then set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID and SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET.",
+    "Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.",
+    "Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in."
+  ]
+}

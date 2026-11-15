@@ -132,7 +132,7 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 | Access tests | Generated pgTAP tests: every person × action × row, as real users, with every failure reported | **Done** |
 | Sign-in settings | `auth:` (methods, signup, email confirmation, password rules) compiled into `supabase/config.toml`, and `mfa: true` roles that need a second factor | **Done** |
 | Agents | The Svetra skill for Claude Code, `svetra init`, an MCP server for any agent, and holes: custom code as guarded Postgres functions | **Done** |
-| See who can see what | `svetra view`: one page with a table of every person × thing × action, in words, and a diagram ([spec](docs/view.md)) | Specified |
+| See who can see what | `svetra view`: one page with a table of every person × thing × action, in words, and a diagram ([spec](docs/view.md)) | **Built** (next release) |
 | Automations | Scheduled jobs, triggers when data changes, and incoming webhooks | Planned |
 | Start fast | `svetra new` with templates | Planned |
 | Change safely | `svetra plan` (classifies changes as safe, breaking or destructive), `svetra undo` | Planned |

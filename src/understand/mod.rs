@@ -3,4 +3,5 @@
 pub mod context;
 pub mod explain;
 pub mod graph;
+pub mod view;
 pub mod words;
