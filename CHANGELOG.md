@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+
+- **`explain` reads fields named for an action as that action:** `paid_by == auth.user` is now "it was paid by them", not "its paid by is them", and `assigned_to` reads "it is assigned to them".
 ## 0.4.2 (2026-11-16)
 
 A security fix for holes, and holes that can give people roles.

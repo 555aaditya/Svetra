@@ -289,6 +289,14 @@ fn english(e: &Expr, st: Style) -> String {
                 if *op == Op::Eq { "empty" } else { "filled in" }
             )
         }
+        // A field named for an action, such as `paid_by` or `assigned_to`, reads as that action:
+        // "it was paid by them" instead of "its paid by is them".
+        Expr::Bin(op @ (Op::Eq | Op::Ne), l, r) if st == Style::Policy && acted(l, r).is_some() => {
+            let f = label(acted(l, r).unwrap_or_default());
+            let not = if *op == Op::Ne { " not" } else { "" };
+            let verb = if f.ends_with(" by") { "was" } else { "is" };
+            format!("it {verb}{not} {f} them")
+        }
         Expr::Bin(Op::Ne, l, r) if matches!((&**l, &**r), (Expr::Path(a), Expr::Path(b)) if a.len() == 1 && b.len() == 1) =>
         {
             format!("{} and {} are different", english(l, st), english(r, st))
@@ -311,6 +319,26 @@ fn english(e: &Expr, st: Style) -> String {
             };
             format!("{a}{word} {b}")
         }
+    }
+}
+
+/// The field in `field == auth.user` (either way round) when its name ends in `_by` or `_to`.
+fn acted<'a>(l: &'a Expr, r: &'a Expr) -> Option<&'a str> {
+    let me =
+        |e: &Expr| matches!(e, Expr::Path(p) if p.len() == 2 && p[0] == "auth" && p[1] == "user");
+    let field = |e: &'a Expr| match e {
+        Expr::Path(p) => match p.as_slice() {
+            [f] if f.ends_with("_by") || f.ends_with("_to") => Some(f.as_str()),
+            _ => None,
+        },
+        _ => None,
+    };
+    if me(r) {
+        field(l)
+    } else if me(l) {
+        field(r)
+    } else {
+        None
     }
 }
 
