@@ -1,0 +1,32 @@
+# The design of your app. Your agent edits it with you; `svetra validate` checks every change.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+svetra: "0.1"
+system: Blog
+
+auth:
+  sign_in: [email]
+
+entities:
+  Post:
+    fields:
+      id:        { type: uuid, primary: true }
+      author:    { type: user, required: true }
+      title:     { type: text, required: true }
+      is_public: { type: bool, required: true, default: false }
+    indexes:
+      - [author]
+
+policies:
+  public_posts_readable:
+    on: Post
+    allow: [select]
+    when: "is_public == true"
+    as: anyone
+  authors_read_own:
+    on: Post
+    allow: [select]
+    when: "author == auth.user"
+  authors_write_own:
+    on: Post
+    allow: [insert, update, delete]
+    when: "author == auth.user"

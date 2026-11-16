@@ -1,0 +1,101 @@
+{
+ "users": {
+  "alice": "a0000000-0000-4000-8000-000000000001",
+  "bob": "b0000000-0000-4000-8000-000000000002"
+ },
+ "setup": [
+  "insert into public.post (id, author, title, is_public) values ('5e7a0000-0000-4000-8001-000000000001', 'a0000000-0000-4000-8000-000000000001', 'alice private', false), ('5e7a0000-0000-4000-8001-000000000002', 'b0000000-0000-4000-8000-000000000002', 'bob public', true), ('5e7a0000-0000-4000-8001-000000000003', 'b0000000-0000-4000-8000-000000000002', 'bob private', false)"
+ ],
+ "checks": [
+  [
+   "a visitor can read a public post",
+   "anon",
+   "select 1 from public.post where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "allowed"
+  ],
+  [
+   "a visitor cannot read a private post",
+   "anon",
+   "select 1 from public.post where id = '5e7a0000-0000-4000-8001-000000000003'",
+   "denied"
+  ],
+  [
+   "alice can read a public post",
+   "alice",
+   "select 1 from public.post where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "allowed"
+  ],
+  [
+   "alice cannot read bob's private post",
+   "alice",
+   "select 1 from public.post where id = '5e7a0000-0000-4000-8001-000000000003'",
+   "denied"
+  ],
+  [
+   "alice can read her own private post",
+   "alice",
+   "select 1 from public.post where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "bob cannot read alice's private post",
+   "bob",
+   "select 1 from public.post where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "alice can change her post",
+   "alice",
+   "update public.post set title = 'edited' where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "alice cannot change bob's public post",
+   "alice",
+   "update public.post set title = 'edited' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice cannot delete bob's public post",
+   "alice",
+   "delete from public.post where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice can delete her post",
+   "alice",
+   "delete from public.post where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "alice can create her own post",
+   "alice",
+   "insert into public.post (author, title) values ('a0000000-0000-4000-8000-000000000001', 'new')",
+   "allowed"
+  ],
+  [
+   "alice cannot create a post as bob",
+   "alice",
+   "insert into public.post (author, title) values ('b0000000-0000-4000-8000-000000000002', 'new')",
+   "denied"
+  ],
+  [
+   "a visitor cannot create a post",
+   "anon",
+   "insert into public.post (author, title) values ('a0000000-0000-4000-8000-000000000001', 'new')",
+   "denied"
+  ],
+  [
+   "alice cannot take over bob's post",
+   "alice",
+   "update public.post set author = 'a0000000-0000-4000-8000-000000000001' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "a visitor cannot change a public post",
+   "anon",
+   "update public.post set title = 'edited' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ]
+ ]
+}

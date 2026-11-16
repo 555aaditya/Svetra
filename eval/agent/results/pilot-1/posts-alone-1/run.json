@@ -1,0 +1,132 @@
+{
+ "prompt": "posts",
+ "condition": "alone",
+ "seed": 1,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "timed_out": false,
+  "wall_s": 205.6,
+  "is_error": false,
+  "num_turns": 4,
+  "cost_usd": 0.05123119999999999,
+  "input_tokens": 6,
+  "output_tokens": 1505,
+  "cache_read_tokens": 90246,
+  "cache_creation_tokens": 6749,
+  "tools": {
+   "Read": 1,
+   "Bash": 1,
+   "Write": 1
+  },
+  "stderr": "Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.\n",
+  "answer": "I wrote the migration to `supabase/migrations/20261116000000_create_post.sql`. I haven't run it against a database, so none of it is tested.\n\n- **Table:** `post` has the columns from your contract. `author` and `title` are required, and `is_public` defaults to false. Deleting a user also deletes their posts. I added an index on `author`.\n- **Read access:** anyone, signed in or not, can read public posts. A signed-in person can also read their own private posts, and nobody else's.\n- **Create, change and delete:** only signed-in people can write. Insert requires `author` to be your own id. Updat"
+ },
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20261116000000_create_post.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "a visitor can read a public post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot read a private post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can read a public post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot read bob's private post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can read her own private post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "bob cannot read alice's private post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can change her post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change bob's public post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's public post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice can create her own post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create a post as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create a post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot change a public post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 15,
+  "total": 15,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  }
+ }
+}

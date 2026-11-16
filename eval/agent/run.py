@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""Agent evaluation pilot: does an agent build a backend that enforces who can see what?
+
+For each (prompt, condition, seed) it starts a fresh directory, runs headless Claude Code on the
+prompt, then checks the schema the agent produced on a real PostgreSQL, deterministically:
+
+  * the schema applies, and the contract in the prompt holds (the oracle's test data inserts);
+  * every (person, operation, row) in oracle/<prompt>.json is allowed or denied as expected,
+    run as real database roles, never the superuser;
+  * `svetra check` finds no critical leak in what the agent built.
+
+Conditions:  alone   an empty folder
+             svetra  `svetra init` was run (skill + MCP server), and the prompt doesn't mention it
+
+See eval/agent/README.md for the design, what this does and doesn't show, and how to run it.
+"""
+import argparse, json, os, shutil, subprocess, sys, time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
+CONTAINER = "svetra-eval-pg"
+TEMPLATE = "evaltpl"
+
+TRY = """
+create schema eval;
+create function eval.try(p_role text, p_user uuid, p_sql text) returns text language plpgsql as $$
+declare n bigint;
+begin
+  begin
+    perform set_config('role', p_role, true);
+    perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
+    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', 'aal1')::text, true);
+    execute p_sql;
+    get diagnostics n = row_count;
+    raise exception 'eval_undo';
+  exception when others then
+    if sqlerrm = 'eval_undo' then return case when n > 0 then 'allowed' else 'denied' end;
+    elsif sqlstate = '42501' then return 'denied';
+    end if;
+    return 'error ' || sqlstate || ': ' || sqlerrm;
+  end;
+end $$;
+"""
+
+
+def sh(cmd, **kw):
+    return subprocess.run(cmd, capture_output=True, text=True, **kw)
+
+
+def psql(db, sql, check=False):
+    r = subprocess.run(
+        ["docker", "exec", "-i", CONTAINER, "psql", "-U", "postgres", "-d", db, "-X", "-A", "-t", "-q"]
+        + (["-v", "ON_ERROR_STOP=1"] if check else []),
+        input=sql, capture_output=True, text=True,
+    )
+    return r
+
+
+def ensure_postgres():
+    running = sh(["docker", "ps", "-q", "-f", f"name={CONTAINER}"]).stdout.strip()
+    if not running:
+        sh(["docker", "rm", "-f", CONTAINER])
+        r = sh(["docker", "run", "-d", "--name", CONTAINER, "-e", "POSTGRES_PASSWORD=pw", "postgres:16"])
+        if r.returncode:
+            sys.exit(f"cannot start postgres: {r.stderr}")
+    for _ in range(90):
+        if sh(["docker", "logs", CONTAINER]).stdout.count("init process complete") or "ready to accept" in sh(["docker", "logs", CONTAINER]).stderr:
+            if sh(["docker", "exec", CONTAINER, "pg_isready", "-U", "postgres"]).returncode == 0:
+                break
+        time.sleep(1)
+    have = psql("postgres", f"select 1 from pg_database where datname = '{TEMPLATE}'").stdout.strip()
+    if not have:
+        psql("postgres", f"create database {TEMPLATE}", check=True)
+        stub = open(os.path.join(REPO, "tests", "pg", "supabase_stub.sql")).read()
+        r = psql(TEMPLATE, stub, check=True)
+        if r.returncode:
+            sys.exit(f"stub failed: {r.stderr}")
+
+
+def find_schema(work):
+    """The SQL the agent produced: migrations first, then Svetra's generated schema."""
+    found = []
+    for sub in ("supabase/migrations", "supabase/schemas"):
+        d = os.path.join(work, sub)
+        if os.path.isdir(d):
+            found += [os.path.join(d, f) for f in sorted(os.listdir(d)) if f.endswith(".sql")]
+        if found:
+            break
+    return found
+
+
+def run_agent(work, prompt, condition, model, budget, svetra_bin, timeout):
+    env = dict(os.environ)
+    cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose", "--model", model,
+           "--permission-mode", "acceptEdits", "--setting-sources", "project", "--strict-mcp-config",
+           "--no-session-persistence", "--max-budget-usd", str(budget)]
+    if condition == "svetra":
+        r = sh([svetra_bin, "init", work])
+        if r.returncode:
+            return {"error": f"svetra init failed: {r.stderr}"}, ""
+        mcp = os.path.join(work, ".mcp.json")
+        cfg = json.load(open(mcp))
+        cfg["mcpServers"]["svetra"] = {"command": os.path.abspath(svetra_bin), "args": ["mcp"]}
+        json.dump(cfg, open(mcp, "w"), indent=2)
+        cmd += ["--mcp-config", mcp, "--allowedTools", "mcp__svetra", "Read", "Write", "Edit", "Glob", "Grep"]
+    else:
+        cmd += ["--allowedTools", "Read", "Write", "Edit", "Glob", "Grep"]
+    started = time.time()
+    try:
+        r = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=timeout, env=env)
+        out, err, timed_out = r.stdout, r.stderr, False
+    except subprocess.TimeoutExpired as e:
+        out, err, timed_out = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""), "timeout", True
+    wall = time.time() - started
+    tools, final = {}, {}
+    for line in out.splitlines():
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        if ev.get("type") == "assistant":
+            for c in ev.get("message", {}).get("content", []):
+                if c.get("type") == "tool_use":
+                    tools[c["name"]] = tools.get(c["name"], 0) + 1
+        if ev.get("type") == "result":
+            final = ev
+    usage = final.get("usage", {})
+    return {
+        "timed_out": timed_out, "wall_s": round(wall, 1), "is_error": final.get("is_error"),
+        "num_turns": final.get("num_turns"), "cost_usd": final.get("total_cost_usd"),
+        "input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens"),
+        "cache_read_tokens": usage.get("cache_read_input_tokens"),
+        "cache_creation_tokens": usage.get("cache_creation_input_tokens"),
+        "tools": tools, "stderr": err[-500:] if err else "",
+        "answer": (final.get("result") or "")[:600],
+    }, out
+
+
+def check(work, oracle, svetra_bin, name):
+    """Apply the agent's schema, run the oracle as real roles, then svetra check."""
+    res = {"schema_files": [], "applied": False, "setup_ok": False, "checks": [], "leaks": 0, "too_strict": 0,
+           "passed": 0, "total": len(oracle["checks"]), "svetra_check": None}
+    files = find_schema(work)
+    res["schema_files"] = [os.path.relpath(f, work) for f in files]
+    if not files:
+        res["error"] = "no schema produced"
+        return res
+    db = "run_" + name.replace("-", "_")
+    psql("postgres", f"drop database if exists {db}")
+    psql("postgres", f"create database {db} template {TEMPLATE}", check=True)
+    for f in files:
+        r = psql(db, open(f).read(), check=True)
+        if r.returncode:
+            res["error"] = "schema did not apply: " + r.stderr.strip()[-300:]
+            return res
+    res["applied"] = True
+    users = ", ".join(f"('{u}', '{n}@eval.test')" for n, u in oracle["users"].items())
+    r = psql(db, f"insert into auth.users (id, email) values {users};\n" + ";\n".join(oracle["setup"]) + ";", check=True)
+    if r.returncode:
+        res["error"] = "the data contract in the prompt doesn't hold: " + r.stderr.strip()[-300:]
+    else:
+        res["setup_ok"] = True
+        psql(db, TRY, check=True)
+        lines = []
+        for i, (what, who, sql, want) in enumerate(oracle["checks"]):
+            uid = "null" if who == "anon" else f"'{oracle['users'][who]}'"
+            role = "anon" if who == "anon" else "authenticated"
+            lines.append(f"select {i}, eval.try('{role}', {uid}, $e${sql}$e$);")
+        out = psql(db, "\n".join(lines))
+        got = {}
+        for line in out.stdout.splitlines():
+            if "|" in line:
+                i, v = line.split("|", 1)
+                got[int(i)] = v.strip()
+        for i, (what, who, sql, want) in enumerate(oracle["checks"]):
+            g = got.get(i, "no result")
+            ok = g == want
+            res["checks"].append({"check": what, "want": want, "got": g, "ok": ok})
+            res["passed"] += ok
+            if not ok and want == "denied" and g == "allowed":
+                res["leaks"] += 1
+            if not ok and want == "allowed" and g == "denied":
+                res["too_strict"] += 1
+    q = sh([svetra_bin, "check", "--print-query"]).stdout
+    snap = psql(db, q).stdout
+    snap_file = os.path.join(work, "..", "snapshot.json")
+    open(snap_file, "w").write(snap)
+    c = sh([svetra_bin, "check", "--snapshot", snap_file, "--json"])
+    try:
+        j = json.loads(c.stdout)
+        res["svetra_check"] = j["counts"]
+    except ValueError:
+        res["svetra_check"] = {"error": c.stderr[-200:]}
+    psql("postgres", f"drop database if exists {db}")
+    return res
+
+
+def selftest(svetra_bin):
+    """The checker must score correct schemas 100% and catch each broken one (no agents run)."""
+    import tempfile
+    # (schema file, prompt, expectation on the result)
+    cases = [
+        ("notes_good", "notes", lambda r: r["passed"] == r["total"] and r["leaks"] == 0 and r["svetra_check"]["critical"] == 0),
+        ("notes_rls_off", "notes", lambda r: r["leaks"] > 0 and r["svetra_check"]["critical"] >= 1),
+        ("notes_open_read", "notes", lambda r: r["leaks"] >= 3),
+        # An update policy with `with check (true)` is not a leak here: PostgreSQL still applies the select
+        # policy to the updated row, so ownership still holds (a "masked" mutant in the P7 study).
+        ("notes_open_insert", "notes", lambda r: r["leaks"] == 1 and r["total"] - r["passed"] == 1),
+        ("posts_good", "posts", lambda r: r["passed"] == r["total"] and r["leaks"] == 0),
+        ("posts_too_strict", "posts", lambda r: r["too_strict"] >= 2 and r["leaks"] == 0),
+    ]
+    bad = 0
+    for name, prompt, ok in cases:
+        work = os.path.join(tempfile.mkdtemp(prefix="svetra-eval-self-"), "work")
+        os.makedirs(os.path.join(work, "supabase", "migrations"))
+        shutil.copy(os.path.join(HERE, "selftest", name + ".sql"), os.path.join(work, "supabase", "migrations", "001.sql"))
+        r = check(work, json.load(open(os.path.join(HERE, "oracle", prompt + ".json"))), svetra_bin, "self_" + name)
+        good = bool(r.get("applied")) and ok(r)
+        bad += not good
+        print(f"{'ok  ' if good else 'FAIL'} {name}: {r['passed']}/{r['total']} passed, {r['leaks']} leaks, "
+              f"{r['too_strict']} too strict, svetra check {r['svetra_check']}")
+        if not good:
+            print("     ", r.get("error"), [c for c in r["checks"] if not c["ok"]][:4])
+    sys.exit(1 if bad else 0)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--prompts", default="notes,posts")
+    ap.add_argument("--conditions", default="alone,svetra")
+    ap.add_argument("--seeds", type=int, default=1)
+    ap.add_argument("--model", default="claude-sonnet-5-5")
+    ap.add_argument("--budget", type=float, default=3.0, help="max USD per run")
+    ap.add_argument("--timeout", type=int, default=1200)
+    ap.add_argument("--svetra", default=os.path.join(REPO, "target", "debug", "svetra"))
+    ap.add_argument("--out", default=os.path.join(HERE, "results", time.strftime("%Y%m%d-%H%M%S")))
+    ap.add_argument("--check-only", help="re-check an existing results folder without running agents")
+    ap.add_argument("--selftest", action="store_true", help="validate the checker on hand-written schemas; runs no agents")
+    a = ap.parse_args()
+    if not os.path.exists(a.svetra):
+        sys.exit(f"build svetra first: cargo build ({a.svetra} missing)")
+    ensure_postgres()
+    if a.selftest:
+        return selftest(a.svetra)
+    out = os.path.abspath(a.check_only or a.out)
+    os.makedirs(out, exist_ok=True)
+    rows = []
+    for prompt in a.prompts.split(","):
+        text = open(os.path.join(HERE, "prompts", prompt + ".md")).read().strip()
+        oracle = json.load(open(os.path.join(HERE, "oracle", prompt + ".json")))
+        for cond in a.conditions.split(","):
+            for seed in range(1, a.seeds + 1):
+                name = f"{prompt}-{cond}-{seed}"
+                base = os.path.join(out, name)
+                work = os.path.join(base, "work")
+                if a.check_only:
+                    meta = json.load(open(os.path.join(base, "run.json"))).get("agent", {})
+                else:
+                    shutil.rmtree(base, ignore_errors=True)
+                    os.makedirs(work)
+                    print(f"running {name} ...", flush=True)
+                    meta, transcript = run_agent(work, text, cond, a.model, a.budget, a.svetra, a.timeout)
+                    open(os.path.join(base, "transcript.jsonl"), "w").write(transcript)
+                res = check(work, oracle, a.svetra, name)
+                json.dump({"prompt": prompt, "condition": cond, "seed": seed, "model": a.model, "agent": meta, "check": res},
+                          open(os.path.join(base, "run.json"), "w"), indent=1)
+                rows.append((name, meta, res))
+                print(f"  {name}: {res['passed']}/{res['total']} oracle checks, {res['leaks']} leaks, "
+                      f"svetra check {res['svetra_check']}, ${meta.get('cost_usd')}, {meta.get('num_turns')} turns", flush=True)
+    print("\n| run | applied | passed | leaks | too strict | critical | cost | turns | output tokens | svetra tools |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for name, m, r in rows:
+        crit = (r["svetra_check"] or {}).get("critical", "?")
+        st = sum(v for k, v in (m.get("tools") or {}).items() if k.startswith("mcp__svetra"))
+        print(f"| {name} | {r['applied']} | {r['passed']}/{r['total']} | {r['leaks']} | {r['too_strict']} | {crit} | "
+              f"${(m.get('cost_usd') or 0):.2f} | {m.get('num_turns')} | {m.get('output_tokens')} | {st} |")
+    json.dump([{"run": n, "agent": m, "check": r} for n, m, r in rows], open(os.path.join(out, "summary.json"), "w"), indent=1)
+
+
+if __name__ == "__main__":
+    main()

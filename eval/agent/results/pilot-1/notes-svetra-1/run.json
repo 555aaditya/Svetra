@@ -1,0 +1,118 @@
+{
+ "prompt": "notes",
+ "condition": "svetra",
+ "seed": 1,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "timed_out": false,
+  "wall_s": 90.1,
+  "is_error": false,
+  "num_turns": 12,
+  "cost_usd": 0.0955448,
+  "input_tokens": 16,
+  "output_tokens": 1877,
+  "cache_read_tokens": 270554,
+  "cache_creation_tokens": 12386,
+  "tools": {
+   "Read": 4,
+   "Glob": 1,
+   "Write": 1,
+   "Bash": 2,
+   "ToolSearch": 1,
+   "mcp__svetra__validate": 1,
+   "mcp__svetra__compile": 1
+  },
+  "stderr": "Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.\n",
+  "answer": "The notes backend is in `supabase/migrations/20261116000000_notes.sql`. I haven't run it or the generated access tests, because no local Supabase was running.\n\n- **Table:** `note` has `id` (uuid primary key, generated), `owner` (uuid, required, references `auth.users`) and `body` (text, required). There is an index on `owner`.\n- **Who sees and changes what:** row-level security is on. Signed-in people can read, create, edit and delete only rows where `owner` is their own id. Creating or editing a note can't set `owner` to someone else. Anonymous visitors get nothing.\n\nI put the design in `svet"
+ },
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20261116000000_notes.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see alice's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can change her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create a note as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 12,
+  "total": 12,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  }
+ }
+}

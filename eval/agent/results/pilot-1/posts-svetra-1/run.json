@@ -1,0 +1,139 @@
+{
+ "prompt": "posts",
+ "condition": "svetra",
+ "seed": 1,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "timed_out": false,
+  "wall_s": 156.0,
+  "is_error": false,
+  "num_turns": 18,
+  "cost_usd": 0.1257684,
+  "input_tokens": 24,
+  "output_tokens": 2874,
+  "cache_read_tokens": 426358,
+  "cache_creation_tokens": 13549,
+  "tools": {
+   "Read": 2,
+   "Bash": 4,
+   "Skill": 1,
+   "Write": 1,
+   "mcp__svetra__validate": 2,
+   "Grep": 1,
+   "Edit": 2,
+   "mcp__svetra__plan": 1,
+   "mcp__svetra__compile": 1,
+   "mcp__svetra__explain": 1
+  },
+  "stderr": "Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.\n",
+  "answer": "The blog backend is written and the design checks out, but I haven't run the access tests. The Supabase CLI isn't installed here, so nothing has been tried against a live database.\n\nI replaced the placeholder `Note` design in `svetra.yaml` with a `Post` design and compiled it. The final schema is in `supabase/migrations/20261116000000_blog.sql`. It's a copy of the generated `supabase/schemas/svetra.sql`.\n\nThe `post` table has the columns you specified, with `author` referencing `auth.users`. Row-level security is on, and the rules are:\n\n- **Public posts:** anyone, signed in or not, can read a "
+ },
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20261116000000_blog.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "a visitor can read a public post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot read a private post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can read a public post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot read bob's private post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can read her own private post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "bob cannot read alice's private post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can change her post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change bob's public post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's public post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice can create her own post",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create a post as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create a post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot change a public post",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 15,
+  "total": 15,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  }
+ }
+}
