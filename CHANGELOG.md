@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (2026-11-16)
+
+Find the leaks in an app you already have: `svetra check`.
 
 - **`svetra check`: find the leaks in an app you already have.** Point it at any Supabase or PostgreSQL database (`--db URL`, or `--local` for `supabase start`) and it reports, in plain English, where data is open to people who shouldn't reach it: tables with row-level security off, policies that let anyone read or change every row, views and functions that skip row-level security, and rules that trust `user_metadata`. Each finding has a fix. It needs no `svetra.yaml`, runs one read-only query, never prints the password, and exits 1 on a critical finding, so it works in CI. Without `psql`, `--print-query` gives the query to run in the Supabase SQL editor, and `--snapshot` reads its result.
 ## 0.6.0 (2026-11-16)
