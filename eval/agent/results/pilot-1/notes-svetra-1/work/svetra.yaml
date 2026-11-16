@@ -1,0 +1,22 @@
+# The design of your app. Your agent edits it with you; `svetra validate` checks every change.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+svetra: "0.1"
+system: App
+
+auth:
+  sign_in: [email]
+
+entities:
+  Note:
+    fields:
+      id:    { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      body:  { type: text, required: true }
+    indexes:
+      - [owner]
+
+policies:
+  own_notes:
+    on: Note
+    allow: [select, insert, update, delete]
+    when: "owner == auth.user"

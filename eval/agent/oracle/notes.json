@@ -1,0 +1,83 @@
+{
+ "users": {
+  "alice": "a0000000-0000-4000-8000-000000000001",
+  "bob": "b0000000-0000-4000-8000-000000000002"
+ },
+ "setup": [
+  "insert into public.note (id, owner, body) values ('5e7a0000-0000-4000-8001-000000000001', 'a0000000-0000-4000-8000-000000000001', 'alice a'), ('5e7a0000-0000-4000-8001-000000000002', 'b0000000-0000-4000-8000-000000000002', 'bob b')"
+ ],
+ "checks": [
+  [
+   "alice sees her own note",
+   "alice",
+   "select 1 from public.note where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "alice cannot see bob's note",
+   "alice",
+   "select 1 from public.note where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "bob cannot see alice's note",
+   "bob",
+   "select 1 from public.note where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "a visitor cannot see a note",
+   "anon",
+   "select 1 from public.note where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "alice can change her note",
+   "alice",
+   "update public.note set body = 'edited' where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "alice cannot change bob's note",
+   "alice",
+   "update public.note set body = 'edited' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice can delete her note",
+   "alice",
+   "delete from public.note where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "alice cannot delete bob's note",
+   "alice",
+   "delete from public.note where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice can create her own note",
+   "alice",
+   "insert into public.note (owner, body) values ('a0000000-0000-4000-8000-000000000001', 'new')",
+   "allowed"
+  ],
+  [
+   "alice cannot create a note as bob",
+   "alice",
+   "insert into public.note (owner, body) values ('b0000000-0000-4000-8000-000000000002', 'new')",
+   "denied"
+  ],
+  [
+   "a visitor cannot create a note",
+   "anon",
+   "insert into public.note (owner, body) values ('a0000000-0000-4000-8000-000000000001', 'new')",
+   "denied"
+  ],
+  [
+   "alice cannot take over bob's note",
+   "alice",
+   "update public.note set owner = 'a0000000-0000-4000-8000-000000000001' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ]
+ ]
+}

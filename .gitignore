@@ -5,3 +5,6 @@
 .codex/
 .devin/
 .factory/
+eval/agent/results/*
+!eval/agent/results/pilot-*/
+__pycache__/

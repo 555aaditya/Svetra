@@ -1,0 +1,114 @@
+{
+ "prompt": "notes",
+ "condition": "alone",
+ "seed": 1,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "timed_out": false,
+  "wall_s": 34.3,
+  "is_error": false,
+  "num_turns": 5,
+  "cost_usd": 0.0629612,
+  "input_tokens": 8,
+  "output_tokens": 1221,
+  "cache_read_tokens": 119043,
+  "cache_creation_tokens": 9672,
+  "tools": {
+   "Bash": 2,
+   "Read": 1,
+   "Write": 1
+  },
+  "stderr": "Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.\n",
+  "answer": "I added the schema as one migration, `supabase/migrations/20261116000000_create_note.sql`. I haven't run it against a database or tested it.\n\n- **Table:** `note` has `id` (uuid primary key, generated), `owner` (uuid, not null, references `auth.users`, deleted along with the user) and `body` (text, required). `owner` defaults to the signed-in user's id, so clients don't have to send it. I also added an index on `owner`.\n- **Row-level security:** it is enabled and forced on `note`, with one policy each for select, insert, update and delete. Each policy applies to signed-in users only and checks "
+ },
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20261116000000_create_note.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see alice's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can change her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create a note as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 12,
+  "total": 12,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  }
+ }
+}
