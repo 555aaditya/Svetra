@@ -128,3 +128,34 @@ The expected results come from the evaluator, which reads the policies, never th
 - **`graph`** is unchanged: a column rule grants nothing and draws no edge.
 - **`view`** has no new column: **Change** stays one cell per person and thing. Its detail panel lists, for a person and row, what the change may touch: "a reviewer can change a submitted document's status, to approved or rejected, and nothing else". (This is also where docs/update-check.md's listing of allowed transitions lands.)
 - **`plan`** (docs/change.md) classifies by the access diff it already computes from the evaluator. Adding an `unchanged` field, or a policy that locks one, **narrows** access; removing one **widens** it and needs `--accept wider_access`. Adding the first `unchanged` to an entity adds the guard trigger, which is a schema addition and safe for data; removing the last one drops it.
+
+## 6. Diagnostics
+
+| Code | Severity | Rule |
+|---|---|---|
+| `SVT035` (new) | error | A policy has `unchanged` but doesn't allow `update`: only an update changes fields |
+| `SVT002` (existing) | error | `unchanged` names a field the entity doesn't have, or its primary key |
+| `SVT036` (new) | warning | A person is covered, on some row, by two permissive update policies that disagree about a field: one lists it in `unchanged` and another doesn't. By section 2 the second one frees it, so the lock has no effect for that person. Computed by the evaluator, like `SVT034` |
+
+`SVT036` is the column-rule twin of `SVT034`: a combination of policies that does something neither says alone. The hint is to move the field out of the freeing policy's reach, or to list it in both.
+
+## 7. Alternatives considered
+
+- **Column privileges** (`grant update (title) on doc to authenticated`). They are per database role, not per row or state, so they can't say "only while the document is submitted", and the approvals rule needs exactly that. They are the lighter tool for a field **nobody** may change after creation, such as `author` or `created_at`. That is a different, simpler feature, a field flag `immutable: true` (Open **C6**), and it could share the same tests.
+- **A `check` constraint.** It sees one row, so it can't compare old and new.
+- **A view with `instead of` triggers.** Heavier, and the API would have to be pointed at the view.
+- **Leave it to holes and hand-written triggers.** This is what happens today, and what the agent evaluation measured: four of four agents wrote the trigger by hand, outside the design, where it isn't explained, tested or diffed. A rule Svetra can't see is a rule Svetra can't prove.
+- **Check it in the app.** Not enforceable: the browser talks to the database directly.
+
+## 8. The approvals app, complete
+
+```yaml
+  reviewers_decide:
+    on: Doc
+    allow: [update]
+    when:  "reviewer == auth.user and status == 'submitted'"
+    check: "reviewer == auth.user and status in ['approved', 'rejected']"
+    unchanged: [title, author, reviewer]
+```
+
+With this single added line, the whole prompt is in `svetra.yaml`: the author's rules, the reviewer's, the transitions, and the column rule. No hole, no hand-written SQL, and every one of the 24 oracle checks is expected to pass, including "the reviewer cannot approve and retitle at once".
