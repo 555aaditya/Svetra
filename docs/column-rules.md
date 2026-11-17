@@ -14,7 +14,7 @@ The agent evaluation measured how much this matters. After `check` was built (Sv
 
 Row-level security cannot do this by itself. A policy sees one row at a time, the old one in `USING` and the new one in `WITH CHECK`, never both. Comparing old and new needs a row trigger, which is what the agents wrote and what this feature would generate and test.
 
-## 1. `unchanged` on a policy
+## 1. `only` on a policy
 
 ```yaml
 policies:
@@ -23,29 +23,30 @@ policies:
     allow: [update]
     when:  "reviewer == auth.user and status == 'submitted'"
     check: "reviewer == auth.user and status in ['approved', 'rejected']"
-    unchanged: [title, author, reviewer]
+    only: [status]
 ```
 
 | Key | Meaning |
 |---|---|
-| `unchanged` (new, optional) | Fields an update **allowed through this policy** may not change. Names fields of the policy's entity. Only for a policy that allows `update` (`SVT035` otherwise) |
+| `only` (new, optional) | The fields an update **allowed through this policy** may change. Every other field must be left as it is. Names fields of the policy's entity, at least one. Only for a policy that allows `update` (`SVT035` otherwise). Without `only`, the policy frees every field, as today |
 
+- **An allow-list, on purpose: it fails closed.** Add a column to `Doc` later and the reviewer still can't touch it, because it isn't in their `only`. A list of fields that *can't* change would silently leave a new column open, which is a leak by omission; a security tool should be closed by default, as everything else in Svetra is. (Open **C1** discusses the alternative.)
 - **"Changed" means `is distinct from`.** An update that sets a field to the value it already has isn't a change, so a client that sends the whole row back still works. A null that stays null isn't a change either.
-- **It never grants anything.** `unchanged` only refuses updates that would otherwise be allowed. A policy with `unchanged` and a `when` that never holds locks nothing.
+- **It never grants anything.** `only` only refuses updates that would otherwise be allowed. A policy with `only` and a `when` that never holds restricts nothing.
 - **The primary key** can't be listed: it is never changed through the API, and the checks identify rows by it (`SVT002`).
 - **Insert and delete are unaffected.** A new row has no old values; a deleted row has no new ones.
 
 ## 2. When several policies apply to the same update
 
-A person can be covered by more than one update policy on the same row: an author who is also a reviewer, or an admin policy beside a member policy. Permissive policies combine with `or`, so the rule for fields must follow the same idea:
+A person can be covered by more than one update policy on the same row: an author who is also a reviewer, or an admin policy beside a member policy. Permissive policies combine with `or`, so the rule for fields follows the same idea:
 
 > **A field is locked for an update by person P on row R when no permissive update policy that applies to P on R leaves it free.**
 >
-> A permissive policy **applies** to P on R when its `when` holds on R (the old row) for P's database role. It **leaves a field free** when the field isn't in its `unchanged`.
+> A permissive policy **applies** to P on R when its `when` holds on R (the old row) for P's database role. It **leaves a field free** when it has no `only`, or the field is in its `only`.
 
-So `unchanged` on one policy cannot take away something another applicable policy grants: an author's own policy that lets them retitle keeps working even when the same person also holds a reviewer's policy that locks the title. This mirrors how a grant works everywhere else in Svetra.
+So `only` on one policy cannot take away something another applicable policy grants: an author's own policy, with no `only`, still lets them retitle, even when the same person also holds a reviewer's policy that allows only the status. This mirrors how a grant works everywhere else in Svetra.
 
-**Restrictive policies** (docs/update-check.md) may also have `unchanged`, and for them it is the other way round: **a field is locked if any applicable restrictive policy lists it**, whatever the permissive ones say. A restrictive policy exists to narrow, so "while an order is paid, nobody changes its total" is one restrictive rule:
+**Restrictive policies** (docs/update-check.md) may also have `only`, and for them it is the other way round: **a field is locked if any applicable restrictive policy omits it from its `only`**, whatever the permissive ones say. A restrictive policy exists to narrow, so "while an order is paid, only its notes may change" is one restrictive rule:
 
 ```yaml
   paid_orders_are_final:
@@ -53,7 +54,7 @@ So `unchanged` on one policy cannot take away something another applicable polic
     allow: [update]
     restrictive: true
     when: "status == 'paid'"
-    unchanged: [total, customer]
+    only: [notes]
 ```
 
 Putting it together, an update of row R by person P is refused when any field it changes is locked as above; otherwise the ordinary rules (`when`, `check`, restrictive policies, select policies) decide, exactly as before.
@@ -62,9 +63,9 @@ Putting it together, an update of row R by person P is refused when any field it
 
 | Update by bob | Result | Why |
 |---|---|---|
-| status `submitted` → `approved` | allowed | `reviewers_decide` applies, the status isn't in its `unchanged`, and the `check` holds |
+| status `submitted` → `approved` | allowed | `reviewers_decide` applies, `status` is in its `only`, and the `check` holds |
 | title changed, status unchanged | refused | the `check` fails (status must become approved or rejected); the column rule isn't even reached |
-| status → `approved` **and** title changed | **refused** | the `check` holds, but `title` is in `reviewers_decide`'s `unchanged`, and no other policy applies to bob on D that leaves it free. This is the case no row policy can express |
+| status → `approved` **and** title changed | **refused** | the `check` holds, but `title` isn't in `reviewers_decide`'s `only`, and no other policy applies to bob on D that leaves it free. This is the case no row policy can express |
 | status → `approved`, title "changed" to the same text | allowed | not a change |
 
 ## 3. How it compiles
