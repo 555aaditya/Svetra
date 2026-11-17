@@ -82,7 +82,7 @@ svetra.yaml:7:7: error SVT005: `total` looks like money but uses float, which lo
   hint: Use { type: money, precision: 18, scale: 6 }.
 ```
 
-There are 21 checks. They cover tables with no access policy, weak sign-in settings, money stored as `float`, references to things that don't exist, policy and constraint expressions that don't type-check, enum typos, and more. The exit code is `0` for valid, `1` for errors and `2` for a usage error.
+There are 24 checks. They cover tables with no access policy, weak sign-in settings, money stored as `float`, references to things that don't exist, policy and constraint expressions that don't type-check, enum typos, and more. The exit code is `0` for valid, `1` for errors and `2` for a usage error.
 
 ## What works today: `svetra compile`
 
@@ -131,7 +131,7 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 
 | Step | What | Status |
 |---|---|---|
-| Format and validator | `svetra.yaml` v0.1, 21 checks, JSON output, JSON Schema | **Done** |
+| Format and validator | `svetra.yaml` v0.1, 24 checks, JSON output, JSON Schema | **Done** |
 | Compiler | PostgreSQL tables, row-level security, TypeScript types and Zod validators for Supabase and React | **Done** |
 | Understand | `svetra explain` (your app in plain English), `svetra graph` (a diagram), `svetra context` (compact context for agents) | **Done** |
 | Roles and teams | `roles:` (global like `admin`, or scoped like `staff` at one location) and `has_role()` in rules, compiled to a private grants table and a locked-down check function | **Done** |
