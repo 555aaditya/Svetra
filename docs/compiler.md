@@ -131,6 +131,10 @@ Constraints and policy conditions translate like this:
 | `has_role('staff', location)` | `"svetra"."has_role"('staff', "location")`, evaluated per row |
 | `ref.field` (policies only) | `(select t."field" from "public"."<target>" t where t."<pk>" = "<table>"."ref")`, a scalar subquery on the referenced row's primary key |
 
+### Guards
+
+For an entity with any `only`, the schema has a `-- Guards` section after `-- Policies`: a `before update` row trigger, `svetra_guard`, and its function, `svetra.guard_<table>`. For each field that some update policy's `only` leaves out, it refuses (SQLSTATE `42501`) an update **through the API** (`current_user` is `anon` or `authenticated`) that changes the field when the person is covered by no permissive update policy that frees it, or by a restrictive one that doesn't. A policy covers the person when its role matches and its `when` holds on `old`; a null counts as not covering. The service role, the table owner and hole bodies aren't `anon` or `authenticated`, so they are exempt, as they are from row-level security. The full rules are in [column-rules.md](column-rules.md).
+
 ### Policies
 
 An update policy compiles to `using (<when>) with check (<check>)`, where `<check>` is the policy's `check`, or `<when>` when it has none. A `restrictive: true` policy compiles to `create policy ... as restrictive`.
