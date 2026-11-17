@@ -412,6 +412,19 @@ impl<'a> Checker<'a> {
 
     fn policies(&mut self, doc: &Document) {
         for p in &doc.policies {
+            if p.check.is_some() && !p.allow.contains(&Action::Update) {
+                let msg = format!(
+                    "Policy `{}` has a `check`, but it doesn't allow update: only an update has a row after it.",
+                    p.name
+                );
+                self.d(
+                    Code::Svt033,
+                    format!("policies.{}.check", p.name),
+                    p.pos,
+                    msg,
+                    "Remove `check`, or add update to `allow`. For insert, `when` is already the condition on the new row.",
+                );
+            }
             let pp = format!("policies.{}.on", p.name);
             if let Some(e) = self.reference(&p.on, &pp)
                 && e.private
@@ -547,15 +560,18 @@ impl<'a> Checker<'a> {
                 continue;
             };
             let scope = typeck::Scope::new(e, &entities, true, &doc.roles);
-            if let Err(problem) = typeck::check(&p.when, &scope) {
-                let (code, msg) = problem.split();
-                self.d(
-                    code,
-                    format!("policies.{}.when", p.name),
-                    p.pos,
-                    msg,
-                    "Fix the expression; see Expressions in docs/format.md.",
-                );
+            for (key, text) in [("when", Some(&p.when)), ("check", p.check.as_ref())] {
+                let Some(text) = text else { continue };
+                if let Err(problem) = typeck::check(text, &scope) {
+                    let (code, msg) = problem.split();
+                    self.d(
+                        code,
+                        format!("policies.{}.{key}", p.name),
+                        p.pos,
+                        msg,
+                        "Fix the expression; see Expressions in docs/format.md.",
+                    );
+                }
             }
         }
         for h in &doc.holes {
@@ -602,12 +618,17 @@ impl<'a> Checker<'a> {
     /// expression or `true`; anything narrower means signing in would take access away.
     fn anon_only(&mut self, doc: &Document) {
         let cond = |s: &str| expr::parse(s).ok();
-        for p in doc.policies.iter().filter(|p| p.role == Role::Anon) {
+        for p in doc
+            .policies
+            .iter()
+            .filter(|p| p.role == Role::Anon && !p.restrictive)
+        {
             let mine = cond(&p.when);
             for a in &p.allow {
                 let covered = doc.policies.iter().any(|q| {
                     let theirs = cond(&q.when);
                     q.on.name == p.on.name
+                        && !q.restrictive
                         && q.role != Role::Anon
                         && q.allow.contains(a)
                         && (theirs == Some(expr::Expr::Bool(true)) || theirs == mine)
@@ -638,13 +659,27 @@ impl<'a> Checker<'a> {
     /// SVT001: exposed entities need a policy. SVT004: every entity needs some write path.
     fn access(&mut self, doc: &Document) {
         for e in &doc.entities {
-            let policies: Vec<&Policy> = doc
+            // A restrictive policy never lets anyone in, so only permissive ones count.
+            let all: Vec<&Policy> = doc
                 .policies
                 .iter()
                 .filter(|p| p.on.name == e.name)
                 .collect();
+            let policies: Vec<&Policy> = all.iter().copied().filter(|p| !p.restrictive).collect();
             let ep = format!("entities.{}", e.name);
-            if !e.private && policies.is_empty() {
+            if !e.private && policies.is_empty() && !all.is_empty() {
+                let msg = format!(
+                    "{} has only restrictive policies, which narrow access but never grant it, so nobody can reach it.",
+                    e.name
+                );
+                self.d(
+                    Code::Svt001,
+                    ep.clone(),
+                    e.pos,
+                    msg,
+                    "Add a permissive policy for the people who should get in; the restrictive ones then narrow it.",
+                );
+            } else if !e.private && policies.is_empty() {
                 let msg = format!("{} is exposed through the API but has no policy.", e.name);
                 self.d(
                     Code::Svt001,

@@ -665,7 +665,12 @@ fn policies(
     names: &HashMap<&str, &str>,
     changes: &mut Vec<Change>,
 ) {
-    let key = |p: &Policy| format!("{:?} {:?} {}", p.allow, p.role, p.when);
+    let key = |p: &Policy| {
+        format!(
+            "{:?} {:?} {} {:?} {}",
+            p.allow, p.role, p.when, p.check, p.restrictive
+        )
+    };
     for p in &new.policies {
         let path = format!("policies.{}", p.name);
         match old.policies.iter().find(|x| x.name == p.name) {

@@ -1,0 +1,6 @@
+flowchart LR
+  person(("👤 Signed-in person"))
+  e_Doc["Doc<br/>author: user!<br/>reviewer: user!<br/>title: text!<br/>status: enum!"]
+  e_Doc -- author --> person
+  e_Doc -- reviewer --> person
+  person -. "sees, creates, changes, deletes" .-> e_Doc

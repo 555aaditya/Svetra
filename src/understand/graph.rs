@@ -86,7 +86,7 @@ pub fn graph(doc: &Document) -> String {
             for p in doc
                 .policies
                 .iter()
-                .filter(|p| &source(p) == node && p.on.name == e.name)
+                .filter(|p| !p.restrictive && &source(p) == node && p.on.name == e.name)
             {
                 for a in &p.allow {
                     let v = match a {

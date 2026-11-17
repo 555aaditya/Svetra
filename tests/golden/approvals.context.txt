@@ -1,0 +1,9 @@
+Approvals (svetra 0.1)
+auth email; signup open; confirm email; password 10
+Doc: id uuid pk; author user!; reviewer user!; title text!; status enum(draft|submitted|approved|rejected)!=draft | check different_people: author != reviewer | index (author); (reviewer)
+policy authors_see: Doc select authenticated when author == auth.user
+policy reviewers_see: Doc select authenticated when reviewer == auth.user and status != 'draft'
+policy authors_start: Doc insert authenticated when author == auth.user and status == 'draft'
+policy authors_edit: Doc update authenticated when author == auth.user and status == 'draft' check author == auth.user and status in ['draft', 'submitted']
+policy reviewers_decide: Doc update authenticated when reviewer == auth.user and status == 'submitted' check reviewer == auth.user and status in ['approved', 'rejected']
+policy authors_delete_drafts: Doc delete authenticated when author == auth.user and status == 'draft'

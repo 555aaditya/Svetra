@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 root="$PWD"
 bin="$(cd "$root" && realpath "${SVETRA_BIN:-target/debug/svetra}")"
-fixtures="${FIXTURES:-finledger posts bookings clinic teams}"
+fixtures="${FIXTURES:-finledger posts bookings clinic teams approvals}"
 supabase="${SUPABASE_CLI:-npx -y supabase@3.1.0}"
 work="$(mktemp -d)"
 project="$work/project"

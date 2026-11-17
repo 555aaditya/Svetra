@@ -7,6 +7,9 @@ pub fn validate(src: &str) -> Vec<Diagnostic> {
     let (doc, mut diags) = crate::load::load(src);
     if !diags.iter().any(|d| d.severity() == Severity::Error) {
         diags.extend(crate::check::check(&doc));
+        if !has_errors(&diags) {
+            diags.extend(crate::compile::access_tests::hazards(&doc));
+        }
     }
     diags.sort_by_key(|d| (d.line, d.col));
     diags

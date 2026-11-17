@@ -2,7 +2,7 @@
 
 This document specifies two additions to policies, so that a rule can say what an update is allowed to turn a row **into**, and so that one rule can narrow others instead of only adding to them. When the code and this document disagree, that's a bug in one of them.
 
-**Status: draft for review.** The decisions marked **Open** need the maintainer's answer before building. Nothing here is built.
+**Status: built in 0.8 (unreleased).** The open decisions took the recommendations: follow PostgreSQL and warn (`SVT034`), the names `check` and `restrictive`, restrictive policies worded as a limit on the sentences they narrow, no `check` on insert, column rules in their own spec, and no cap on the generated transition checks. What shipped differs from the draft in two places, both found while building: the test world's **second `user` field now points at the other person** (so an author and a reviewer are two different people), and the warning found a real flaw in the first version of the approvals example (a reviewer could make themselves the author), fixed with a constraint.
 
 **Done when:** the document-approval app from the agent evaluation (`eval/agent/prompts/approvals.md`) can be written in `svetra.yaml` with no holes for its status changes, and the generated access tests prove it.
 

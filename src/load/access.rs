@@ -33,12 +33,21 @@ impl Cx {
         let allow = self.actions(allow?, &format!("{path}.allow"))?;
         let when = self.string(when?, &format!("{path}.when"))?;
         let role = self.role_as(k.get("as").copied(), &path)?;
+        let check = match k.get("check") {
+            Some(v) => Some(self.string(v, &format!("{path}.check"))?),
+            None => None,
+        };
+        let restrictive = k
+            .get("restrictive")
+            .is_some_and(|v| self.boolean(v, &format!("{path}.restrictive")));
         Some(Policy {
             name: pname,
             pos: pos(name),
             on,
             allow,
             when,
+            check,
+            restrictive,
             role,
         })
     }

@@ -1,0 +1,31 @@
+Approvals
+
+What your app stores
+  Docs
+    - the signed-in person who owns it (required)
+    - reviewer: a signed-in person (required)
+    - title: text (required)
+    - status: one of draft, submitted, approved or rejected (required) (starts as draft)
+
+Signing in
+  - People sign in with email (a password or an emailed link).
+  - Anyone can create an account.
+  - People confirm their email address before they can sign in.
+  - Passwords need at least 10 characters.
+
+Rules that always hold
+  - A doc's author and reviewer are different.
+
+Who can see and change what
+  Docs
+    - Signed-in people can see a doc when its author is them.
+    - Signed-in people can see a doc when its reviewer is them and its status is not draft.
+    - Signed-in people can create a doc when its author is them and its status is draft.
+    - Signed-in people can change a doc when its author is them and its status is draft. After the change, its author is them and its status is draft or submitted.
+    - Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected.
+    - Signed-in people can delete a doc when its author is them and its status is draft.
+    - Nobody can see docs any other way.
+
+Before going live
+  - Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.
+  - Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in.
