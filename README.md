@@ -65,9 +65,9 @@ holes:
 
 Every table is closed by default. Here, people can read only their own accounts, and balances change only through `transfer`, which is a *hole*: the one place where custom code goes.
 
-## What works today: `svetra validate`
+## Install
 
-**Install** on macOS or Linux; it downloads a release and checks its SHA-256:
+On macOS or Linux, this downloads a release and checks its SHA-256:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/555aaditya/Svetra/main/install.sh | sh
@@ -90,6 +90,8 @@ export NODE_EXTRA_CA_CERTS=/path/to/proxy-root.pem
 Your IT team can give you the certificate. On macOS it's usually in the System keychain: `security find-certificate -c "<proxy name>" -p /Library/Keychains/System.keychain > ~/proxy-root.pem`.
 
 Or with Rust 1.88+: `cargo install svetra`. Windows builds are also on the [releases page](https://github.com/555aaditya/Svetra/releases).
+
+## What works today: `svetra validate`
 
 ```sh
 svetra validate svetra.yaml          # readable output
