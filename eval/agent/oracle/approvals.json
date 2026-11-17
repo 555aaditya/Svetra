@@ -1,0 +1,156 @@
+{
+ "users": {
+  "alice": "a0000000-0000-4000-8000-000000000001",
+  "bob": "b0000000-0000-4000-8000-000000000002",
+  "carol": "c0000000-0000-4000-8000-000000000003"
+ },
+ "setup": [
+  "insert into public.doc (id, author, reviewer, title, status) values ('5e7a0000-0000-4000-8001-000000000001', 'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'draft one', 'draft'), ('5e7a0000-0000-4000-8001-000000000002', 'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'submitted two', 'submitted'), ('5e7a0000-0000-4000-8001-000000000003', 'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'approved three', 'approved')"
+ ],
+ "checks": [
+  [
+   "alice sees her draft",
+   "alice",
+   "select 1 from public.doc where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "the reviewer cannot see a draft",
+   "bob",
+   "select 1 from public.doc where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "the reviewer sees a submitted document",
+   "bob",
+   "select 1 from public.doc where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "allowed"
+  ],
+  [
+   "someone else cannot see a submitted document",
+   "carol",
+   "select 1 from public.doc where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "a visitor cannot see a document",
+   "anon",
+   "select 1 from public.doc where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice sees her approved document",
+   "alice",
+   "select 1 from public.doc where id = '5e7a0000-0000-4000-8001-000000000003'",
+   "allowed"
+  ],
+  [
+   "alice can change her draft's title",
+   "alice",
+   "update public.doc set title = 'edited' where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "alice cannot change a submitted title",
+   "alice",
+   "update public.doc set title = 'edited' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice can submit her draft",
+   "alice",
+   "update public.doc set status = 'submitted' where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "alice cannot approve her own submitted document",
+   "alice",
+   "update public.doc set status = 'approved' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice cannot approve her own draft",
+   "alice",
+   "update public.doc set status = 'approved' where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "the reviewer can approve a submitted document",
+   "bob",
+   "update public.doc set status = 'approved' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "allowed"
+  ],
+  [
+   "the reviewer can reject a submitted document",
+   "bob",
+   "update public.doc set status = 'rejected' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "allowed"
+  ],
+  [
+   "the reviewer cannot act on a draft",
+   "bob",
+   "update public.doc set status = 'approved' where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "nobody can change an approved document",
+   "bob",
+   "update public.doc set status = 'rejected' where id = '5e7a0000-0000-4000-8001-000000000003'",
+   "denied"
+  ],
+  [
+   "alice cannot change an approved document",
+   "alice",
+   "update public.doc set title = 'edited' where id = '5e7a0000-0000-4000-8001-000000000003'",
+   "denied"
+  ],
+  [
+   "the reviewer cannot change the title",
+   "bob",
+   "update public.doc set title = 'hacked' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "the reviewer cannot approve and retitle at once",
+   "bob",
+   "update public.doc set status = 'approved', title = 'hacked' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "the reviewer cannot reassign the reviewer",
+   "bob",
+   "update public.doc set reviewer = 'c0000000-0000-4000-8000-000000000003' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice can delete her draft",
+   "alice",
+   "delete from public.doc where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "alice cannot delete a submitted document",
+   "alice",
+   "delete from public.doc where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice can create a document",
+   "alice",
+   "insert into public.doc (author, reviewer, title) values ('a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'new')",
+   "allowed"
+  ],
+  [
+   "alice cannot create an already approved document",
+   "alice",
+   "insert into public.doc (author, reviewer, title, status) values ('a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'new', 'approved')",
+   "denied"
+  ],
+  [
+   "carol cannot create a document under alice's name",
+   "carol",
+   "insert into public.doc (author, reviewer, title) values ('a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'new')",
+   "denied"
+  ]
+ ]
+}

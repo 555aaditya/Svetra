@@ -1,0 +1,5 @@
+Build the backend for a small document approval app on Supabase (PostgreSQL). A person writes a document and names one other person as its reviewer. While it is a draft, only its author can see it, change its title, delete it, or submit it for review. Once it is submitted, the reviewer can also see it, and can approve or reject it, but cannot change anything else about it. After it is submitted the author can no longer change or delete it, and can never approve their own document. Nobody can change a document once it is approved or rejected. Nobody else can see a document at all.
+
+Data contract, which the tests rely on: a table `doc` with `id` (uuid primary key, generated), `author` (uuid, required, references auth.users), `reviewer` (uuid, required, references auth.users), `title` (text, required) and `status` (text, required, one of 'draft', 'submitted', 'approved', 'rejected', and 'draft' by default). A new document is always created as a draft.
+
+Put the final database schema, including everything that decides who can see and change data, in `supabase/migrations/`. Don't build a user interface.
