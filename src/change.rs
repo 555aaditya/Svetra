@@ -666,9 +666,13 @@ fn policies(
     changes: &mut Vec<Change>,
 ) {
     let key = |p: &Policy| {
+        let only: Option<Vec<&str>> = p
+            .only
+            .as_ref()
+            .map(|o| o.iter().map(|f| f.name.as_str()).collect());
         format!(
-            "{:?} {:?} {} {:?} {}",
-            p.allow, p.role, p.when, p.check, p.restrictive
+            "{:?} {:?} {} {:?} {:?} {}",
+            p.allow, p.role, p.when, p.check, only, p.restrictive
         )
     };
     for p in &new.policies {
