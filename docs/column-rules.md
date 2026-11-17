@@ -120,3 +120,11 @@ The expected results come from the evaluator, which reads the policies, never th
 - **Roughly** 3 to 5 extra checks per person per row per field of an entity that uses `unchanged`. The approvals example is a few dozen.
 
 **Deliberate breakages for the real-database checks** (`tests/pg/breakages/`, the same mechanism as for policies): the trigger dropped; the trigger disabled (`alter table ... disable trigger`); a policy's `unchanged` emptied by hand in the function; and the restrictive lock ignored. Each must fail exactly the checks above and nothing else.
+
+## 5. `explain`, `view`, `context`, `graph` and `plan`
+
+- **`explain`** adds a sentence to a policy that has `unchanged`: *"…but they can't change its title, author or reviewer."* For a restrictive one: *"…while it is paid, nobody can change its total or customer."* The words are the fields' own labels. The generated trigger is never mentioned, because the reader needs the rule, not the mechanism.
+- **`context`** appends `unchanged title,author,reviewer` to the policy's line.
+- **`graph`** is unchanged: a column rule grants nothing and draws no edge.
+- **`view`** has no new column: **Change** stays one cell per person and thing. Its detail panel lists, for a person and row, what the change may touch: "a reviewer can change a submitted document's status, to approved or rejected, and nothing else". (This is also where docs/update-check.md's listing of allowed transitions lands.)
+- **`plan`** (docs/change.md) classifies by the access diff it already computes from the evaluator. Adding an `unchanged` field, or a policy that locks one, **narrows** access; removing one **widens** it and needs `--accept wider_access`. Adding the first `unchanged` to an entity adds the guard trigger, which is a schema addition and safe for data; removing the last one drops it.
