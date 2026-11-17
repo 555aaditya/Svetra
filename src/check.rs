@@ -425,6 +425,40 @@ impl<'a> Checker<'a> {
                     "Remove `check`, or add update to `allow`. For insert, `when` is already the condition on the new row.",
                 );
             }
+            if let Some(only) = &p.only {
+                if !p.allow.contains(&Action::Update) {
+                    let msg = format!(
+                        "Policy `{}` has an `only`, but it doesn't allow update: only an update changes fields.",
+                        p.name
+                    );
+                    self.d(
+                        Code::Svt035,
+                        format!("policies.{}.only", p.name),
+                        p.pos,
+                        msg,
+                        "Remove `only`, or add update to `allow`.",
+                    );
+                }
+                if let Some(e) = self.entities.get(p.on.name.as_str()).copied() {
+                    for f in only {
+                        let path = format!("policies.{}.only", p.name);
+                        match e.fields.iter().find(|x| x.name == f.name) {
+                            None => {
+                                let msg = format!("{} has no field `{}`.", e.name, f.name);
+                                self.d(Code::Svt002, path, f.pos, msg, "Use a field of that entity.");
+                            }
+                            Some(x) if x.primary => {
+                                let msg = format!(
+                                    "`{}` is {}'s primary key, which an update never changes.",
+                                    f.name, e.name
+                                );
+                                self.d(Code::Svt002, path, f.pos, msg, "Remove it from `only`.");
+                            }
+                            Some(_) => {}
+                        }
+                    }
+                }
+            }
             let pp = format!("policies.{}.on", p.name);
             if let Some(e) = self.reference(&p.on, &pp)
                 && e.private
