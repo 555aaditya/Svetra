@@ -1,0 +1,191 @@
+{
+ "prompt": "teams",
+ "condition": "svetra",
+ "seed": 1,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "invalid": null,
+  "wall_s": 46.6,
+  "is_error": false,
+  "num_turns": 28,
+  "cost_usd": 0.19905140000000004,
+  "input_tokens": 38,
+  "output_tokens": 4720,
+  "cache_read_tokens": 741101,
+  "cache_creation_tokens": 19376,
+  "tools": {
+   "Bash": 14,
+   "Read": 1,
+   "Skill": 1,
+   "mcp__svetra__context": 1,
+   "ToolSearch": 1,
+   "Write": 1,
+   "mcp__svetra__validate": 2,
+   "mcp__svetra__compile": 4,
+   "Edit": 1
+  },
+  "stderr": "",
+  "answer": "The backend is designed and compiled, and the schema is in `supabase/migrations/20261117000000_teams_tasks.sql`. I haven't run it against a database, because the Supabase CLI isn't installed and the sandbox blocked my attempt to check for a local Postgres. The generated access tests in `supabase/tests/svetra.test.sql` haven't been run either.\n\n## What it does\n- **Tables:** `team` and `task` match your data contract, with row-level security on both.\n- **`start_team(team_name)`:** creates the team"
+ },
+ "applied_before": null,
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20261117000000_teams_tasks.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her team",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see another team",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "carol, added by alice, sees the team",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see a team he isn't in",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice sees her team's task",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "carol sees her team's task",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see another team's task",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see a task",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see another team's task",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "carol can add a task to her team",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "carol cannot add a task under alice's name",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "bob cannot add a task to a team he isn't in",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can change her task",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "carol cannot change alice's task",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her task",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "bob cannot delete another team's task",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a member can add someone to the team",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "carol, a member, can add someone too",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "bob cannot add himself to a team",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot add someone to another team",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot add members",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can start a team",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot start a team",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 23,
+  "total": 23,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 2
+  },
+  "artifacts": {
+   "svetra_yaml": true,
+   "generated_access_tests": 133
+  }
+ }
+}

@@ -1,0 +1,34 @@
+# The design of your app. Your agent edits it with you; `svetra validate` checks every change.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+svetra: "0.1"
+system: Journal
+
+auth:
+  sign_in: [email]
+
+entities:
+  Entry:
+    fields:
+      id:         { type: uuid, primary: true }
+      owner:      { type: user, required: true }
+      body:       { type: text, required: true }
+      deleted_at: { type: timestamp }
+    indexes:
+      - [owner]
+
+policies:
+  own_entries_visible:
+    on: Entry
+    allow: [select]
+    when: "owner == auth.user and deleted_at == null"
+  own_entries_write:
+    on: Entry
+    allow: [insert, update]
+    when: "owner == auth.user and deleted_at == null"
+
+holes:
+  soft_delete:
+    kind: function
+    input: { entry_id: Entry.id }
+    writes: [Entry]
+    when: "entry_id.owner == auth.user"

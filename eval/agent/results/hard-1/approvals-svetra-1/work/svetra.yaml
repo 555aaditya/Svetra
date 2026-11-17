@@ -1,0 +1,63 @@
+svetra: "0.1"
+system: Approvals
+
+auth:
+  sign_in: [email]
+
+entities:
+  Doc:
+    fields:
+      id:       { type: uuid, primary: true }
+      author:   { type: user, required: true }
+      reviewer: { type: user, required: true }
+      title:    { type: text, required: true }
+      status:   { type: enum, values: [draft, submitted, approved, rejected], required: true, default: draft }
+    constraints:
+      reviewer_is_someone_else: "author != reviewer"
+    indexes:
+      - [author]
+      - [reviewer]
+
+policies:
+  author_sees_own:
+    on: Doc
+    allow: [select]
+    when: "author == auth.user"
+  reviewer_sees_submitted:
+    on: Doc
+    allow: [select]
+    when: "reviewer == auth.user and status != 'draft'"
+  author_starts_draft:
+    on: Doc
+    allow: [insert]
+    when: "author == auth.user and status == 'draft'"
+  author_deletes_draft:
+    on: Doc
+    allow: [delete]
+    when: "author == auth.user and status == 'draft'"
+
+holes:
+  rename_doc:
+    kind: function
+    input: { doc: Doc.id, title: Doc.title }
+    reads: [Doc]
+    writes: [Doc]
+    when: "doc.author == auth.user and doc.status == 'draft'"
+  submit_doc:
+    kind: function
+    input: { doc: Doc.id }
+    reads: [Doc]
+    writes: [Doc]
+    when: "doc.author == auth.user and doc.status == 'draft'"
+  approve_doc:
+    kind: function
+    input: { doc: Doc.id }
+    reads: [Doc]
+    writes: [Doc]
+    when: "doc.reviewer == auth.user and doc.status == 'submitted'"
+  reject_doc:
+    kind: function
+    input: { doc: Doc.id }
+    reads: [Doc]
+    writes: [Doc]
+    when: "doc.reviewer == auth.user and doc.status == 'submitted'"

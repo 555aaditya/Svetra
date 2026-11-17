@@ -1,0 +1,36 @@
+svetra: "0.1"
+system: Journal
+
+auth:
+  sign_in: [email]
+
+entities:
+  Entry:
+    fields:
+      id:         { type: uuid, primary: true }
+      owner:      { type: user, required: true }
+      body:       { type: text, required: true }
+      deleted_at: { type: timestamp }
+    indexes:
+      - [owner]
+
+policies:
+  own_live_entries_read:
+    on: Entry
+    allow: [select]
+    when: "owner == auth.user and deleted_at == null"
+  own_entries_create:
+    on: Entry
+    allow: [insert]
+    when: "owner == auth.user and deleted_at == null"
+  own_live_entries_edit:
+    on: Entry
+    allow: [update]
+    when: "owner == auth.user and deleted_at == null"
+
+holes:
+  soft_delete:
+    kind: function
+    input: { entry_id: Entry.id }
+    writes: [Entry]
+    when: "entry_id.owner == auth.user"

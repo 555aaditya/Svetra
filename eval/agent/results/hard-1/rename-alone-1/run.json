@@ -1,0 +1,156 @@
+{
+ "prompt": "rename",
+ "condition": "alone",
+ "seed": 1,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "invalid": null,
+  "wall_s": 10.7,
+  "is_error": false,
+  "num_turns": 11,
+  "cost_usd": 0.11056350000000001,
+  "input_tokens": 6,
+  "output_tokens": 2080,
+  "cache_read_tokens": 89509,
+  "cache_creation_tokens": 7895,
+  "tools": {
+   "Bash": 2,
+   "Glob": 1,
+   "Read": 3,
+   "Write": 2,
+   "Grep": 1
+  },
+  "stderr": "",
+  "answer": "I added the schema in `supabase/migrations/20260101000000_notes.sql`. I haven't run it against a database, so it is untested.\n\n- **Table:** `public.note` has `id` (uuid primary key, generated with `gen_random_uuid()`), `owner` (uuid, not null, references `auth.users`) and `body` (text, not null).\n- **Owner default:** `owner` defaults to `auth.uid()`, so a client doesn't have to send it. Deleting a user also deletes their notes.\n- **Row-level security:** it is enabled and forced on the table.\n  -",
+  "turn2": {
+   "invalid": null,
+   "wall_s": 10.7,
+   "is_error": false,
+   "num_turns": 7,
+   "cost_usd": 0.0587777,
+   "input_tokens": 10,
+   "output_tokens": 970,
+   "cache_read_tokens": 154588,
+   "cache_creation_tokens": 8366,
+   "tools": {
+    "Bash": 1,
+    "Read": 2,
+    "Glob": 1,
+    "Grep": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I added `supabase/migrations/20260102000000_note_body_to_content.sql`, which renames `body` to `content` on `public.note`. I haven't run it against a database.\n\n```sql\nalter table public.note rename column body to content;\n```\n\n- **Data:** a rename changes only the column name, so existing notes keep their text and the `not null` constraint stays.\n- **Everything else:** the row-level security setup, the policies and the grants all stay as they are. The policies only check `owner`, so none of the"
+  }
+ },
+ "applied_before": [
+  "supabase/migrations/20260101000000_notes.sql"
+ ],
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20260101000000_notes.sql",
+   "supabase/migrations/20260102000000_note_body_to_content.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see alice's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can change her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create a note as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the old note keeps its text",
+    "want": "precious text",
+    "got": "precious text",
+    "ok": true
+   },
+   {
+    "check": "bob's old note keeps its text",
+    "want": "bob text",
+    "got": "bob text",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 14,
+  "total": 14,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  },
+  "artifacts": {
+   "svetra_yaml": false,
+   "generated_access_tests": 0
+  }
+ }
+}

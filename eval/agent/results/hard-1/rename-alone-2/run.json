@@ -1,0 +1,152 @@
+{
+ "prompt": "rename",
+ "condition": "alone",
+ "seed": 2,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "invalid": null,
+  "wall_s": 10.5,
+  "is_error": false,
+  "num_turns": 9,
+  "cost_usd": 0.100826,
+  "input_tokens": 6,
+  "output_tokens": 2012,
+  "cache_read_tokens": 89383,
+  "cache_creation_tokens": 8048,
+  "tools": {
+   "Read": 2,
+   "Write": 2,
+   "Bash": 3
+  },
+  "stderr": "",
+  "answer": "I wrote the schema to `supabase/migrations/20260101000000_notes.sql`. I haven't run it against a database, so it's untested.\n\n- **Table:** `public.note` has `id` (uuid primary key, generated), `owner` (uuid, not null, references `auth.users`) and `body` (text, not null). `owner` defaults to `auth.uid()`, so clients don't have to send it. Deleting a user also deletes their notes.\n- **Visibility:** row-level security is enabled and forced. Anonymous visitors get no access. Signed-in users can only",
+  "turn2": {
+   "invalid": null,
+   "wall_s": 12.7,
+   "is_error": false,
+   "num_turns": 5,
+   "cost_usd": 0.047960800000000005,
+   "input_tokens": 8,
+   "output_tokens": 854,
+   "cache_read_tokens": 123739,
+   "cache_creation_tokens": 6724,
+   "tools": {
+    "Read": 1,
+    "Bash": 2,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I added `supabase/migrations/20260102000000_note_rename_body_to_content.sql`, which renames `note.body` to `note.content`. I haven't run it against a database.\n\nThe migration is one statement: `alter table public.note rename column body to content;`. A rename keeps every existing row's text, so no data is lost.\n\nThe existing migration is untouched. The row-level security policies, grants, index and owner-lock trigger don't reference `body`, so they keep working as before. I also searched the res"
+  }
+ },
+ "applied_before": [
+  "supabase/migrations/20260101000000_notes.sql"
+ ],
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20260101000000_notes.sql",
+   "supabase/migrations/20260102000000_note_rename_body_to_content.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see alice's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can change her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create a note as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the old note keeps its text",
+    "want": "precious text",
+    "got": "precious text",
+    "ok": true
+   },
+   {
+    "check": "bob's old note keeps its text",
+    "want": "bob text",
+    "got": "bob text",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 14,
+  "total": 14,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  },
+  "artifacts": {
+   "svetra_yaml": false,
+   "generated_access_tests": 0
+  }
+ }
+}

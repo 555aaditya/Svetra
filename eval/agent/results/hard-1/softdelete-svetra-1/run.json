@@ -1,0 +1,155 @@
+{
+ "prompt": "softdelete",
+ "condition": "svetra",
+ "seed": 1,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "invalid": null,
+  "wall_s": 38.2,
+  "is_error": false,
+  "num_turns": 20,
+  "cost_usd": 0.1420224,
+  "input_tokens": 28,
+  "output_tokens": 3435,
+  "cache_read_tokens": 499572,
+  "cache_creation_tokens": 14375,
+  "tools": {
+   "Bash": 7,
+   "Read": 1,
+   "Skill": 1,
+   "mcp__svetra__context": 1,
+   "Write": 2,
+   "mcp__svetra__validate": 2,
+   "mcp__svetra__plan": 1,
+   "mcp__svetra__compile": 2,
+   "mcp__svetra__explain": 1
+  },
+  "stderr": "",
+  "answer": "The journal backend is written and the migration is in `supabase/migrations/20261117000000_journal.sql`. I didn't run it against a database. `supabase test db` wasn't run either, so the access tests Svetra generated haven't been run. Svetra's validation passes.\n\n**How it behaves**\n- **Table:** `entry` has `id` (generated uuid key), `owner` (required, references `auth.users`), `body` (required) and `deleted_at` (empty until deleted).\n- **Seeing and writing:** signed-in people can see, create and "
+ },
+ "applied_before": null,
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20261117000000_journal.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her live entry",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see her deleted entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see alice's entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see an entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can edit her entry",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot edit a deleted entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot undelete an entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot remove her entry permanently",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot remove a deleted entry permanently",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create an entry",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create an entry as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create an entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her entry",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "bob cannot delete alice's entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot delete an entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 17,
+  "total": 17,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 1
+  },
+  "artifacts": {
+   "svetra_yaml": true,
+   "generated_access_tests": 51
+  }
+ }
+}
