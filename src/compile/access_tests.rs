@@ -757,12 +757,54 @@ pub struct Hazard {
     pub to: Vec<String>,
 }
 
+/// A field one policy limits and another frees, for the same person and row (SVT036): the first
+/// policy's `only` has no effect for them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Overlap {
+    pub entity: String,
+    pub person: String,
+    pub field: String,
+    /// Policies whose `only` leaves the field out.
+    pub limiting: Vec<String>,
+    /// Policies that leave it free, so it stays free.
+    pub freeing: Vec<String>,
+}
+
 /// The generated test file, and its checks as data.
 pub struct Analysis {
     pub text: String,
     pub people: Vec<TestPerson>,
     pub checks: Vec<Check>,
     pub hazards: Vec<Hazard>,
+    pub overlaps: Vec<Overlap>,
+}
+
+/// The permissive update policies that cover `person` on row `k`, split by whether they limit
+/// `field`. Both non-empty means the limit changes nothing for them.
+fn overlap(
+    doc: &Document,
+    world: &World,
+    person: &Person,
+    ei: usize,
+    k: usize,
+    field: &str,
+) -> Option<(Vec<String>, Vec<String>)> {
+    let name = &world.entities[ei].name;
+    let applicable: Vec<&Policy> = doc
+        .policies
+        .iter()
+        .filter(|p| !p.restrictive && covers(p, person, name, Action::Update))
+        .filter(|p| holds(world, person, ei, k, None, &p.when) == Some(true))
+        .collect();
+    let names = |limited: bool| -> Vec<String> {
+        applicable
+            .iter()
+            .filter(|p| limits(p, field) == limited)
+            .map(|p| p.name.clone())
+            .collect()
+    };
+    let (limiting, freeing) = (names(true), names(false));
+    (!limiting.is_empty() && !freeing.is_empty()).then_some((limiting, freeing))
 }
 
 /// Records the update as a hazard when PostgreSQL allows it and no one policy does.
@@ -810,7 +852,8 @@ fn note_hazard(
     }
 }
 
-/// The SVT034 warnings for a validated design: updates only a *combination* of policies allows.
+/// The SVT034 and SVT036 warnings for a validated design: updates only a *combination* of policies
+/// allows, and limits that another policy covering the same person frees.
 pub fn hazards(doc: &Document) -> Vec<Diagnostic> {
     // Needs two permissive update policies on one entity; skip the analysis otherwise.
     let combine = doc.entities.iter().any(|e| {
@@ -823,27 +866,43 @@ pub fn hazards(doc: &Document) -> Vec<Diagnostic> {
     if !combine {
         return Vec::new();
     }
-    analyse(doc)
-        .hazards
-        .iter()
-        .filter_map(|h| {
-            let first = doc.policies.iter().find(|p| h.from.first() == Some(&p.name))?;
-            Some(Diagnostic {
-                code: Code::Svt034,
-                path: format!("policies.{}", first.name),
-                line: first.pos.line,
-                col: first.pos.col,
-                message: format!(
-                    "{} can {}: policy `{}` allows it on the row as it is and `{}` on the row afterwards, but neither allows it alone.",
-                    h.person,
-                    h.what,
-                    h.from.join("` or `"),
-                    h.to.join("` or `")
-                ),
-                hint: "Merge the two into one policy with a `when` and a `check`, or make their `check` conditions match.".into(),
-            })
+    let analysis = analyse(doc);
+    let combined = analysis.hazards.iter().filter_map(|h| {
+        let first = doc.policies.iter().find(|p| h.from.first() == Some(&p.name))?;
+        Some(Diagnostic {
+            code: Code::Svt034,
+            path: format!("policies.{}", first.name),
+            line: first.pos.line,
+            col: first.pos.col,
+            message: format!(
+                "{} can {}: policy `{}` allows it on the row as it is and `{}` on the row afterwards, but neither allows it alone.",
+                h.person,
+                h.what,
+                h.from.join("` or `"),
+                h.to.join("` or `")
+            ),
+            hint: "Merge the two into one policy with a `when` and a `check`, or make their `check` conditions match.".into(),
         })
-        .collect()
+    });
+    let freed = analysis.overlaps.iter().filter_map(|o| {
+        let first = doc.policies.iter().find(|p| o.limiting.first() == Some(&p.name))?;
+        Some(Diagnostic {
+            code: Code::Svt036,
+            path: format!("policies.{}.only", first.name),
+            line: first.pos.line,
+            col: first.pos.col,
+            message: format!(
+                "{} can change the {} of {} through `{}`, so the `only` of `{}` doesn't limit it for them.",
+                o.person,
+                o.field,
+                o.entity,
+                o.freeing.join("` or `"),
+                o.limiting.join("` or `")
+            ),
+            hint: "Give the freeing policy an `only` too, or merge the two policies.".into(),
+        })
+    });
+    combined.chain(freed).collect()
 }
 
 /// Entities in an order where every ref target comes first; file order breaks ties and cycles.
@@ -1078,6 +1137,7 @@ pub fn analyse(doc: &Document) -> Analysis {
         ));
     }
     let mut hazards: Vec<Hazard> = Vec::new();
+    let mut overlaps: Vec<Overlap> = Vec::new();
     for (ei, e) in world.entities.iter().enumerate().take(tables) {
         // The fields a rule with a `check` reads, and each value to try them at.
         let updates: Vec<&Policy> = doc
@@ -1125,6 +1185,17 @@ pub fn analyse(doc: &Document) -> Analysis {
                 transitions.push((f, values));
             }
         }
+        // An entity whose policies limit which fields an update may change gets checks for that.
+        let guarded = updates.iter().any(|p| p.only.is_some());
+        let skippable = |f: &Field| {
+            f.unique
+                || e.unique
+                    .iter()
+                    .any(|u| u.fields.len() == 1 && u.fields[0].name == f.name)
+                || e.constraints
+                    .iter()
+                    .any(|c| c.expr.contains(f.name.as_str()))
+        };
         for p in &people {
             let mut check =
                 |what: String,
@@ -1226,6 +1297,98 @@ pub fn analyse(doc: &Document) -> Analysis {
                         let what = format!("set the {} of {} {r} to {word}", f.name, e.name);
                         note_hazard(&mut hazards, doc, &world, p, ei, k, &swap, &what, expected);
                         check(what, sql, expected, None);
+                    }
+                }
+            }
+            // Fields an update may not change (docs/column-rules.md): each on its own, and each
+            // beside a transition the ordinary rules allow, which only the guard can refuse.
+            if guarded {
+                for (k, r) in ROWS.iter().enumerate().take(2) {
+                    for f in e.fields.iter().filter(|f| !f.primary) {
+                        if let Some((limiting, freeing)) = overlap(doc, &world, p, ei, k, &f.name)
+                            && !overlaps.iter().any(|o| {
+                                o.entity == e.name && o.limiting == limiting && o.freeing == freeing
+                            })
+                        {
+                            overlaps.push(Overlap {
+                                entity: e.name.clone(),
+                                person: p.name.clone(),
+                                field: f.name.clone(),
+                                limiting,
+                                freeing,
+                            });
+                        }
+                    }
+                    // A change of each field to the other row's value. A `ref` can't be set to a
+                    // value without its row, and skippable fields could be refused for another reason.
+                    let changes: Vec<(&Field, String, Val)> = e
+                        .fields
+                        .iter()
+                        .filter(|f| {
+                            !f.primary && !matches!(f.ty, FieldType::Ref(_)) && !skippable(f)
+                        })
+                        .filter_map(|f| {
+                            let (sql, value) = world.value(ei, f, k ^ 1);
+                            (value != world.field_value(ei, &f.name, k)).then_some((f, sql, value))
+                        })
+                        .collect();
+                    for (f, sql_value, value) in changes.iter().filter(|(f, ..)| {
+                        !matches!(f.ty, FieldType::User)
+                            && !transitions.iter().any(|(t, _)| t.name == f.name)
+                    }) {
+                        let swap = Swap {
+                            field: &f.name,
+                            to: SwapTo::Value(value.clone()),
+                            and: None,
+                        };
+                        let expected = update_expected(doc, &world, p, ei, k, Some(&swap));
+                        let sql = format!(
+                            "update {} set {} = {sql_value} where {}",
+                            table(&e.name),
+                            q(&f.name),
+                            key(&world, ei, k)
+                        );
+                        let what = format!("change the {} of {} {r}", f.name, e.name);
+                        note_hazard(&mut hazards, doc, &world, p, ei, k, &swap, &what, expected);
+                        check(what, sql, expected, None);
+                    }
+                    for (g, values) in &transitions {
+                        for (sql_g, value_g, word) in values {
+                            if &world.field_value(ei, &g.name, k) == value_g {
+                                continue;
+                            }
+                            let first = Swap {
+                                field: &g.name,
+                                to: SwapTo::Value(value_g.clone()),
+                                and: None,
+                            };
+                            if update_expected(doc, &world, p, ei, k, Some(&first)) != Some(true) {
+                                continue;
+                            }
+                            for (f, sql_f, value) in
+                                changes.iter().filter(|(f, ..)| f.name != g.name)
+                            {
+                                let both_changed = Swap {
+                                    field: &f.name,
+                                    to: SwapTo::Value(value.clone()),
+                                    and: Some(&first),
+                                };
+                                let expected =
+                                    update_expected(doc, &world, p, ei, k, Some(&both_changed));
+                                let sql = format!(
+                                    "update {} set {} = {sql_g}, {} = {sql_f} where {}",
+                                    table(&e.name),
+                                    q(&g.name),
+                                    q(&f.name),
+                                    key(&world, ei, k)
+                                );
+                                let what = format!(
+                                    "set the {} of {} {r} to {word} and change the {}",
+                                    g.name, e.name, f.name
+                                );
+                                check(what, sql, expected, None);
+                            }
+                        }
                     }
                 }
             }
@@ -1491,6 +1654,7 @@ pub fn analyse(doc: &Document) -> Analysis {
         people,
         checks: found,
         hazards,
+        overlaps,
     }
 }
 
