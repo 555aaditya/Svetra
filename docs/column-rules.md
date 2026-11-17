@@ -143,9 +143,10 @@ The expected results come from the evaluator, which reads the policies, never th
 
 ## 7. Alternatives considered
 
-- **Column privileges** (`grant update (title) on doc to authenticated`). They are per database role, not per row or state, so they can't say "only while the document is submitted", and the approvals rule needs exactly that. They are the lighter tool for a field **nobody** may change after creation, such as `author` or `created_at`. That is a different, simpler feature, a field flag `immutable: true` (Open **C6**), and it could share the same tests.
+- **Column privileges** (`grant update (status) on doc to authenticated`). They are per database role, not per row or state, so they can't say "only while the document is submitted", and the approvals rule needs exactly that. They are the lighter tool for a field **nobody** may change after creation, such as `author` or `created_at`. That is a different, simpler feature, a field flag `immutable: true` (Open **C6**), and it could share the same tests.
 - **A `check` constraint.** It sees one row, so it can't compare old and new.
 - **A view with `instead of` triggers.** Heavier, and the API would have to be pointed at the view.
+- **A list of fields that can't change (`unchanged`)** is the same power, written the other way round, and the first draft of this document used it. It fails open: a column added later is free for everyone the rule was meant to limit. The approvals prompt itself is an allow-list ("cannot change anything else"). Open **C1**.
 - **Leave it to holes and hand-written triggers.** This is what happens today, and what the agent evaluation measured: four of four agents wrote the trigger by hand, outside the design, where it isn't explained, tested or diffed. A rule Svetra can't see is a rule Svetra can't prove.
 - **Check it in the app.** Not enforceable: the browser talks to the database directly.
 
@@ -157,7 +158,7 @@ The expected results come from the evaluator, which reads the policies, never th
     allow: [update]
     when:  "reviewer == auth.user and status == 'submitted'"
     check: "reviewer == auth.user and status in ['approved', 'rejected']"
-    unchanged: [title, author, reviewer]
+    only: [status]
 ```
 
-With this single added line, the whole prompt is in `svetra.yaml`: the author's rules, the reviewer's, the transitions, and the column rule. No hole, no hand-written SQL, and every one of the 24 oracle checks is expected to pass, including "the reviewer cannot approve and retitle at once".
+With this single added line, the whole prompt is in `svetra.yaml`: the author's rules, the reviewer's, the transitions, and the column rule. No hole, no hand-written SQL, and every one of the 24 oracle checks is expected to pass, including "the reviewer cannot approve and retitle at once". Add a `notes` column to `Doc` next month and the reviewer still can't edit it, with no change to the rule.
