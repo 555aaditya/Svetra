@@ -22,7 +22,7 @@ Who can see and change what
     - Signed-in people can see a doc when its reviewer is them and its status is not draft.
     - Signed-in people can create a doc when its author is them and its status is draft.
     - Signed-in people can change a doc when its author is them and its status is draft. After the change, its author is them and its status is draft or submitted.
-    - Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected.
+    - Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected. They can change only its status.
     - Signed-in people can delete a doc when its author is them and its status is draft.
     - Nobody can see docs any other way.
 
