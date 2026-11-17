@@ -1,0 +1,149 @@
+{
+ "prompt": "softdelete",
+ "condition": "careful",
+ "seed": 1,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "invalid": null,
+  "wall_s": 21.5,
+  "is_error": false,
+  "num_turns": 5,
+  "cost_usd": 0.07668340000000001,
+  "input_tokens": 8,
+  "output_tokens": 2605,
+  "cache_read_tokens": 122273,
+  "cache_creation_tokens": 9557,
+  "tools": {
+   "Bash": 2,
+   "Read": 1,
+   "Write": 1
+  },
+  "stderr": "",
+  "answer": "I wrote the schema to `supabase/migrations/20261117000000_journal_entries.sql`. I haven't run it against a database, so it is untested.\n\n**Table `entry`**\n- It has `id`, `owner`, `body` and `deleted_at` as specified.\n- `owner` defaults to the caller's id and references `auth.users`.\n- Row-level security is enabled and forced.\n\n**What the app can do**\n- **Privileges:** `anon` gets nothing. `authenticated` can read, insert `owner` and `body`, and update `body`. There is no delete privilege and no "
+ },
+ "applied_before": null,
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20261117000000_journal_entries.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her live entry",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see her deleted entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see alice's entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see an entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can edit her entry",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot edit a deleted entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot undelete an entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot remove her entry permanently",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot remove a deleted entry permanently",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create an entry",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create an entry as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create an entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her entry",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "bob cannot delete alice's entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot delete an entry",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 17,
+  "total": 17,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 1
+  },
+  "artifacts": {
+   "svetra_yaml": false,
+   "generated_access_tests": 0
+  }
+ }
+}

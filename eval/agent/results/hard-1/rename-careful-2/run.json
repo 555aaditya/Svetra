@@ -1,0 +1,155 @@
+{
+ "prompt": "rename",
+ "condition": "careful",
+ "seed": 2,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "invalid": null,
+  "wall_s": 11.8,
+  "is_error": false,
+  "num_turns": 11,
+  "cost_usd": 0.0969417,
+  "input_tokens": 8,
+  "output_tokens": 1983,
+  "cache_read_tokens": 123342,
+  "cache_creation_tokens": 6389,
+  "tools": {
+   "Bash": 1,
+   "Glob": 2,
+   "Read": 3,
+   "Write": 2,
+   "Grep": 1
+  },
+  "stderr": "",
+  "answer": "I wrote the schema to `supabase/migrations/20260101000000_notes.sql`. I haven't run it against a database or tested it.\n\n- **Table:** `note` has `id` (uuid primary key, generated), `owner` (uuid, required, references `auth.users`) and `body` (text, required). `owner` defaults to the signed-in person, and deleting a user deletes their notes. I added an index on `owner`.\n- **Row-level security:** it is enabled and forced on `note`. Select, insert, update and delete are each allowed only when `owne",
+  "turn2": {
+   "invalid": null,
+   "wall_s": 9.5,
+   "is_error": false,
+   "num_turns": 6,
+   "cost_usd": 0.0480097,
+   "input_tokens": 8,
+   "output_tokens": 895,
+   "cache_read_tokens": 123659,
+   "cache_creation_tokens": 6635,
+   "tools": {
+    "Read": 2,
+    "Glob": 1,
+    "Grep": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I added `supabase/migrations/20260102000000_note_rename_body_to_content.sql`, which renames `body` to `content` on `public.note`. I haven't run it against a database.\n\n- **No data loss:** `alter table public.note rename column body to content;` renames the column in place. Existing rows keep their text, and nothing is dropped or copied.\n- **Security unchanged:** Row-level security and forced row-level security stay on. Access stays limited to signed-in users, and each person can still only selec"
+  }
+ },
+ "applied_before": [
+  "supabase/migrations/20260101000000_notes.sql"
+ ],
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20260101000000_notes.sql",
+   "supabase/migrations/20260102000000_note_rename_body_to_content.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see alice's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can change her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create a note as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the old note keeps its text",
+    "want": "precious text",
+    "got": "precious text",
+    "ok": true
+   },
+   {
+    "check": "bob's old note keeps its text",
+    "want": "bob text",
+    "got": "bob text",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 14,
+  "total": 14,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  },
+  "artifacts": {
+   "svetra_yaml": false,
+   "generated_access_tests": 0
+  }
+ }
+}

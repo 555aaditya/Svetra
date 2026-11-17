@@ -1,0 +1,195 @@
+{
+ "prompt": "approvals",
+ "condition": "svetra",
+ "seed": 2,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "invalid": null,
+  "wall_s": 51.2,
+  "is_error": false,
+  "num_turns": 14,
+  "cost_usd": 0.173303,
+  "input_tokens": 20,
+  "output_tokens": 7000,
+  "cache_read_tokens": 361314,
+  "cache_creation_tokens": 16743,
+  "tools": {
+   "Read": 4,
+   "Glob": 1,
+   "ToolSearch": 1,
+   "Write": 2,
+   "mcp__svetra__validate": 1,
+   "mcp__svetra__compile": 1,
+   "Bash": 3
+  },
+  "stderr": "",
+  "answer": "The backend is written as one migration, `supabase/migrations/20261117000000_doc_approval.sql`. I haven't run it against a database, so none of it is tested.\n\nIt creates `doc` with the columns you specified. `status` is limited to the four values and defaults to `draft`. I also added a rule that the reviewer can't be the author.\n\n- **Who can see a document:** the author always can. The reviewer can once it is submitted, approved or rejected. Nobody else can.\n- **Who can change a document:**\n  - "
+ },
+ "applied_before": null,
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20261117000000_doc_approval.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her draft",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "the reviewer cannot see a draft",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the reviewer sees a submitted document",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "someone else cannot see a submitted document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see a document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice sees her approved document",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice can change her draft's title",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change a submitted title",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can submit her draft",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot approve her own submitted document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot approve her own draft",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the reviewer can approve a submitted document",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "the reviewer can reject a submitted document",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "the reviewer cannot act on a draft",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "nobody can change an approved document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change an approved document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the reviewer cannot change the title",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the reviewer cannot approve and retitle at once",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the reviewer cannot reassign the reviewer",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her draft",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete a submitted document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create a document",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create an already approved document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "carol cannot create a document under alice's name",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 24,
+  "total": 24,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  },
+  "artifacts": {
+   "svetra_yaml": true,
+   "generated_access_tests": 0
+  }
+ }
+}

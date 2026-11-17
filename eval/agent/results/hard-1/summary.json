@@ -1,0 +1,3886 @@
+[
+ {
+  "run": "teams-alone-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 24.7,
+   "is_error": false,
+   "num_turns": 5,
+   "cost_usd": 0.08695910000000001,
+   "input_tokens": 8,
+   "output_tokens": 2835,
+   "cache_read_tokens": 120398,
+   "cache_creation_tokens": 11598,
+   "tools": {
+    "Bash": 1,
+    "Read": 1,
+    "Glob": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the schema to `supabase/migrations/20260101000000_team_tasks.sql`. I haven't run it against a database, so it is untested.\n\n**Tables**\n- `team` and `task` follow your contract.\n- I added a `team_member (team, person)` table to record membership.\n- Row level security is on for all three tables.\n\n**Functions**\n- `start_team(team_name)` creates the team, adds the caller as its first member and returns the new team's id. It fails if nobody is signed in.\n- `add_member(team_id, person)` only w"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_team_tasks.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol, added by alice, sees the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol can add a task to her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot add a task under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add a task to a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot change alice's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a member can add someone to the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol, a member, can add someone too",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add himself to a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot add someone to another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot add members",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can start a team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot start a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 23,
+   "total": 23,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 3
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "teams-alone-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 22.6,
+   "is_error": false,
+   "num_turns": 5,
+   "cost_usd": 0.0867983,
+   "input_tokens": 8,
+   "output_tokens": 2835,
+   "cache_read_tokens": 120350,
+   "cache_creation_tokens": 11559,
+   "tools": {
+    "Bash": 1,
+    "Read": 1,
+    "Glob": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the schema to `supabase/migrations/20260101000000_team_tasks.sql`. I haven't run it against a database or tested it.\n\n**Tables**\n- `team` and `task` follow your contract.\n- I added a `team_member (team, person)` table to record who belongs to which team.\n\n**Functions**\n- **`start_team(team_name)`** creates the team, makes the caller its first member, and returns the new id. It rejects callers who aren't signed in and blank names.\n- **`add_member(team_id, person)`** only works if the call"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_team_tasks.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol, added by alice, sees the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol can add a task to her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot add a task under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add a task to a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot change alice's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a member can add someone to the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol, a member, can add someone too",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add himself to a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot add someone to another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot add members",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can start a team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot start a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 23,
+   "total": 23,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 3
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "teams-careful-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 24.7,
+   "is_error": false,
+   "num_turns": 5,
+   "cost_usd": 0.0838435,
+   "input_tokens": 8,
+   "output_tokens": 3153,
+   "cache_read_tokens": 122163,
+   "cache_creation_tokens": 9979,
+   "tools": {
+    "Bash": 1,
+    "Read": 1,
+    "Glob": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the schema to `supabase/migrations/20260101000000_team_tasks.sql`. I haven't run it against a database, so it's untested.\n\n**Tables**\n- `team` and `task` follow your contract.\n- I added a `team_member` table (`team`, `person`) to record who belongs to which team.\n- Row-level security is enabled and forced on all three tables.\n\n**Who can see and change what**\n- **Reading:** members can read their team, its member list and its tasks. Everyone else sees nothing, and `anon` has no table acce"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_team_tasks.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol, added by alice, sees the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol can add a task to her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot add a task under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add a task to a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot change alice's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a member can add someone to the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol, a member, can add someone too",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add himself to a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot add someone to another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot add members",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can start a team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot start a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 23,
+   "total": 23,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 2
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "teams-careful-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 52.8,
+   "is_error": false,
+   "num_turns": 12,
+   "cost_usd": 0.16387130000000003,
+   "input_tokens": 20,
+   "output_tokens": 7585,
+   "cache_read_tokens": 348601,
+   "cache_creation_tokens": 13239,
+   "tools": {
+    "Bash": 5,
+    "Read": 1,
+    "Glob": 1,
+    "Write": 4
+   },
+   "stderr": "",
+   "answer": "I couldn't run the migration against a test Postgres, so it hasn't been run at all. The command was refused (it needs approval and I didn't get it), so the checks below are from reading the SQL, not from running it.\n\nThe migration is in `supabase/migrations/20261117000000_team_tasks.sql`.\n\n**Tables and functions (your contract):**\n- `team` and `task` match what you specified.\n- I added a `team_member (team, person)` table to record who belongs to which team.\n- `start_team(team_name)` creates the"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_team_tasks.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol, added by alice, sees the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol can add a task to her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot add a task under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add a task to a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot change alice's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a member can add someone to the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol, a member, can add someone too",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add himself to a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot add someone to another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot add members",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can start a team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot start a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 23,
+   "total": 23,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 2
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "teams-svetra-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 46.6,
+   "is_error": false,
+   "num_turns": 28,
+   "cost_usd": 0.19905140000000004,
+   "input_tokens": 38,
+   "output_tokens": 4720,
+   "cache_read_tokens": 741101,
+   "cache_creation_tokens": 19376,
+   "tools": {
+    "Bash": 14,
+    "Read": 1,
+    "Skill": 1,
+    "mcp__svetra__context": 1,
+    "ToolSearch": 1,
+    "Write": 1,
+    "mcp__svetra__validate": 2,
+    "mcp__svetra__compile": 4,
+    "Edit": 1
+   },
+   "stderr": "",
+   "answer": "The backend is designed and compiled, and the schema is in `supabase/migrations/20261117000000_teams_tasks.sql`. I haven't run it against a database, because the Supabase CLI isn't installed and the sandbox blocked my attempt to check for a local Postgres. The generated access tests in `supabase/tests/svetra.test.sql` haven't been run either.\n\n## What it does\n- **Tables:** `team` and `task` match your data contract, with row-level security on both.\n- **`start_team(team_name)`:** creates the team"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_teams_tasks.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol, added by alice, sees the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol can add a task to her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot add a task under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add a task to a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot change alice's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a member can add someone to the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol, a member, can add someone too",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add himself to a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot add someone to another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot add members",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can start a team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot start a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 23,
+   "total": 23,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 2
+   },
+   "artifacts": {
+    "svetra_yaml": true,
+    "generated_access_tests": 133
+   }
+  }
+ },
+ {
+  "run": "teams-svetra-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 46.1,
+   "is_error": false,
+   "num_turns": 29,
+   "cost_usd": 0.2182136,
+   "input_tokens": 44,
+   "output_tokens": 4996,
+   "cache_read_tokens": 867163,
+   "cache_creation_tokens": 20322,
+   "tools": {
+    "Read": 3,
+    "Bash": 6,
+    "Skill": 1,
+    "mcp__svetra__context": 1,
+    "Write": 3,
+    "mcp__svetra__validate": 5,
+    "Edit": 4,
+    "mcp__svetra__plan": 1,
+    "mcp__svetra__compile": 2,
+    "Grep": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the backend and put the schema in `supabase/migrations/20261117000000_teams.sql`. I haven't run it against a database. There's no Supabase CLI here, and my attempt to check for a local Postgres was blocked, so the generated access tests in `supabase/tests/svetra.test.sql` haven't been run either.\n\nI did it by editing `svetra.yaml` and compiling it. `validate` passes and `compile` ran clean. The migration is a copy of the generated `supabase/schemas/svetra.sql`. If you edit `svetra.yaml` "
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_teams.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol, added by alice, sees the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol sees her team's task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol can add a task to her team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot add a task under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add a task to a team he isn't in",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol cannot change alice's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her task",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete another team's task",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a member can add someone to the team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "carol, a member, can add someone too",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot add himself to a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot add someone to another team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot add members",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can start a team",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot start a team",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 23,
+   "total": 23,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 2
+   },
+   "artifacts": {
+    "svetra_yaml": true,
+    "generated_access_tests": 133
+   }
+  }
+ },
+ {
+  "run": "approvals-alone-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 31.2,
+   "is_error": false,
+   "num_turns": 5,
+   "cost_usd": 0.1014817,
+   "input_tokens": 8,
+   "output_tokens": 4381,
+   "cache_read_tokens": 124551,
+   "cache_creation_tokens": 11260,
+   "tools": {
+    "Read": 1,
+    "Bash": 2,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I've written the schema to `supabase/migrations/20260101000000_doc_approval.sql`, but I haven't run it against a database, so none of it is tested.\n\n**Table:** `doc` follows your data contract, and `status` defaults to `'draft'`. I added one constraint you didn't ask for: the reviewer must be a different person from the author (`author <> reviewer`). That makes \"never approve their own document\" hold at the data level, and it matches \"names one other person\".\n\n**Who can see and change what** (ro"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_doc_approval.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot see a draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer sees a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "someone else cannot see a submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her approved document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice can change her draft's title",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change a submitted title",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can submit her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot approve her own submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot approve her own draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer can approve a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer can reject a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot act on a draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "nobody can change an approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change an approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot change the title",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot approve and retitle at once",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot reassign the reviewer",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete a submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create a document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an already approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol cannot create a document under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 24,
+   "total": 24,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "approvals-alone-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 37.4,
+   "is_error": false,
+   "num_turns": 8,
+   "cost_usd": 0.1131691,
+   "input_tokens": 12,
+   "output_tokens": 5098,
+   "cache_read_tokens": 199405,
+   "cache_creation_tokens": 10516,
+   "tools": {
+    "Read": 1,
+    "Bash": 5,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the migration but haven't tested it, because I can't run anything against a database here. My `pg_isready` check was blocked pending approval, so I never found out whether a local Postgres is running.\n\nThe file is `supabase/migrations/20260101000000_doc_approval.sql`. It sets up the `doc` table to your contract, plus row-level security and two triggers:\n\n- **Author and reviewer:** a check constraint requires them to be different people. Both are fixed once the document is created, as is "
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_doc_approval.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot see a draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer sees a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "someone else cannot see a submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her approved document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice can change her draft's title",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change a submitted title",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can submit her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot approve her own submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot approve her own draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer can approve a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer can reject a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot act on a draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "nobody can change an approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change an approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot change the title",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot approve and retitle at once",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot reassign the reviewer",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete a submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create a document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an already approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol cannot create a document under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 24,
+   "total": 24,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "approvals-careful-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 27.1,
+   "is_error": false,
+   "num_turns": 5,
+   "cost_usd": 0.0921687,
+   "input_tokens": 8,
+   "output_tokens": 3266,
+   "cache_read_tokens": 120462,
+   "cache_creation_tokens": 11821,
+   "tools": {
+    "Bash": 1,
+    "Read": 1,
+    "Glob": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the schema to `supabase/migrations/20260101000000_doc_approval.sql`. I haven't run it against a database, so it is untested.\n\n**Table.** `doc` follows your contract. I added a check that author and reviewer differ, so nobody can name themselves as reviewer. RLS is enabled and forced, and the `anon` role has no access.\n\n**Who can do what** (row-level security policies):\n- **See:** the author always sees their documents. The reviewer sees a document only once it is no longer a draft. Nobod"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_doc_approval.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot see a draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer sees a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "someone else cannot see a submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her approved document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice can change her draft's title",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change a submitted title",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can submit her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot approve her own submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot approve her own draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer can approve a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer can reject a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot act on a draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "nobody can change an approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change an approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot change the title",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot approve and retitle at once",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot reassign the reviewer",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete a submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create a document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an already approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol cannot create a document under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 24,
+   "total": 24,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "approvals-careful-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 32.0,
+   "is_error": false,
+   "num_turns": 6,
+   "cost_usd": 0.105967,
+   "input_tokens": 10,
+   "output_tokens": 4420,
+   "cache_read_tokens": 157355,
+   "cache_creation_tokens": 11462,
+   "tools": {
+    "Bash": 3,
+    "Read": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I've written the schema to `supabase/migrations/20261117000000_doc_approval.sql`, but I haven't run it against a database, so none of it is tested.\n\n**Table and checks**\n- The `doc` table follows your contract.\n- `status` is limited to the four values and defaults to `'draft'`.\n- A check stops the author and reviewer from being the same person, so nobody can approve their own document.\n\n**Who can see and change what**\n- **Create:** you can only create a document as yourself, and it always starts"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_doc_approval.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot see a draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer sees a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "someone else cannot see a submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her approved document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice can change her draft's title",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change a submitted title",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can submit her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot approve her own submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot approve her own draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer can approve a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer can reject a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot act on a draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "nobody can change an approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change an approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot change the title",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot approve and retitle at once",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot reassign the reviewer",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete a submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create a document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an already approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol cannot create a document under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 24,
+   "total": 24,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "approvals-svetra-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 41.5,
+   "is_error": false,
+   "num_turns": 22,
+   "cost_usd": 0.21897940000000002,
+   "input_tokens": 28,
+   "output_tokens": 4717,
+   "cache_read_tokens": 591938,
+   "cache_creation_tokens": 28100,
+   "tools": {
+    "Bash": 7,
+    "Read": 2,
+    "Skill": 1,
+    "ToolSearch": 1,
+    "Glob": 1,
+    "mcp__svetra__validate": 1,
+    "mcp__svetra__compile": 3,
+    "Write": 4
+   },
+   "stderr": "",
+   "answer": "The backend is written but I haven't run it. The Supabase CLI isn't installed here, so I couldn't try it against a database or run the generated access tests (`supabase/tests/svetra.test.sql`). The design passes `validate` and compiles cleanly.\n\nThe schema is in `supabase/migrations/20260101000000_approvals.sql`. It is a copy of the compiled output in `supabase/schemas/svetra.sql`, which comes from `svetra.yaml`. If you change the design, recompile and copy it again.\n\n**The `doc` table** matches"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_approvals.sql"
+   ],
+   "applied": false,
+   "setup_ok": false,
+   "checks": [],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 0,
+   "total": 24,
+   "svetra_check": null,
+   "artifacts": {
+    "svetra_yaml": true,
+    "generated_access_tests": 84
+   },
+   "error": "schema did not apply: NOTICE:  role \"postgres\" has already been granted membership in role \"svetra_hole_rename_doc\" by role \"postgres\"\nERROR:  syntax error at or near \"end\"\nLINE 15: end\n         ^"
+  }
+ },
+ {
+  "run": "approvals-svetra-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 51.2,
+   "is_error": false,
+   "num_turns": 14,
+   "cost_usd": 0.173303,
+   "input_tokens": 20,
+   "output_tokens": 7000,
+   "cache_read_tokens": 361314,
+   "cache_creation_tokens": 16743,
+   "tools": {
+    "Read": 4,
+    "Glob": 1,
+    "ToolSearch": 1,
+    "Write": 2,
+    "mcp__svetra__validate": 1,
+    "mcp__svetra__compile": 1,
+    "Bash": 3
+   },
+   "stderr": "",
+   "answer": "The backend is written as one migration, `supabase/migrations/20261117000000_doc_approval.sql`. I haven't run it against a database, so none of it is tested.\n\nIt creates `doc` with the columns you specified. `status` is limited to the four values and defaults to `draft`. I also added a rule that the reviewer can't be the author.\n\n- **Who can see a document:** the author always can. The reviewer can once it is submitted, approved or rejected. Nobody else can.\n- **Who can change a document:**\n  - "
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_doc_approval.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot see a draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer sees a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "someone else cannot see a submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice sees her approved document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice can change her draft's title",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change a submitted title",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can submit her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot approve her own submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot approve her own draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer can approve a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer can reject a submitted document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot act on a draft",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "nobody can change an approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change an approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot change the title",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot approve and retitle at once",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the reviewer cannot reassign the reviewer",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her draft",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete a submitted document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create a document",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an already approved document",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "carol cannot create a document under alice's name",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 24,
+   "total": 24,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": true,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "softdelete-alone-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 19.8,
+   "is_error": false,
+   "num_turns": 5,
+   "cost_usd": 0.0714458,
+   "input_tokens": 8,
+   "output_tokens": 2249,
+   "cache_read_tokens": 122086,
+   "cache_creation_tokens": 9143,
+   "tools": {
+    "Bash": 1,
+    "Read": 1,
+    "Glob": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the schema to `supabase/migrations/20260101000000_journal.sql`. I haven't run it against a database, so it is untested.\n\n- **Table:** `entry` has the columns from your contract. Row-level security is enabled and forced.\n- **Seeing entries:** a signed-in user sees only their own entries that aren't deleted. Once an entry is soft-deleted, even its owner can't see it.\n- **Creating and editing:** users can insert entries as themselves, and can edit only the `body` of their own live entries. "
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_journal.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her live entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see her deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can edit her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot edit a deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot undelete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove her entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove a deleted entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create an entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an entry as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot delete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 17,
+   "total": 17,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 1
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "softdelete-alone-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 18.6,
+   "is_error": false,
+   "num_turns": 4,
+   "cost_usd": 0.0604604,
+   "input_tokens": 6,
+   "output_tokens": 2218,
+   "cache_read_tokens": 91372,
+   "cache_creation_tokens": 7243,
+   "tools": {
+    "Read": 1,
+    "Glob": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the schema to `supabase/migrations/20261117000000_journal_entries.sql`. I haven't run it against a database.\n\n- **Table:** `entry` has the columns from your contract. `owner` defaults to `auth.uid()`. Row-level security is on.\n- **Visibility:** the select policy shows a user only their own entries where `deleted_at` is null. A deleted entry is hidden from its owner too, and no app role can read it.\n- **Create and edit:** a user can insert entries for themselves and edit the `body` of the"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_journal_entries.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her live entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see her deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can edit her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot edit a deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot undelete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove her entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove a deleted entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create an entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an entry as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot delete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 17,
+   "total": 17,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 1
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "softdelete-careful-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 21.5,
+   "is_error": false,
+   "num_turns": 5,
+   "cost_usd": 0.07668340000000001,
+   "input_tokens": 8,
+   "output_tokens": 2605,
+   "cache_read_tokens": 122273,
+   "cache_creation_tokens": 9557,
+   "tools": {
+    "Bash": 2,
+    "Read": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the schema to `supabase/migrations/20261117000000_journal_entries.sql`. I haven't run it against a database, so it is untested.\n\n**Table `entry`**\n- It has `id`, `owner`, `body` and `deleted_at` as specified.\n- `owner` defaults to the caller's id and references `auth.users`.\n- Row-level security is enabled and forced.\n\n**What the app can do**\n- **Privileges:** `anon` gets nothing. `authenticated` can read, insert `owner` and `body`, and update `body`. There is no delete privilege and no "
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_journal_entries.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her live entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see her deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can edit her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot edit a deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot undelete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove her entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove a deleted entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create an entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an entry as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot delete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 17,
+   "total": 17,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 1
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "softdelete-careful-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 19.2,
+   "is_error": false,
+   "num_turns": 5,
+   "cost_usd": 0.0652365,
+   "input_tokens": 8,
+   "output_tokens": 2317,
+   "cache_read_tokens": 123884,
+   "cache_creation_tokens": 7375,
+   "tools": {
+    "Bash": 1,
+    "Read": 1,
+    "Glob": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the schema to `supabase/migrations/20260101000000_journal_entries.sql`. I haven't run it against a database, so it is untested.\n\n- **Table:** `entry` has `id` (uuid primary key, generated), `owner` (required, references `auth.users`), `body` (required) and `deleted_at` (empty until deleted).\n- **Privacy:** Row-level security is enabled and forced. Each person can read only their own entries that aren't deleted, so deleted entries are hidden from everyone, including the owner. Anonymous u"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_journal_entries.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her live entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see her deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can edit her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot edit a deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot undelete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove her entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove a deleted entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create an entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an entry as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot delete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 17,
+   "total": 17,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 1
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "softdelete-svetra-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 38.2,
+   "is_error": false,
+   "num_turns": 20,
+   "cost_usd": 0.1420224,
+   "input_tokens": 28,
+   "output_tokens": 3435,
+   "cache_read_tokens": 499572,
+   "cache_creation_tokens": 14375,
+   "tools": {
+    "Bash": 7,
+    "Read": 1,
+    "Skill": 1,
+    "mcp__svetra__context": 1,
+    "Write": 2,
+    "mcp__svetra__validate": 2,
+    "mcp__svetra__plan": 1,
+    "mcp__svetra__compile": 2,
+    "mcp__svetra__explain": 1
+   },
+   "stderr": "",
+   "answer": "The journal backend is written and the migration is in `supabase/migrations/20261117000000_journal.sql`. I didn't run it against a database. `supabase test db` wasn't run either, so the access tests Svetra generated haven't been run. Svetra's validation passes.\n\n**How it behaves**\n- **Table:** `entry` has `id` (generated uuid key), `owner` (required, references `auth.users`), `body` (required) and `deleted_at` (empty until deleted).\n- **Seeing and writing:** signed-in people can see, create and "
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_journal.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her live entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see her deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can edit her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot edit a deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot undelete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove her entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove a deleted entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create an entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an entry as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot delete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 17,
+   "total": 17,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 1
+   },
+   "artifacts": {
+    "svetra_yaml": true,
+    "generated_access_tests": 51
+   }
+  }
+ },
+ {
+  "run": "softdelete-svetra-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 66.8,
+   "is_error": false,
+   "num_turns": 22,
+   "cost_usd": 0.20849209999999999,
+   "input_tokens": 34,
+   "output_tokens": 7278,
+   "cache_read_tokens": 637929,
+   "cache_creation_tokens": 17923,
+   "tools": {
+    "Bash": 10,
+    "Read": 1,
+    "Skill": 1,
+    "mcp__svetra__context": 1,
+    "Write": 4,
+    "mcp__svetra__validate": 1,
+    "mcp__svetra__compile": 2
+   },
+   "stderr": "",
+   "answer": "The journal backend is written, but I haven't run it against a database. The one step that would have run it needed approval and I didn't pursue it. That step used a Postgres container (`svetra-eval-pg`) that I didn't start. The generated access tests in `supabase/tests/svetra.test.sql` also haven't been run, and the `supabase` CLI isn't installed here. Please run `supabase test db` before relying on it.\n\n**What's there**\n- **Design:** `svetra.yaml` now describes the journal. I replaced the star"
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_journal.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her live entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see her deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can edit her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot edit a deleted entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot undelete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove her entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot remove a deleted entry permanently",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create an entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create an entry as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her entry",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "bob cannot delete alice's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot delete an entry",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 17,
+   "total": 17,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 1
+   },
+   "artifacts": {
+    "svetra_yaml": true,
+    "generated_access_tests": 51
+   }
+  }
+ },
+ {
+  "run": "rename-alone-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 10.7,
+   "is_error": false,
+   "num_turns": 11,
+   "cost_usd": 0.11056350000000001,
+   "input_tokens": 6,
+   "output_tokens": 2080,
+   "cache_read_tokens": 89509,
+   "cache_creation_tokens": 7895,
+   "tools": {
+    "Bash": 2,
+    "Glob": 1,
+    "Read": 3,
+    "Write": 2,
+    "Grep": 1
+   },
+   "stderr": "",
+   "answer": "I added the schema in `supabase/migrations/20260101000000_notes.sql`. I haven't run it against a database, so it is untested.\n\n- **Table:** `public.note` has `id` (uuid primary key, generated with `gen_random_uuid()`), `owner` (uuid, not null, references `auth.users`) and `body` (text, not null).\n- **Owner default:** `owner` defaults to `auth.uid()`, so a client doesn't have to send it. Deleting a user also deletes their notes.\n- **Row-level security:** it is enabled and forced on the table.\n  -",
+   "turn2": {
+    "invalid": null,
+    "wall_s": 10.7,
+    "is_error": false,
+    "num_turns": 7,
+    "cost_usd": 0.0587777,
+    "input_tokens": 10,
+    "output_tokens": 970,
+    "cache_read_tokens": 154588,
+    "cache_creation_tokens": 8366,
+    "tools": {
+     "Bash": 1,
+     "Read": 2,
+     "Glob": 1,
+     "Grep": 1,
+     "Write": 1
+    },
+    "stderr": "",
+    "answer": "I added `supabase/migrations/20260102000000_note_body_to_content.sql`, which renames `body` to `content` on `public.note`. I haven't run it against a database.\n\n```sql\nalter table public.note rename column body to content;\n```\n\n- **Data:** a rename changes only the column name, so existing notes keep their text and the `not null` constraint stays.\n- **Everything else:** the row-level security setup, the policies and the grants all stay as they are. The policies only check `owner`, so none of the"
+   }
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_notes.sql",
+    "supabase/migrations/20260102000000_note_body_to_content.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create a note as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the old note keeps its text",
+     "want": "precious text",
+     "got": "precious text",
+     "ok": true
+    },
+    {
+     "check": "bob's old note keeps its text",
+     "want": "bob text",
+     "got": "bob text",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 14,
+   "total": 14,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "rename-alone-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 10.5,
+   "is_error": false,
+   "num_turns": 9,
+   "cost_usd": 0.100826,
+   "input_tokens": 6,
+   "output_tokens": 2012,
+   "cache_read_tokens": 89383,
+   "cache_creation_tokens": 8048,
+   "tools": {
+    "Read": 2,
+    "Write": 2,
+    "Bash": 3
+   },
+   "stderr": "",
+   "answer": "I wrote the schema to `supabase/migrations/20260101000000_notes.sql`. I haven't run it against a database, so it's untested.\n\n- **Table:** `public.note` has `id` (uuid primary key, generated), `owner` (uuid, not null, references `auth.users`) and `body` (text, not null). `owner` defaults to `auth.uid()`, so clients don't have to send it. Deleting a user also deletes their notes.\n- **Visibility:** row-level security is enabled and forced. Anonymous visitors get no access. Signed-in users can only",
+   "turn2": {
+    "invalid": null,
+    "wall_s": 12.7,
+    "is_error": false,
+    "num_turns": 5,
+    "cost_usd": 0.047960800000000005,
+    "input_tokens": 8,
+    "output_tokens": 854,
+    "cache_read_tokens": 123739,
+    "cache_creation_tokens": 6724,
+    "tools": {
+     "Read": 1,
+     "Bash": 2,
+     "Write": 1
+    },
+    "stderr": "",
+    "answer": "I added `supabase/migrations/20260102000000_note_rename_body_to_content.sql`, which renames `note.body` to `note.content`. I haven't run it against a database.\n\nThe migration is one statement: `alter table public.note rename column body to content;`. A rename keeps every existing row's text, so no data is lost.\n\nThe existing migration is untouched. The row-level security policies, grants, index and owner-lock trigger don't reference `body`, so they keep working as before. I also searched the res"
+   }
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_notes.sql",
+    "supabase/migrations/20260102000000_note_rename_body_to_content.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create a note as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the old note keeps its text",
+     "want": "precious text",
+     "got": "precious text",
+     "ok": true
+    },
+    {
+     "check": "bob's old note keeps its text",
+     "want": "bob text",
+     "got": "bob text",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 14,
+   "total": 14,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "rename-careful-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 10.5,
+   "is_error": false,
+   "num_turns": 12,
+   "cost_usd": 0.11526800000000001,
+   "input_tokens": 8,
+   "output_tokens": 2141,
+   "cache_read_tokens": 121533,
+   "cache_creation_tokens": 7923,
+   "tools": {
+    "Bash": 2,
+    "Glob": 2,
+    "Read": 3,
+    "Write": 2,
+    "Grep": 1
+   },
+   "stderr": "",
+   "answer": "I added the schema in `supabase/migrations/20260101000000_notes.sql`. I haven't run it against a database or tested it.\n\n- **Table `note`:**\n  - `id` is a uuid primary key that is generated automatically.\n  - `owner` is a uuid that references `auth.users` and defaults to the signed-in person, so inserts don't need to set it. Deleting a user deletes their notes.\n  - `body` is required text.\n  - There is an index on `owner`.\n- **Row-level security:** it is enabled and forced on the table, so it ap",
+   "turn2": {
+    "invalid": null,
+    "wall_s": 11.0,
+    "is_error": false,
+    "num_turns": 7,
+    "cost_usd": 0.060660900000000004,
+    "input_tokens": 10,
+    "output_tokens": 1081,
+    "cache_read_tokens": 154851,
+    "cache_creation_tokens": 8552,
+    "tools": {
+     "Bash": 1,
+     "Read": 2,
+     "Glob": 1,
+     "Grep": 1,
+     "Write": 1
+    },
+    "stderr": "",
+    "answer": "I added `supabase/migrations/20260201000000_note_rename_body_to_content.sql`, which renames `note.body` to `note.content` with a single `alter table public.note rename column body to content;`. I haven't run it against a database.\n\n- **No data loss:** a column rename only changes the name, so every existing note keeps its text. Nothing is dropped or copied.\n- **Security is unchanged:** row level security, the revoked `anon` access and the four owner-only policies on `note` all stay as they were."
+   }
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_notes.sql",
+    "supabase/migrations/20260201000000_note_rename_body_to_content.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create a note as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the old note keeps its text",
+     "want": "precious text",
+     "got": "precious text",
+     "ok": true
+    },
+    {
+     "check": "bob's old note keeps its text",
+     "want": "bob text",
+     "got": "bob text",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 14,
+   "total": 14,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "rename-careful-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 11.8,
+   "is_error": false,
+   "num_turns": 11,
+   "cost_usd": 0.0969417,
+   "input_tokens": 8,
+   "output_tokens": 1983,
+   "cache_read_tokens": 123342,
+   "cache_creation_tokens": 6389,
+   "tools": {
+    "Bash": 1,
+    "Glob": 2,
+    "Read": 3,
+    "Write": 2,
+    "Grep": 1
+   },
+   "stderr": "",
+   "answer": "I wrote the schema to `supabase/migrations/20260101000000_notes.sql`. I haven't run it against a database or tested it.\n\n- **Table:** `note` has `id` (uuid primary key, generated), `owner` (uuid, required, references `auth.users`) and `body` (text, required). `owner` defaults to the signed-in person, and deleting a user deletes their notes. I added an index on `owner`.\n- **Row-level security:** it is enabled and forced on `note`. Select, insert, update and delete are each allowed only when `owne",
+   "turn2": {
+    "invalid": null,
+    "wall_s": 9.5,
+    "is_error": false,
+    "num_turns": 6,
+    "cost_usd": 0.0480097,
+    "input_tokens": 8,
+    "output_tokens": 895,
+    "cache_read_tokens": 123659,
+    "cache_creation_tokens": 6635,
+    "tools": {
+     "Read": 2,
+     "Glob": 1,
+     "Grep": 1,
+     "Write": 1
+    },
+    "stderr": "",
+    "answer": "I added `supabase/migrations/20260102000000_note_rename_body_to_content.sql`, which renames `body` to `content` on `public.note`. I haven't run it against a database.\n\n- **No data loss:** `alter table public.note rename column body to content;` renames the column in place. Existing rows keep their text, and nothing is dropped or copied.\n- **Security unchanged:** Row-level security and forced row-level security stay on. Access stays limited to signed-in users, and each person can still only selec"
+   }
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20260101000000_notes.sql",
+    "supabase/migrations/20260102000000_note_rename_body_to_content.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create a note as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the old note keeps its text",
+     "want": "precious text",
+     "got": "precious text",
+     "ok": true
+    },
+    {
+     "check": "bob's old note keeps its text",
+     "want": "bob text",
+     "got": "bob text",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 14,
+   "total": 14,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": false,
+    "generated_access_tests": 0
+   }
+  }
+ },
+ {
+  "run": "rename-svetra-1",
+  "agent": {
+   "invalid": null,
+   "wall_s": 20.1,
+   "is_error": false,
+   "num_turns": 32,
+   "cost_usd": 0.22239309999999998,
+   "input_tokens": 20,
+   "output_tokens": 4610,
+   "cache_read_tokens": 346435,
+   "cache_creation_tokens": 11991,
+   "tools": {
+    "mcp__svetra__compile": 2,
+    "mcp__svetra__validate": 2,
+    "Skill": 1,
+    "Bash": 6,
+    "ToolSearch": 2,
+    "Glob": 1,
+    "Edit": 3,
+    "Read": 6,
+    "mcp__svetra__plan": 3,
+    "Write": 2,
+    "mcp__svetra__explain": 1
+   },
+   "stderr": "",
+   "answer": "The backend is in place as `supabase/migrations/20261117000000_notes.sql`. I haven't run it against a database, so the generated access tests in `supabase/tests/svetra.test.sql` are unrun.\n\n- **Table:** `note` has `id` (uuid primary key, generated), `owner` (uuid, required, references `auth.users`) and `body` (text, required). I added an index on `owner`.\n- **Access:** row-level security is on. Signed-in people can read, create, change and delete a note only when `owner` is their own id. Nobody ",
+   "turn2": {
+    "invalid": null,
+    "wall_s": 25.9,
+    "is_error": false,
+    "num_turns": 16,
+    "cost_usd": 0.1200627,
+    "input_tokens": 20,
+    "output_tokens": 2656,
+    "cache_read_tokens": 354278,
+    "cache_creation_tokens": 14475,
+    "tools": {
+     "Read": 4,
+     "Glob": 1,
+     "Edit": 1,
+     "ToolSearch": 1,
+     "mcp__svetra__validate": 1,
+     "mcp__svetra__plan": 2,
+     "Bash": 2,
+     "Write": 2,
+     "mcp__svetra__compile": 1
+    },
+    "stderr": "",
+    "answer": "I renamed `note.body` to `content` with a new migration that keeps every existing note's text. I haven't run it against a database or run `supabase test db`.\n\n- **Migration:** `supabase/migrations/20261117000100_rename_note_body_to_content.sql` contains one statement, `alter table \"public\".\"note\" rename column \"body\" to \"content\";`. The existing migration is untouched.\n- **Design:** in `svetra.yaml` the field is now `content: { type: text, required: true, was: body }`. The `was: body` marks it a"
+   }
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_notes.sql",
+    "supabase/migrations/20261117000100_rename_note_body_to_content.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create a note as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the old note keeps its text",
+     "want": "precious text",
+     "got": "precious text",
+     "ok": true
+    },
+    {
+     "check": "bob's old note keeps its text",
+     "want": "bob text",
+     "got": "bob text",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 14,
+   "total": 14,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": true,
+    "generated_access_tests": 38
+   }
+  }
+ },
+ {
+  "run": "rename-svetra-2",
+  "agent": {
+   "invalid": null,
+   "wall_s": 21.3,
+   "is_error": false,
+   "num_turns": 31,
+   "cost_usd": 0.21346710000000002,
+   "input_tokens": 18,
+   "output_tokens": 4740,
+   "cache_read_tokens": 313023,
+   "cache_creation_tokens": 12033,
+   "tools": {
+    "mcp__svetra__compile": 2,
+    "mcp__svetra__validate": 2,
+    "Skill": 1,
+    "Bash": 7,
+    "ToolSearch": 2,
+    "Glob": 1,
+    "Edit": 3,
+    "Read": 5,
+    "mcp__svetra__plan": 2,
+    "Write": 2,
+    "mcp__svetra__explain": 1
+   },
+   "stderr": "",
+   "answer": "The notes backend is written, and the schema is in `supabase/migrations/20261117000000_notes.sql`. I couldn't run `supabase test db` because I didn't check for a local Supabase. So none of the access tests have run.\n\n- **Table:** `note` has `id` (uuid primary key, generated), `owner` (uuid, required, references `auth.users`) and `body` (text, required). `owner` is indexed.\n- **Access:** row-level security is on. A signed-in person can read, create, change and delete a note only when `owner` is t",
+   "turn2": {
+    "invalid": null,
+    "wall_s": 24.1,
+    "is_error": false,
+    "num_turns": 16,
+    "cost_usd": 0.1111639,
+    "input_tokens": 18,
+    "output_tokens": 2471,
+    "cache_read_tokens": 315990,
+    "cache_creation_tokens": 13671,
+    "tools": {
+     "Read": 4,
+     "Glob": 1,
+     "Edit": 1,
+     "ToolSearch": 1,
+     "mcp__svetra__validate": 1,
+     "mcp__svetra__plan": 2,
+     "Bash": 2,
+     "Write": 2,
+     "mcp__svetra__compile": 1
+    },
+    "stderr": "",
+    "answer": "I've renamed `note.body` to `content`, and I'm finishing up. I haven't run `supabase test db`, so the generated access tests haven't been run against a database.\n\n- **Design:** `svetra.yaml` now has `content` with `was: body`, which marks it as a rename and not a drop and re-add. `validate` passed.\n- **Plan:** `plan` classed the change as safe (\"every value is kept\"), so it needed no confirmation from you. Git HEAD has no committed `svetra.yaml`, so I compared against a copy of the old design th"
+   }
+  },
+  "check": {
+   "schema_files": [
+    "supabase/migrations/20261117000000_notes.sql",
+    "supabase/migrations/20261117000100_rename_note_body_to_content.sql"
+   ],
+   "applied": true,
+   "setup_ok": true,
+   "checks": [
+    {
+     "check": "alice sees her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot see bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "bob cannot see alice's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot see a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can change her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot change bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can delete her note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot delete bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice can create her own note",
+     "want": "allowed",
+     "got": "allowed",
+     "ok": true
+    },
+    {
+     "check": "alice cannot create a note as bob",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "a visitor cannot create a note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "alice cannot take over bob's note",
+     "want": "denied",
+     "got": "denied",
+     "ok": true
+    },
+    {
+     "check": "the old note keeps its text",
+     "want": "precious text",
+     "got": "precious text",
+     "ok": true
+    },
+    {
+     "check": "bob's old note keeps its text",
+     "want": "bob text",
+     "got": "bob text",
+     "ok": true
+    }
+   ],
+   "leaks": 0,
+   "too_strict": 0,
+   "passed": 14,
+   "total": 14,
+   "svetra_check": {
+    "critical": 0,
+    "warning": 0,
+    "info": 0
+   },
+   "artifacts": {
+    "svetra_yaml": true,
+    "generated_access_tests": 38
+   }
+  }
+ }
+]

@@ -1,0 +1,166 @@
+{
+ "prompt": "rename",
+ "condition": "svetra",
+ "seed": 1,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "invalid": null,
+  "wall_s": 20.1,
+  "is_error": false,
+  "num_turns": 32,
+  "cost_usd": 0.22239309999999998,
+  "input_tokens": 20,
+  "output_tokens": 4610,
+  "cache_read_tokens": 346435,
+  "cache_creation_tokens": 11991,
+  "tools": {
+   "mcp__svetra__compile": 2,
+   "mcp__svetra__validate": 2,
+   "Skill": 1,
+   "Bash": 6,
+   "ToolSearch": 2,
+   "Glob": 1,
+   "Edit": 3,
+   "Read": 6,
+   "mcp__svetra__plan": 3,
+   "Write": 2,
+   "mcp__svetra__explain": 1
+  },
+  "stderr": "",
+  "answer": "The backend is in place as `supabase/migrations/20261117000000_notes.sql`. I haven't run it against a database, so the generated access tests in `supabase/tests/svetra.test.sql` are unrun.\n\n- **Table:** `note` has `id` (uuid primary key, generated), `owner` (uuid, required, references `auth.users`) and `body` (text, required). I added an index on `owner`.\n- **Access:** row-level security is on. Signed-in people can read, create, change and delete a note only when `owner` is their own id. Nobody ",
+  "turn2": {
+   "invalid": null,
+   "wall_s": 25.9,
+   "is_error": false,
+   "num_turns": 16,
+   "cost_usd": 0.1200627,
+   "input_tokens": 20,
+   "output_tokens": 2656,
+   "cache_read_tokens": 354278,
+   "cache_creation_tokens": 14475,
+   "tools": {
+    "Read": 4,
+    "Glob": 1,
+    "Edit": 1,
+    "ToolSearch": 1,
+    "mcp__svetra__validate": 1,
+    "mcp__svetra__plan": 2,
+    "Bash": 2,
+    "Write": 2,
+    "mcp__svetra__compile": 1
+   },
+   "stderr": "",
+   "answer": "I renamed `note.body` to `content` with a new migration that keeps every existing note's text. I haven't run it against a database or run `supabase test db`.\n\n- **Migration:** `supabase/migrations/20261117000100_rename_note_body_to_content.sql` contains one statement, `alter table \"public\".\"note\" rename column \"body\" to \"content\";`. The existing migration is untouched.\n- **Design:** in `svetra.yaml` the field is now `content: { type: text, required: true, was: body }`. The `was: body` marks it a"
+  }
+ },
+ "applied_before": [
+  "supabase/migrations/20261117000000_notes.sql"
+ ],
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20261117000000_notes.sql",
+   "supabase/migrations/20261117000100_rename_note_body_to_content.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see alice's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can change her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create a note as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the old note keeps its text",
+    "want": "precious text",
+    "got": "precious text",
+    "ok": true
+   },
+   {
+    "check": "bob's old note keeps its text",
+    "want": "bob text",
+    "got": "bob text",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 14,
+  "total": 14,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  },
+  "artifacts": {
+   "svetra_yaml": true,
+   "generated_access_tests": 38
+  }
+ }
+}

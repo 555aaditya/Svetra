@@ -1,0 +1,156 @@
+{
+ "prompt": "rename",
+ "condition": "careful",
+ "seed": 1,
+ "model": "claude-sonnet-5-5",
+ "agent": {
+  "invalid": null,
+  "wall_s": 10.5,
+  "is_error": false,
+  "num_turns": 12,
+  "cost_usd": 0.11526800000000001,
+  "input_tokens": 8,
+  "output_tokens": 2141,
+  "cache_read_tokens": 121533,
+  "cache_creation_tokens": 7923,
+  "tools": {
+   "Bash": 2,
+   "Glob": 2,
+   "Read": 3,
+   "Write": 2,
+   "Grep": 1
+  },
+  "stderr": "",
+  "answer": "I added the schema in `supabase/migrations/20260101000000_notes.sql`. I haven't run it against a database or tested it.\n\n- **Table `note`:**\n  - `id` is a uuid primary key that is generated automatically.\n  - `owner` is a uuid that references `auth.users` and defaults to the signed-in person, so inserts don't need to set it. Deleting a user deletes their notes.\n  - `body` is required text.\n  - There is an index on `owner`.\n- **Row-level security:** it is enabled and forced on the table, so it ap",
+  "turn2": {
+   "invalid": null,
+   "wall_s": 11.0,
+   "is_error": false,
+   "num_turns": 7,
+   "cost_usd": 0.060660900000000004,
+   "input_tokens": 10,
+   "output_tokens": 1081,
+   "cache_read_tokens": 154851,
+   "cache_creation_tokens": 8552,
+   "tools": {
+    "Bash": 1,
+    "Read": 2,
+    "Glob": 1,
+    "Grep": 1,
+    "Write": 1
+   },
+   "stderr": "",
+   "answer": "I added `supabase/migrations/20260201000000_note_rename_body_to_content.sql`, which renames `note.body` to `note.content` with a single `alter table public.note rename column body to content;`. I haven't run it against a database.\n\n- **No data loss:** a column rename only changes the name, so every existing note keeps its text. Nothing is dropped or copied.\n- **Security is unchanged:** row level security, the revoked `anon` access and the four owner-only policies on `note` all stay as they were."
+  }
+ },
+ "applied_before": [
+  "supabase/migrations/20260101000000_notes.sql"
+ ],
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20260101000000_notes.sql",
+   "supabase/migrations/20260201000000_note_rename_body_to_content.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot see bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "bob cannot see alice's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can change her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create her own note",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create a note as bob",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot create a note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot take over bob's note",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the old note keeps its text",
+    "want": "precious text",
+    "got": "precious text",
+    "ok": true
+   },
+   {
+    "check": "bob's old note keeps its text",
+    "want": "bob text",
+    "got": "bob text",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 14,
+  "total": 14,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  },
+  "artifacts": {
+   "svetra_yaml": false,
+   "generated_access_tests": 0
+  }
+ }
+}
