@@ -8,8 +8,8 @@ readme = "README.md"
 homepage = "https://555aaditya.github.io/Svetra/"
 keywords = ["supabase", "postgres", "row-level-security", "compiler", "cli"]
 categories = ["command-line-utilities", "database", "development-tools"]
-# The crate ships the source, the specs and the schema; not the whitepaper or the test fixtures.
-exclude = ["Svetra.pdf", "tests/", "scripts/", ".github/", "npm/", "site/"]
+# The crate ships the source, the specs and the schema; not the whitepaper, the test fixtures or the agent evaluation.
+exclude = ["Svetra.pdf", "tests/", "scripts/", ".github/", "npm/", "site/", "eval/"]
 license = "MIT"
 repository = "https://github.com/555aaditya/Svetra"
 
