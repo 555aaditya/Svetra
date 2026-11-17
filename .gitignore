@@ -10,3 +10,7 @@ eval/agent/results/*
 !eval/agent/results/hard-*/
 !eval/agent/results/approvals-*/
 __pycache__/
+
+# Per-run files that name the local checkout; never needed to re-check a run
+eval/agent/results/**/.mcp.json
+eval/agent/results/**/bin/
