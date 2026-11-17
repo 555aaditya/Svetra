@@ -34,7 +34,7 @@ Use the `svetra` MCP tools (`validate`, `compile`, `explain`, `context`, `graph`
 
 - **Never** use the service role key in app code, and never turn row-level security off.
 - **Never** weaken a rule to make a test pass. A failing access test means the design and the database disagree; find out which is wrong.
-- **Prefer a policy over a hole, and a hole over app code,** for anything about who can see or change data. A change of state on a row (draft to submitted, submitted to approved) is a policy with a `check`, not a hole: `when` is the row as it is, `check` is the row after, and `restrictive: true` narrows other rules.
+- **Prefer a policy over a hole, and a hole over app code,** for anything about who can see or change data. A change of state on a row (draft to submitted, submitted to approved) is a policy with a `check`, not a hole: `when` is the row as it is, `check` is the row after, and `restrictive: true` narrows other rules. "Can change only the status" is `only: [status]` on that policy, never a hand-written trigger: Svetra generates and tests the guard.
 - **App code calls holes** through the typed functions in `src/svetra.gen.ts`, such as `transfer(supabase, input)`.
 - **Read the design with `context`**, not by opening the generated files.
 - **When asked "who can see X?",** call `explain` again and answer from its lines, even if you called it earlier. Never answer from memory: the file may have changed since.
