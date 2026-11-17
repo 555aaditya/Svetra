@@ -106,39 +106,40 @@ create trigger "svetra_guard" before update on "public"."doc"
 
 ## 4. The access tests
 
-The expected results come from the evaluator, which reads the policies, never the generated trigger. For an entity with any `unchanged`, the generator adds checks of three kinds, for every person and stored row (`a` and `b`). "Locked" is computed from the policies exactly as in section 2, on the old row, for that person.
+The expected results come from the evaluator, which reads the policies, never the generated trigger. For an entity with any `only`, the generator adds checks of three kinds, for every person and stored row (`a` and `b`). "Locked" is computed from the policies exactly as in section 2, on the old row, for that person.
 
 | Check | Update | Expected |
 |---|---|---|
-| **A field on its own** | one field set to the other row's value (every stored row differs in every field, so it is a real change), for each field that appears in any `unchanged` and for each that doesn't | allowed when the ordinary rules allow that update **and** the field isn't locked; otherwise denied |
-| **A locked field beside an allowed transition** | for each locked field F, and each transition G → v that the ordinary rules allow for this person and row (docs/update-check.md, section 3): G set to v **and** F changed, in one update | **denied** whenever F is locked. This is the check no row policy could pass, and the one that proves the trigger exists and works |
+| **A field on its own** | one field set to the other row's value (every stored row differs in every field, so it is a real change), for every non-key field | allowed when the ordinary rules allow that update **and** the field isn't locked; otherwise denied |
+| **A locked field beside an allowed transition** | for each field F that is locked for this person and row, and each transition G → v that the ordinary rules allow for this person and row (docs/update-check.md, section 3): G set to v **and** F changed, in one update | **denied** whenever F is locked. This is the check no row policy could pass, and the one that proves the trigger exists and works |
 | **A free field beside an allowed transition** | the same, with a field that isn't locked | as the ordinary rules say for the combined row |
 
 - **Why the second row is the point.** A locked field changed *alone* is usually refused by `WITH CHECK` anyway (the status didn't move, so the `check` fails), so it can't tell a working trigger from none. The combined update is allowed by every row policy and is refused only by the guard. A design where the trigger is missing, disabled or wrong fails exactly those checks.
 - **Several changed fields** need the evaluator's "new row" to hold more than one changed field; it holds a list of them, where today it holds one.
 - **Skipped, as for the existing change checks:** fields alone in a `unique` rule, and fields a declared constraint names, because the database could refuse the new value for another reason.
-- **Entities with no `unchanged` get none of these checks,** so every existing golden file stays byte-identical.
-- **Roughly** 3 to 5 extra checks per person per row per field of an entity that uses `unchanged`. The approvals example is a few dozen.
+- **Entities with no `only` get none of these checks,** so every existing golden file stays byte-identical.
+- **Roughly** 3 to 5 extra checks per person per row per field of an entity that uses `only`. The approvals example is a few dozen.
 
-**Deliberate breakages for the real-database checks** (`tests/pg/breakages/`, the same mechanism as for policies): the trigger dropped; the trigger disabled (`alter table ... disable trigger`); a policy's `unchanged` emptied by hand in the function; and the restrictive lock ignored. Each must fail exactly the checks above and nothing else.
+**Deliberate breakages for the real-database checks** (`tests/pg/breakages/`, the same mechanism as for policies): the trigger dropped; the trigger disabled (`alter table ... disable trigger`); a field removed from the guard by hand; and the restrictive lock ignored. Each must fail exactly the checks above and nothing else.
 
 ## 5. `explain`, `view`, `context`, `graph` and `plan`
 
-- **`explain`** adds a sentence to a policy that has `unchanged`: *"…but they can't change its title, author or reviewer."* For a restrictive one: *"…while it is paid, nobody can change its total or customer."* The words are the fields' own labels. The generated trigger is never mentioned, because the reader needs the rule, not the mechanism.
-- **`context`** appends `unchanged title,author,reviewer` to the policy's line.
+- **`explain`** adds a sentence to a policy that has `only`: *"…and they can change only its status."* For a restrictive one: *"…while it is paid, only its notes can change."* The words are the fields' own labels. The generated trigger is never mentioned, because the reader needs the rule, not the mechanism.
+- **`context`** appends `only status` to the policy's line.
 - **`graph`** is unchanged: a column rule grants nothing and draws no edge.
 - **`view`** has no new column: **Change** stays one cell per person and thing. Its detail panel lists, for a person and row, what the change may touch: "a reviewer can change a submitted document's status, to approved or rejected, and nothing else". (This is also where docs/update-check.md's listing of allowed transitions lands.)
-- **`plan`** (docs/change.md) classifies by the access diff it already computes from the evaluator. Adding an `unchanged` field, or a policy that locks one, **narrows** access; removing one **widens** it and needs `--accept wider_access`. Adding the first `unchanged` to an entity adds the guard trigger, which is a schema addition and safe for data; removing the last one drops it.
+- **`plan`** (docs/change.md) classifies by the access diff it already computes from the evaluator. Adding an `only`, or dropping a field from one, **narrows** access; removing one, or adding a field to one, **widens** it and needs `--accept wider_access`. Adding the first `only` to an entity adds the guard trigger, which is a schema addition and safe for data; removing the last one drops it. A column added later is locked by every `only` that doesn't list it: the access diff says so, as a narrower access for the people those policies cover.
 
 ## 6. Diagnostics
 
 | Code | Severity | Rule |
 |---|---|---|
-| `SVT035` (new) | error | A policy has `unchanged` but doesn't allow `update`: only an update changes fields |
-| `SVT002` (existing) | error | `unchanged` names a field the entity doesn't have, or its primary key |
-| `SVT036` (new) | warning | A person is covered, on some row, by two permissive update policies that disagree about a field: one lists it in `unchanged` and another doesn't. By section 2 the second one frees it, so the lock has no effect for that person. Computed by the evaluator, like `SVT034` |
+| `SVT035` (new) | error | A policy has `only` but doesn't allow `update`: only an update changes fields |
+| `SVT002` (existing) | error | `only` names a field the entity doesn't have, or its primary key |
+| `SVT029` (existing) | error | `only` lists no field: an update allowed through the policy could change nothing, which is never what is meant |
+| `SVT036` (new) | warning | A person is covered, on some row, by two permissive update policies that disagree about a field: one has an `only` that leaves it out and another frees it (no `only`, or it is listed). By section 2 the second one frees it, so the first one's limit has no effect for that person. Computed by the evaluator, like `SVT034` |
 
-`SVT036` is the column-rule twin of `SVT034`: a combination of policies that does something neither says alone. The hint is to move the field out of the freeing policy's reach, or to list it in both.
+`SVT036` is the column-rule twin of `SVT034`: a combination of policies that does something neither says alone. The hint is to give the freeing policy an `only` too, or to merge the two.
 
 ## 7. Alternatives considered
 
