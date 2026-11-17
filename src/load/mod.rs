@@ -39,7 +39,15 @@ pub const FIELD_KEYS: &[&str] = &[
     "entity",
     "was",
 ];
-pub const POLICY_KEYS: &[&str] = &["on", "allow", "when", "check", "restrictive", "as"];
+pub const POLICY_KEYS: &[&str] = &[
+    "on",
+    "allow",
+    "when",
+    "check",
+    "only",
+    "restrictive",
+    "as",
+];
 pub const HOLE_KEYS: &[&str] = &[
     "kind", "input", "output", "reads", "writes", "grants", "as", "when",
 ];

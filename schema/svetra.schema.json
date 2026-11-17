@@ -300,6 +300,15 @@
           "description": "The condition the row must satisfy after an update (WITH CHECK). Defaults to `when`. Only for policies that allow update.",
           "type": "string"
         },
+        "only": {
+          "description": "The fields an update allowed through this policy may change; every other field must stay as it is. Only for a policy that allows update.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          }
+        },
         "restrictive": {
           "description": "true: must hold in addition to a permissive policy for the same action; never grants access on its own.",
           "type": "boolean"

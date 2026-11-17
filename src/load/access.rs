@@ -37,6 +37,23 @@ impl Cx {
             Some(v) => Some(self.string(v, &format!("{path}.check"))?),
             None => None,
         };
+        let only = match k.get("only") {
+            Some(v) => {
+                let fields = self.name_list(v, &format!("{path}.only"));
+                if fields.is_empty() {
+                    self.report(
+                        Code::Svt029,
+                        &format!("{path}.only"),
+                        v,
+                        "`only` must list at least one field.".into(),
+                        "Name the fields an update may change, such as only: [status].",
+                    );
+                    return None;
+                }
+                Some(fields)
+            }
+            None => None,
+        };
         let restrictive = k
             .get("restrictive")
             .is_some_and(|v| self.boolean(v, &format!("{path}.restrictive")));
@@ -47,6 +64,7 @@ impl Cx {
             allow,
             when,
             check,
+            only,
             restrictive,
             role,
         })
