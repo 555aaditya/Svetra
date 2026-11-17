@@ -70,7 +70,7 @@ Putting it together, an update of row R by person P is refused when any field it
 
 ## 3. How it compiles
 
-One `before update` row trigger per entity that has any `unchanged`, and one function behind it, both in the generated schema file (so they come with `supabase db diff`, are checked by `compile --check`, and are owned by Svetra):
+One `before update` row trigger per entity that has any `only`, and one function behind it, both in the generated schema file (so they come with `supabase db diff`, are checked by `compile --check`, and are owned by Svetra):
 
 ```sql
 create function "svetra"."guard_doc"() returns trigger language plpgsql as $$
@@ -80,7 +80,7 @@ begin
   if new."title" is distinct from old."title" and <title is locked> then
     raise exception 'doc: title can''t be changed here' using errcode = '42501';
   end if;
-  -- ... one block per field that appears in any `unchanged` of this entity
+  -- ... one block per non-key field that some policy's `only` leaves out
   return new;
 end $$;
 create trigger "svetra_guard" before update on "public"."doc"
@@ -89,8 +89,8 @@ create trigger "svetra_guard" before update on "public"."doc"
 
 `<title is locked>` is built from the policies, exactly as section 2 says: each applicable policy is its `when` evaluated on **`old`**, for the person's database role.
 
-- **Restrictive lock:** `<any applicable restrictive policy lists title>`.
-- **Permissive lock:** at least one permissive update policy applies and **none** that applies leaves `title` free. In SQL, `not (<policy A applies and doesn't list title> or <policy B applies and doesn't list title> or …)`.
+- **Restrictive lock:** `<any applicable restrictive policy has an `only` that leaves title out>`.
+- **Permissive lock:** at least one permissive update policy applies and **none** that applies leaves `title` free. In SQL, `not (<policy A applies and has no only, or lists title> or <policy B applies and …> or …)`.
 - **"Applies"** is the policy's `when` compiled against `old`: columns become `old."col"`, a one-hop path becomes the same scalar subquery as in a policy keyed on `old."fk"`, `auth.user` is `(select auth.uid())`, and `has_role(...)` is `svetra.has_role(...)`. A policy `as anon` only applies when `current_user = 'anon'`, one `as authenticated` when it is `'authenticated'`, one `as anyone` to both.
 - **The refusal is SQLSTATE 42501** (insufficient privilege), like any other refusal by a policy, so a client can't tell it apart, and the generated tests count it as denied.
 
@@ -102,7 +102,7 @@ create trigger "svetra_guard" before update on "public"."doc"
 - **The service role, the table owner and migrations.** They aren't `anon` or `authenticated`, so row-level security doesn't apply to them, and neither does this.
 - **Hole bodies.** A hole runs as its own role (docs/compiler.md), which isn't either of those, so it is exempt as it is from the policies. That is what makes a hole the right place for logic that must change a locked field, such as an administrator's tool.
 
-**Cost:** one extra function call per updated row, and only for entities that use `unchanged`. The expressions are the policies' own, on a row already in memory.
+**Cost:** one extra function call per updated row, and only for entities that use `only`. The expressions are the policies' own, on a row already in memory.
 
 ## 4. The access tests
 
