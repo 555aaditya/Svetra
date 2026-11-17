@@ -116,7 +116,11 @@ pub fn context(doc: &Document) -> String {
         let after = p
             .check
             .as_ref()
-            .map_or(String::new(), |c| format!(" check {c}"));
+            .map_or(String::new(), |c| format!(" check {c}"))
+            + &p.only.as_ref().map_or(String::new(), |only| {
+                let names: Vec<&str> = only.iter().map(|f| f.name.as_str()).collect();
+                format!(" only {}", names.join(","))
+            });
         out += &format!(
             "{kind}policy {}: {} {} {role} when {}{after}\n",
             p.name,
