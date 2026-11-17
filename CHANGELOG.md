@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 (2026-11-18)
+
+Say what an update may turn a row into, so a state change isn't a hole: `check` on update, and `restrictive` policies.
 
 - **A policy can say what an update turns a row into: `check`.** `when` is the row as it is, `check` is the row afterwards (PostgreSQL's `USING` and `WITH CHECK`), so "a draft becomes submitted, a submitted document is approved or rejected, and nothing else" is a policy, not a hand-written function. Without a `check` nothing changes. The access tests try each value a rule with a `check` reads (each enum value, or true and false), so the transitions are proven on your database like the rest. In the agent evaluation, an agent given this exact app wrote four holes; the example (`approvals`) now needs none.
 - **`restrictive: true`:** a policy that must hold in addition to a permissive one, compiled to `as restrictive`. "Suspended people can't write" is one rule, not an edit to every policy. `explain` ends each sentence it narrows with "and only when ...". New code **SVT033** (a `check` on a policy that doesn't allow update).
