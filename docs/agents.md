@@ -30,7 +30,7 @@ Sets a project up for agents. `DIR` defaults to the current folder. It writes:
 2. **Validate after every edit,** with the `validate` tool, or `svetra validate --json`. Fix every error using its `remediation.hint` before going on. Don't move on with errors.
 3. **Plan a change,** when `svetra.yaml` already exists in git: call `plan`. Show the person every destructive line and every wider-access line, in their words, and get an explicit yes before running `svetra plan --accept <kinds>`. Declare renames with `was:`, never by removing and adding.
 4. **Compile,** with the `compile` tool. Never edit the generated files (`supabase/schemas/svetra.sql`, `src/svetra.gen.ts`, `supabase/tests/svetra.test.sql`), or the keys Svetra owns in `supabase/config.toml`.
-5. **Write only hole bodies,** in `supabase/holes/<name>.sql`. Use the `p_` inputs, touch only the declared entities, and never add a check that `when` already makes.
+5. **Write only hole bodies,** in `supabase/holes/<name>.sql`, as statements only: Svetra writes the `begin` and `end` around them, so never wrap the body in its own `begin … end`, and end every statement with `;` (`compile` refuses a body that doesn't, with SVT032). Use the `p_` inputs, touch only the declared entities, and never add a check that `when` already makes.
 6. **Explain,** with the `explain` tool. Show the person the "Who can see and change what" section, and "Before going live" if there is one, in their words, not SQL.
 7. **Prove it,** with `supabase test db` when a local Supabase is running. Report failures as they are, and never weaken a policy to make a test pass.
 

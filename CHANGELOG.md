@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+
+- **`compile` refuses a hole body that would break the function around it.** Svetra writes the `begin` and `end` around a hole's hand-written body, so the body must be statements ending in `;`. A body that is a whole function (`begin … end` with no `;` after it) left a stray `end` and a migration that didn't parse; an agent did exactly that in the agent evaluation, with no database to find out. It is now **SVT032**, reported against `supabase/holes/<name>.sql` (over MCP too, as `hole_bodies`), with nothing written. Nested blocks ending in `end;`, trailing comments and empty bodies are still fine. The skill and the agents doc say bodies are statements only.
 ## 0.7.0 (2026-11-16)
 
 Find the leaks in an app you already have: `svetra check`.

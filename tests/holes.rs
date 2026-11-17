@@ -142,3 +142,62 @@ fn a_hole_that_grants_one_role_cannot_reach_the_others() {
     assert!(tests.contains("'add_member can''t give the admin role'"));
     assert!(tests.contains("'add_member can give the member role'"));
 }
+
+fn compile_ledger_with_body(dir_name: &str, body: &str) -> std::process::Output {
+    let dir = std::env::temp_dir().join(format!("svetra-body-{dir_name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("supabase/holes")).unwrap();
+    std::fs::write(
+        dir.join("svetra.yaml"),
+        include_str!("fixtures/finledger.yaml"),
+    )
+    .unwrap();
+    std::fs::write(dir.join("supabase/holes/transfer.sql"), body).unwrap();
+    std::process::Command::new(env!("CARGO_BIN_EXE_svetra"))
+        .args(["compile", dir.join("svetra.yaml").to_str().unwrap()])
+        .output()
+        .unwrap()
+}
+
+/// The body an agent wrote in the evaluation: a whole function, `begin … end` with no `;`. Svetra
+/// puts its own begin and end around the body, so it left a stray `end` and a migration that
+/// didn't parse. It is refused before anything is written, and the report names the body file.
+#[test]
+fn a_whole_function_body_is_refused_against_its_own_file() {
+    let body = "begin\n  update \"public\".\"account\" set \"balance\" = \"balance\" - p_amount\n   where \"id\" = p_source;\n  if not found then\n    raise exception 'no such account' using errcode = '42501';\n  end if;\nend\n";
+    let out = compile_ledger_with_body("whole", body);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("supabase/holes/transfer.sql:7:1: error SVT032"),
+        "{text}"
+    );
+    assert!(
+        text.contains("whole begin … end block with no `;`")
+            && text.contains("Svetra already adds the outer begin and end"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Delete the outer `begin` and `end`")
+            && text.contains("Nothing was written."),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_body_must_end_with_a_semicolon_but_nested_blocks_and_comments_are_fine() {
+    let refused = |body: &str| {
+        let out = compile_ledger_with_body("semi", body);
+        String::from_utf8_lossy(&out.stdout).contains("SVT032")
+    };
+    // Not statements: refused.
+    assert!(refused("update \"public\".\"account\" set \"balance\" = 0"));
+    assert!(refused("  perform 1;\n  if true then perform 2; end if"));
+    // A nested block ending with `end;`, trailing comments and an empty body are all valid.
+    assert!(!refused("declare v int;\nbegin\n  v := 1;\nend;\n"));
+    assert!(!refused("  perform 1;\n-- done\n/* really done */\n"));
+    assert!(!refused(""));
+    assert!(!refused(include_str!(
+        "fixtures/holes/finledger/transfer.sql"
+    )));
+}

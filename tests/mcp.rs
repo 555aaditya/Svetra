@@ -181,3 +181,27 @@ fn protocol_errors() {
         .collect();
     assert_eq!(codes, [-32700, -32601, -32602]);
 }
+
+/// An agent calling `compile` with a hole body that is a whole function gets the problem against
+/// the body file, as a tool error it can act on, and nothing is written.
+#[test]
+fn compile_refuses_a_hole_body_that_is_a_whole_function() {
+    let dir = project("body", include_str!("fixtures/finledger.yaml"));
+    std::fs::create_dir_all(dir.join("supabase/holes")).unwrap();
+    std::fs::write(
+        dir.join("supabase/holes/transfer.sql"),
+        "begin\n  perform 1;\nend\n",
+    )
+    .unwrap();
+    let replies = session(&dir, &[call(1, "compile", json!({}))]);
+    let (v, is_error) = result(&replies[0]);
+    assert!(is_error);
+    let body = &v["hole_bodies"][0];
+    assert_eq!(body["file"], "supabase/holes/transfer.sql");
+    assert_eq!(body["diagnostics"][0]["code"], "SVT032");
+    assert_eq!(
+        body["diagnostics"][0]["remediation"]["action"],
+        "fix_hole_body"
+    );
+    assert!(!dir.join("supabase/schemas/svetra.sql").exists());
+}

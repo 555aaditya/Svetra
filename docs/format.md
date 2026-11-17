@@ -269,7 +269,7 @@ Every entity named in `reads`, `writes`, `input` or `output` must exist (`SVT002
 
 **Giving a role** in a body is an insert into `"svetra"."role_grants"` (`"user_id"`, `"role"`, `"scope_id"`), with the scope row's id for a scoped role and `null` for a global one; taking it away is a delete. For example, `insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values (p_caller, 'member', v_team."id");`. Who may call the hole is still decided by `as` and `when`: a hole that adds members usually has `when: "has_role('member', team)"`.
 
-**The body** is the one hand-written part: PL/pgSQL statements in `supabase/holes/<name>.sql`, next to `svetra.yaml`.
+**The body** is the one hand-written part: PL/pgSQL statements in `supabase/holes/<name>.sql`, next to `svetra.yaml`. **Statements only:** Svetra writes the function around them, including its own `begin` and `end`, so every statement ends with `;`. A whole function body (`begin … end` with no `;` after it) leaves a stray `end` and a migration that doesn't parse, so `compile` refuses it (`SVT032`).
 - **Inputs** are named `p_<input>`, such as `p_source`, so they never clash with column names. **`p_caller`** is the signed-in person's id, or `null` for a logged-out visitor.
 - **Variables** need their own block inside the body: `declare v_tx "public"."transaction"; begin … end;`.
 - **The file** is created with a stub the first time, and never overwritten.
@@ -312,6 +312,7 @@ holes:
 | `SVT028` | error | A required key is missing | `add_key` |
 | `SVT029` | error | A value has the wrong kind, such as a string where a list or bool is expected | `fix_value` |
 | `SVT030` | error | A rename can't be right: `was` names an entity or field that is still in this design, or (in `svetra plan`) nothing in the design the database has | `fix_rename` |
+| `SVT032` | error | In `svetra compile`: a hole body that doesn't end with `;`, typically a whole `begin … end` function body. The generated function wouldn't parse. Reported against `supabase/holes/<name>.sql`, and nothing is written | `fix_hole_body` |
 | `SVT031` | info | In `svetra plan`: `was` names a rename that's already applied, because the design the database has already uses the new name. Remove it | `remove_was` |
 | `SVT001` | error | Entity exposed through the API has no policy. Mark it `private: true` or add a policy | `add_policy` |
 | `SVT002` | error | Reference to an entity or field that doesn't exist | `fix_reference` |

@@ -172,6 +172,13 @@ fn compile(args: &[String]) -> ExitCode {
             println!("Nothing was written.");
             return ExitCode::from(1);
         }
+        Err(Failure::HoleBodies(bodies)) => {
+            for (path, d) in &bodies {
+                print!("{}", report::human(path, std::slice::from_ref(d)));
+            }
+            println!("Nothing was written.");
+            return ExitCode::from(1);
+        }
         Err(Failure::Write(e)) => {
             eprintln!("svetra: {e}");
             return ExitCode::from(1);
@@ -228,7 +235,7 @@ fn init(args: &[String]) -> ExitCode {
             eprintln!("svetra: {e}");
             ExitCode::from(1)
         }
-        Err(svetra::project::Failure::Invalid(_)) => unreachable!("init doesn't validate"),
+        Err(_) => unreachable!("init neither validates nor reads hole bodies"),
     }
 }
 
