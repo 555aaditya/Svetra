@@ -1,0 +1,201 @@
+{
+ "prompt": "approvals",
+ "condition": "svetra",
+ "seed": 4,
+ "model": "claude-sonnet-5-5",
+ "svetra": "svetra 0.7.0",
+ "agent": {
+  "invalid": null,
+  "wall_s": 80.2,
+  "is_error": false,
+  "num_turns": 35,
+  "cost_usd": 0.27922719999999995,
+  "input_tokens": 42,
+  "output_tokens": 9797,
+  "cache_read_tokens": 831726,
+  "cache_creation_tokens": 24460,
+  "tools": {
+   "Bash": 8,
+   "Read": 2,
+   "Skill": 1,
+   "ToolSearch": 1,
+   "Write": 2,
+   "mcp__svetra__validate": 8,
+   "Edit": 9,
+   "mcp__svetra__compile": 1,
+   "mcp__svetra__explain": 1
+  },
+  "stderr": "Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.\n",
+  "answer": "The backend is written, but I haven't run any of it. There was no local Supabase to test against, so I haven't run the generated access tests in `supabase/tests/svetra.test.sql` or the guard trigger.\n\n**What's in place**\n- `svetra.yaml` is the design. It validates cleanly and compiles to `supabase/schemas/svetra.sql`.\n- `supabase/migrations/20261118000000_approvals.sql` is the final schema. It holds the `doc` table with the contract you gave and the access rules, plus one hand-written trigger.\n-"
+ },
+ "applied_before": null,
+ "check": {
+  "schema_files": [
+   "supabase/migrations/20261118000000_approvals.sql"
+  ],
+  "applied": true,
+  "setup_ok": true,
+  "checks": [
+   {
+    "check": "alice sees her draft",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "the reviewer cannot see a draft",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the reviewer sees a submitted document",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "someone else cannot see a submitted document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "a visitor cannot see a document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice sees her approved document",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice can change her draft's title",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change a submitted title",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can submit her draft",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot approve her own submitted document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot approve her own draft",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the reviewer can approve a submitted document",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "the reviewer can reject a submitted document",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "the reviewer cannot act on a draft",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "nobody can change an approved document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice cannot change an approved document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the reviewer cannot change the title",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the reviewer cannot approve and retitle at once",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "the reviewer cannot reassign the reviewer",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can delete her draft",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot delete a submitted document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "alice can create a document",
+    "want": "allowed",
+    "got": "allowed",
+    "ok": true
+   },
+   {
+    "check": "alice cannot create an already approved document",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   },
+   {
+    "check": "carol cannot create a document under alice's name",
+    "want": "denied",
+    "got": "denied",
+    "ok": true
+   }
+  ],
+  "leaks": 0,
+  "too_strict": 0,
+  "passed": 24,
+  "total": 24,
+  "svetra_check": {
+   "critical": 0,
+   "warning": 0,
+   "info": 0
+  },
+  "artifacts": {
+   "svetra_yaml": true,
+   "generated_access_tests": 68,
+   "holes": 0,
+   "checks": 2,
+   "restrictive": 0
+  }
+ }
+}

@@ -8,4 +8,5 @@
 eval/agent/results/*
 !eval/agent/results/pilot-*/
 !eval/agent/results/hard-*/
+!eval/agent/results/approvals-*/
 __pycache__/

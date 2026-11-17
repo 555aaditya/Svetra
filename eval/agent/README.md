@@ -112,6 +112,23 @@ Four harder prompts (`teams`, `approvals`, `softdelete`, `rename`) × three cond
 3. **Measure what happens later:** a third turn where someone changes a rule (widening access) and the agent must notice the consequence, with and without `plan`.
 4. **Harder access patterns, or a weaker model,** to find where baseline agents start to leak. More runs on these prompts would mostly measure cost.
 
+## Result 3: the approvals prompt again, after `check` on update (2026-11-18, four runs, Svetra 0.7.0 plus #69)
+
+The agent evaluation pointed at one gap: with the first version of the format, an agent given the approvals prompt needed four hand-written holes for status changes. `check` on update (and `restrictive`) was built for that. Same prompt, same checker, with Svetra, four runs. Saved in `results/approvals-2/`.
+
+| | Before (`hard-1`, two runs) | After (`approvals-2`, four runs) |
+|---|---|---|
+| Runs scoring every check | 1 of 2 (the other: a hole body that didn't parse, fixed in #67) | **4 of 4** |
+| Holes in `svetra.yaml` | 4 | **0** |
+| Policies with a `check` | not possible | 2 in every run |
+| Mean cost / turns | $0.20 / 18 | $0.26 / 29 |
+
+- **Every agent expressed the status transitions with `check:` and wrote no holes.** The skill's new sentence ("a change of state on a row is a policy with a `check`, not a hole") and the format did what they were built for.
+- **All four hit the one gap that is left, the same way:** "the reviewer may approve but not retitle" is a rule about columns, which a `check` can't say, so each agent **appended a hand-written trigger to its migration**, outside `svetra.yaml`. The result is correct (24 of 24 checks, including the reviewer approving and retitling at once), but that trigger is invisible to Svetra: not in the design, not in `explain`, not covered by the generated tests. It is the spec's open item U5, column rules, now with evidence of how often it matters: **4 of 4**.
+- **Cost went up a little** (the design is richer, and the agents validated more), still about two to three times the baseline.
+
+Four runs on one prompt show a direction, not a rate.
+
 ## What the benchmark as a whole cannot show
 
 - **No statistics.** One run per cell. Agents vary run to run; the plan is at least 5 per cell, and bootstrap intervals, before any claim.

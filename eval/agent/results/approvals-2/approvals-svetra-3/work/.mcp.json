@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "svetra": {
+      "command": "/Users/aadityasinha/Documents/GitHub/Svetra/target/debug/svetra",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}
