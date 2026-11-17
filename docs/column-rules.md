@@ -1,4 +1,4 @@
-# Column rules: `unchanged` on an update policy (draft)
+# Column rules: `only` on an update policy (draft)
 
 This document specifies a rule for which **fields** an update may change. When the code and this document disagree, that's a bug in one of them.
 
