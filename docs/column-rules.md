@@ -102,3 +102,21 @@ create trigger "svetra_guard" before update on "public"."doc"
 - **Hole bodies.** A hole runs as its own role (docs/compiler.md), which isn't either of those, so it is exempt as it is from the policies. That is what makes a hole the right place for logic that must change a locked field, such as an administrator's tool.
 
 **Cost:** one extra function call per updated row, and only for entities that use `unchanged`. The expressions are the policies' own, on a row already in memory.
+
+## 4. The access tests
+
+The expected results come from the evaluator, which reads the policies, never the generated trigger. For an entity with any `unchanged`, the generator adds checks of three kinds, for every person and stored row (`a` and `b`). "Locked" is computed from the policies exactly as in section 2, on the old row, for that person.
+
+| Check | Update | Expected |
+|---|---|---|
+| **A field on its own** | one field set to the other row's value (every stored row differs in every field, so it is a real change), for each field that appears in any `unchanged` and for each that doesn't | allowed when the ordinary rules allow that update **and** the field isn't locked; otherwise denied |
+| **A locked field beside an allowed transition** | for each locked field F, and each transition G → v that the ordinary rules allow for this person and row (docs/update-check.md, section 3): G set to v **and** F changed, in one update | **denied** whenever F is locked. This is the check no row policy could pass, and the one that proves the trigger exists and works |
+| **A free field beside an allowed transition** | the same, with a field that isn't locked | as the ordinary rules say for the combined row |
+
+- **Why the second row is the point.** A locked field changed *alone* is usually refused by `WITH CHECK` anyway (the status didn't move, so the `check` fails), so it can't tell a working trigger from none. The combined update is allowed by every row policy and is refused only by the guard. A design where the trigger is missing, disabled or wrong fails exactly those checks.
+- **Several changed fields** need the evaluator's "new row" to hold more than one changed field; it holds a list of them, where today it holds one.
+- **Skipped, as for the existing change checks:** fields alone in a `unique` rule, and fields a declared constraint names, because the database could refuse the new value for another reason.
+- **Entities with no `unchanged` get none of these checks,** so every existing golden file stays byte-identical.
+- **Roughly** 3 to 5 extra checks per person per row per field of an entity that uses `unchanged`. The approvals example is a few dozen.
+
+**Deliberate breakages for the real-database checks** (`tests/pg/breakages/`, the same mechanism as for policies): the trigger dropped; the trigger disabled (`alter table ... disable trigger`); a policy's `unchanged` emptied by hand in the function; and the restrictive lock ignored. Each must fail exactly the checks above and nothing else.
