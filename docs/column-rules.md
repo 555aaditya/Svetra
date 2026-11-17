@@ -95,6 +95,8 @@ create trigger "svetra_guard" before update on "public"."doc"
 
 **Order of events in PostgreSQL:** `USING` filters the rows an update can see, then `before` triggers run, then `WITH CHECK` runs on the result. So the trigger only ever sees rows the person could already update, and it never changes `new`: it only refuses. If no policy applies, the update is already refused before the trigger.
 
+**Checked on PostgreSQL 16** (a table with `update` policy `using (id = 1) with check (x = 99)` and a `before update` trigger that raises a notice): an update of the row with `id = 1` ran the trigger and then failed `WITH CHECK`; an update of the row with `id = 2` ran no trigger, because `USING` hid it; and `current_user` inside the trigger was the calling role, not the table owner. The guard relies on exactly these three facts.
+
 **What is exempt, on purpose:**
 - **The service role, the table owner and migrations.** They aren't `anon` or `authenticated`, so row-level security doesn't apply to them, and neither does this.
 - **Hole bodies.** A hole runs as its own role (docs/compiler.md), which isn't either of those, so it is exempt as it is from the policies. That is what makes a hole the right place for logic that must change a locked field, such as an administrator's tool.
