@@ -85,7 +85,7 @@ export const install = [
 ];
 
 export const features = [
-  { title: "21 checks before anything is written", body: "A table the API can reach with no rule, money stored as a float, weak sign-in settings. Each with a line, a column and a fix, or as JSON for your agent.", code: "SVT001  Order is exposed through the API but has no policy." },
+  { title: "24 checks before anything is written", body: "A table the API can reach with no rule, money stored as a float, weak sign-in settings. Each with a line, a column and a fix, or as JSON for your agent.", code: "SVT001  Order is exposed through the API but has no policy." },
   { title: "Roles and teams", body: "Global roles like admin, or scoped ones like staff at one location, checked by a locked-down function the API can't reach.", code: "when: \"has_role('staff', location)\"" },
   { title: "Access tests", body: "Every person × action × row, as real users, never the service key. Expected results come from svetra.yaml, not from the SQL Svetra wrote.", code: "ok 57 - alice can't see Booking b" },
   { title: "Sign-in and second factors", body: "Safe defaults in supabase/config.toml, only Svetra's own keys touched. Roles marked mfa: true only count after an authenticator app.", code: "admin: { mfa: true }" },
