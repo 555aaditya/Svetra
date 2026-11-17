@@ -229,6 +229,7 @@ fn hole(
             entity: &fields,
             entities,
             params: true,
+            old: false,
         };
         expr_sql(&expr::parse(w).expect("validated expression"), &cx)
     });
@@ -309,6 +310,7 @@ fn policy(p: &Policy, entities: &HashMap<&str, &Entity>) -> Vec<String> {
         entity: e,
         entities,
         params: false,
+        old: false,
     };
     let cond = expr_sql(&expr::parse(&p.when).expect("validated expression"), &cx);
     // The condition on the row after an update: `check`, or `when` when there is none.
@@ -406,6 +408,7 @@ fn create_table(e: &Entity, entities: &HashMap<&str, &Entity>) -> String {
         entity: e,
         entities,
         params: false,
+        old: false,
     };
     for c in &e.constraints {
         let parsed = expr::parse(&c.expr).expect("validated expression");

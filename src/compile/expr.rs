@@ -12,6 +12,8 @@ pub struct Ctx<'a> {
     pub entities: &'a HashMap<&'a str, &'a Entity>,
     /// A hole's `when`: fields are the hole's inputs (`p_<name>`), and `auth.user` is `p_caller`.
     pub params: bool,
+    /// A trigger's `old` row: fields are `old."col"`, and a one-hop path starts from `old`.
+    pub old: bool,
 }
 
 pub fn sql(e: &Expr, cx: &Ctx) -> String {
@@ -102,6 +104,7 @@ fn child_right(e: &Expr, parent: u8, cx: &Ctx) -> String {
 fn path(p: &[String], cx: &Ctx) -> String {
     match p {
         [f] if cx.params => format!("p_{f}"),
+        [f] if cx.old => format!("old.{}", q(f)),
         [f] => q(f),
         [a, b] if a == "auth" && b == "user" && cx.params => "p_caller".into(),
         [a, b] if a == "auth" && b == "user" => "(select auth.uid())".into(),
@@ -119,6 +122,8 @@ fn path(p: &[String], cx: &Ctx) -> String {
                 .expect("validated primary key");
             let from = if cx.params {
                 format!("p_{r}")
+            } else if cx.old {
+                format!("old.{}", q(r))
             } else {
                 format!("{}.{}", q(&snake(&cx.entity.name)), q(r))
             };
@@ -148,6 +153,7 @@ mod tests {
             entity: entities[entity],
             entities: &entities,
             params: false,
+            old: false,
         };
         sql(&parse(src).unwrap(), &cx)
     }
