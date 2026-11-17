@@ -1,0 +1,5 @@
+Build the backend for a journal app on Supabase (PostgreSQL). Each person keeps their own entries, and only they can see them. They can create and edit their entries. An entry is never removed permanently: deleting it marks it as deleted, after which it is hidden from everyone, including its owner, but the row stays in the database so an administrator can recover it later. Nobody can undelete an entry, or remove one permanently, through the app.
+
+Data contract, which the tests rely on: a table `entry` with `id` (uuid primary key, generated), `owner` (uuid, required, references auth.users), `body` (text, required) and `deleted_at` (timestamptz, empty until the entry is deleted); and a function `soft_delete(entry_id uuid)` that marks the caller's own entry as deleted and refuses anyone else by raising an error. It is called as `select public.soft_delete('<entry id>')`.
+
+Put the final database schema, including everything that decides who can see and change data, in `supabase/migrations/`. Don't build a user interface.

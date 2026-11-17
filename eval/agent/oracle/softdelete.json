@@ -1,0 +1,117 @@
+{
+ "users": {
+  "alice": "a0000000-0000-4000-8000-000000000001",
+  "bob": "b0000000-0000-4000-8000-000000000002"
+ },
+ "setup": [
+  "insert into public.entry (id, owner, body, deleted_at) values ('5e7a0000-0000-4000-8001-000000000001', 'a0000000-0000-4000-8000-000000000001', 'a live', null), ('5e7a0000-0000-4000-8001-000000000002', 'a0000000-0000-4000-8000-000000000001', 'a deleted', now()), ('5e7a0000-0000-4000-8001-000000000003', 'b0000000-0000-4000-8000-000000000002', 'b live', null)"
+ ],
+ "checks": [
+  [
+   "alice sees her live entry",
+   "alice",
+   "select 1 from public.entry where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "alice cannot see her deleted entry",
+   "alice",
+   "select 1 from public.entry where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "bob cannot see alice's entry",
+   "bob",
+   "select 1 from public.entry where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "a visitor cannot see an entry",
+   "anon",
+   "select 1 from public.entry where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "alice can edit her entry",
+   "alice",
+   "update public.entry set body = 'edited' where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "alice cannot edit a deleted entry",
+   "alice",
+   "update public.entry set body = 'edited' where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice cannot undelete an entry",
+   "alice",
+   "update public.entry set deleted_at = null where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice cannot take over bob's entry",
+   "alice",
+   "update public.entry set owner = 'a0000000-0000-4000-8000-000000000001' where id = '5e7a0000-0000-4000-8001-000000000003'",
+   "denied"
+  ],
+  [
+   "alice cannot remove her entry permanently",
+   "alice",
+   "delete from public.entry where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "alice cannot remove a deleted entry permanently",
+   "alice",
+   "delete from public.entry where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "alice can create an entry",
+   "alice",
+   "insert into public.entry (owner, body) values ('a0000000-0000-4000-8000-000000000001', 'new')",
+   "allowed"
+  ],
+  [
+   "alice cannot create an entry as bob",
+   "alice",
+   "insert into public.entry (owner, body) values ('b0000000-0000-4000-8000-000000000002', 'new')",
+   "denied"
+  ],
+  [
+   "a visitor cannot create an entry",
+   "anon",
+   "insert into public.entry (owner, body) values ('a0000000-0000-4000-8000-000000000001', 'new')",
+   "denied"
+  ],
+  [
+   "alice can delete her entry",
+   "alice",
+   "select public.soft_delete('5e7a0000-0000-4000-8001-000000000001')",
+   "allowed",
+   "call"
+  ],
+  [
+   "bob cannot delete alice's entry",
+   "bob",
+   "select public.soft_delete('5e7a0000-0000-4000-8001-000000000001')",
+   "denied",
+   "call"
+  ],
+  [
+   "alice cannot delete bob's entry",
+   "alice",
+   "select public.soft_delete('5e7a0000-0000-4000-8001-000000000003')",
+   "denied",
+   "call"
+  ],
+  [
+   "a visitor cannot delete an entry",
+   "anon",
+   "select public.soft_delete('5e7a0000-0000-4000-8001-000000000001')",
+   "denied",
+   "call"
+  ]
+ ]
+}

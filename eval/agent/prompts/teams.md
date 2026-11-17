@@ -1,0 +1,5 @@
+Build the backend for a small team task app on Supabase (PostgreSQL). Anyone signed in can start a team and becomes its first member. Members of a team can add other people to it, see the team and all of its tasks, and add tasks. A task is written by one member, and only that task's author can change or delete it. Nobody who isn't a member of a team can see anything about it or add to it.
+
+Data contract, which the tests rely on: a table `team` (`id` uuid primary key, generated; `name` text, required); a table `task` (`id` uuid primary key, generated; `team` uuid, required, references team; `author` uuid, required, references auth.users; `title` text, required); a function `start_team(team_name text)` that creates a team with the caller as its first member and returns the new team's id as a uuid; and a function `add_member(team_id uuid, person uuid)` that adds a person to a team. They are called as `select public.start_team('Alpha')` and `select public.add_member('<team id>', '<person id>')`.
+
+Put the final database schema, including everything that decides who can see and change data, in `supabase/migrations/`. Don't build a user interface.

@@ -1,0 +1,1 @@
+This project already exists, and its database is in production with real notes in it. Please rename the column `body` on the `note` table to `content`. The notes people have already written must keep their text, so no data may be lost. Add your change as a new migration under `supabase/migrations/`, without editing the existing ones, and keep everything else working as before.

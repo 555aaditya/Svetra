@@ -1,0 +1,173 @@
+{
+ "users": {
+  "alice": "a0000000-0000-4000-8000-000000000001",
+  "bob": "b0000000-0000-4000-8000-000000000002",
+  "carol": "c0000000-0000-4000-8000-000000000003"
+ },
+ "as_users": [
+  {
+   "as": "alice",
+   "sql": "select public.start_team('Alpha')",
+   "capture": "t1"
+  },
+  {
+   "as": "bob",
+   "sql": "select public.start_team('Beta')",
+   "capture": "t2"
+  },
+  {
+   "as": "alice",
+   "sql": "select public.add_member('{t1}', 'c0000000-0000-4000-8000-000000000003')"
+  }
+ ],
+ "after_setup": [
+  "insert into public.task (id, team, author, title) values ('5e7a0000-0000-4000-8001-000000000001', '{t1}', 'a0000000-0000-4000-8000-000000000001', 'alice task'), ('5e7a0000-0000-4000-8001-000000000002', '{t2}', 'b0000000-0000-4000-8000-000000000002', 'bob task')"
+ ],
+ "checks": [
+  [
+   "alice sees her team",
+   "alice",
+   "select 1 from public.team where id = '{t1}'",
+   "allowed"
+  ],
+  [
+   "alice cannot see another team",
+   "alice",
+   "select 1 from public.team where id = '{t2}'",
+   "denied"
+  ],
+  [
+   "carol, added by alice, sees the team",
+   "carol",
+   "select 1 from public.team where id = '{t1}'",
+   "allowed"
+  ],
+  [
+   "bob cannot see a team he isn't in",
+   "bob",
+   "select 1 from public.team where id = '{t1}'",
+   "denied"
+  ],
+  [
+   "alice sees her team's task",
+   "alice",
+   "select 1 from public.task where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "carol sees her team's task",
+   "carol",
+   "select 1 from public.task where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "bob cannot see another team's task",
+   "bob",
+   "select 1 from public.task where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "a visitor cannot see a task",
+   "anon",
+   "select 1 from public.task where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "alice cannot see another team's task",
+   "alice",
+   "select 1 from public.task where id = '5e7a0000-0000-4000-8001-000000000002'",
+   "denied"
+  ],
+  [
+   "carol can add a task to her team",
+   "carol",
+   "insert into public.task (team, author, title) values ('{t1}', 'c0000000-0000-4000-8000-000000000003', 'new')",
+   "allowed"
+  ],
+  [
+   "carol cannot add a task under alice's name",
+   "carol",
+   "insert into public.task (team, author, title) values ('{t1}', 'a0000000-0000-4000-8000-000000000001', 'new')",
+   "denied"
+  ],
+  [
+   "bob cannot add a task to a team he isn't in",
+   "bob",
+   "insert into public.task (team, author, title) values ('{t1}', 'b0000000-0000-4000-8000-000000000002', 'new')",
+   "denied"
+  ],
+  [
+   "alice can change her task",
+   "alice",
+   "update public.task set title = 'edited' where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "carol cannot change alice's task",
+   "carol",
+   "update public.task set title = 'edited' where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "alice can delete her task",
+   "alice",
+   "delete from public.task where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "allowed"
+  ],
+  [
+   "bob cannot delete another team's task",
+   "bob",
+   "delete from public.task where id = '5e7a0000-0000-4000-8001-000000000001'",
+   "denied"
+  ],
+  [
+   "a member can add someone to the team",
+   "alice",
+   "select public.add_member('{t1}', 'b0000000-0000-4000-8000-000000000002')",
+   "allowed",
+   "call"
+  ],
+  [
+   "carol, a member, can add someone too",
+   "carol",
+   "select public.add_member('{t1}', 'b0000000-0000-4000-8000-000000000002')",
+   "allowed",
+   "call"
+  ],
+  [
+   "bob cannot add himself to a team",
+   "bob",
+   "select public.add_member('{t1}', 'b0000000-0000-4000-8000-000000000002')",
+   "denied",
+   "call"
+  ],
+  [
+   "alice cannot add someone to another team",
+   "alice",
+   "select public.add_member('{t2}', 'c0000000-0000-4000-8000-000000000003')",
+   "denied",
+   "call"
+  ],
+  [
+   "a visitor cannot add members",
+   "anon",
+   "select public.add_member('{t1}', 'b0000000-0000-4000-8000-000000000002')",
+   "denied",
+   "call"
+  ],
+  [
+   "alice can start a team",
+   "alice",
+   "select public.start_team('Gamma')",
+   "allowed",
+   "call"
+  ],
+  [
+   "a visitor cannot start a team",
+   "anon",
+   "select public.start_team('Gamma')",
+   "denied",
+   "call"
+  ]
+ ]
+}
