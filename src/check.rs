@@ -445,7 +445,13 @@ impl<'a> Checker<'a> {
                         match e.fields.iter().find(|x| x.name == f.name) {
                             None => {
                                 let msg = format!("{} has no field `{}`.", e.name, f.name);
-                                self.d(Code::Svt002, path, f.pos, msg, "Use a field of that entity.");
+                                self.d(
+                                    Code::Svt002,
+                                    path,
+                                    f.pos,
+                                    msg,
+                                    "Use a field of that entity.",
+                                );
                             }
                             Some(x) if x.primary => {
                                 let msg = format!(
