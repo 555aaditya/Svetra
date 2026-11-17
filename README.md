@@ -33,7 +33,7 @@ People now build apps by talking to AI agents, and most of them can't read the c
 
 Svetra moves those decisions out of the code and into one small, typed file, `svetra.yaml`. Your agent writes and edits it while you design the app together. Svetra checks every change, and will compile it into the database schema, security policies, types and validators, deterministically, the same way every time. You review a short file and a plain-English explanation instead of thousands of generated lines, and your agent spends fewer tokens because it stops rewriting boilerplate.
 
-> **Status: early.** Version 0.1 of the format, the validator and the compiler work today. See the [roadmap](#roadmap).
+> **Status: early, and in use.** Version 0.8 of the tool. The format is `svetra: "0.1"`. Every release is tested on PostgreSQL 16 and on a real Supabase. See the [roadmap](#roadmap).
 
 ## What it looks like
 
