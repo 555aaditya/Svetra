@@ -30,6 +30,8 @@ const ALL: &[Code] = &[
     Code::Svt032,
     Code::Svt033,
     Code::Svt034,
+    Code::Svt035,
+    Code::Svt036,
 ];
 
 /// Rows of the spec's Diagnostics table: (code, severity, action).
@@ -102,6 +104,8 @@ fn all_is_exhaustive(c: Code) {
         | Code::Svt031
         | Code::Svt032
         | Code::Svt033
-        | Code::Svt034 => {}
+        | Code::Svt034
+        | Code::Svt035
+        | Code::Svt036 => {}
     }
 }
