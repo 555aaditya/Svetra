@@ -1,10 +1,33 @@
+<div align="center">
+
 # Svetra
 
 **Design the system with your AI. Svetra compiles it to the low level.**
 
-Website: [555aaditya.github.io/Svetra](https://555aaditya.github.io/Svetra/)
+One small file, `svetra.yaml`, compiles to a locked-down Supabase backend,
+and writes the tests that prove it on your real database.
 
+[![CI](https://github.com/555aaditya/Svetra/actions/workflows/ci.yml/badge.svg)](https://github.com/555aaditya/Svetra/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/555aaditya/Svetra?color=2ea88a)](https://github.com/555aaditya/Svetra/releases)
+[![npm](https://img.shields.io/npm/v/svetra?color=cb3837)](https://www.npmjs.com/package/svetra)
+[![crates.io](https://img.shields.io/crates/v/svetra?color=e6892f)](https://crates.io/crates/svetra)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24262588.svg)](https://doi.org/10.5281/zenodo.24262588)
+
+[**Website**](https://555aaditya.github.io/Svetra/) ·
+[Install](#install) ·
+[Format](docs/format.md) ·
+[Compiler](docs/compiler.md) ·
+[Changelog](CHANGELOG.md) ·
+[Roadmap](#roadmap)
+
+```sh
+npx svetra --version
+```
+
+</div>
+
+---
 
 People now build apps by talking to AI agents, and most of them can't read the code those agents write. That code decides the things that matter most: what data exists, which rules always hold, and who can see what. When it's wrong, users' data leaks. The most common case is a database table that anyone on the internet can read.
 
