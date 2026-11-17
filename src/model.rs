@@ -173,6 +173,9 @@ pub struct Policy {
     pub when: String,
     /// The condition on the row after an update (`WITH CHECK`); `when` when absent.
     pub check: Option<String>,
+    /// The fields an update allowed through this policy may change; every other field must stay
+    /// as it is. `None`: the policy frees every field.
+    pub only: Option<Vec<NameRef>>,
     /// Holds in addition to a permissive policy, never granting access by itself.
     pub restrictive: bool,
     pub role: Role,
