@@ -129,6 +129,22 @@ The agent evaluation pointed at one gap: with the first version of the format, a
 
 Four runs on one prompt show a direction, not a rate.
 
+## Result 4: the approvals prompt a third time, after `only` (2026-11-18, four runs)
+
+The last gap: with `check` alone, all four agents appended a hand-written trigger for "the reviewer may approve but not retitle". `only: [status]` was built for that. Same prompt, same checker, with Svetra. Saved in `results/approvals-3/`.
+
+| | `check` only (`approvals-2`) | `check` and `only` (`approvals-3`) |
+|---|---|---|
+| Runs scoring every check | 4 of 4 | **4 of 4** |
+| Holes | 0 | 0 |
+| Hand-written triggers outside the design | **4 of 4** | **0 of 4** |
+| `only` keys in the design | not possible | 2 in every run |
+| Mean cost / turns | $0.26 / 29 | $0.21 / 23 |
+
+- **The whole prompt now lives in `svetra.yaml`:** no hole, no hand-written SQL. Every agent put `only: [status]` on the reviewer's rule, and, unprompted, **limited the author to `only: [title, status]`**, so authors can't reassign the reviewer either. That is the allow-list failing closed, as designed.
+- **What this buys beyond the agents' own trigger:** the guard is generated, so it is in `explain` ("They can change only its status."), covered by the generated access tests (a locked field changed beside an allowed status change), and checked by `svetra plan`. The agents' triggers were correct but invisible to all of that.
+- Four runs on one prompt show a direction, not a rate. Cost and turns fell compared with the previous round, but the difference is within what run-to-run variation could produce.
+
 ## What the benchmark as a whole cannot show
 
 - **No statistics.** One run per cell. Agents vary run to run; the plan is at least 5 per cell, and bootstrap intervals, before any claim.
