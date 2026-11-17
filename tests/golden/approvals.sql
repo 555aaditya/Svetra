@@ -46,3 +46,24 @@ create policy "reviewers_decide" on "public"."doc"
 create policy "authors_delete_drafts" on "public"."doc"
   for delete to authenticated
   using ("author" = (select auth.uid()) and "status" = 'draft');
+
+-- Guards
+create schema if not exists "svetra";
+
+create function "svetra"."guard_doc"() returns trigger language plpgsql as $svetra$
+begin
+  -- Only people calling through the API are checked: the roles row-level security applies to.
+  if current_user not in ('anon', 'authenticated') then return new; end if;
+  if new."author" is distinct from old."author" and (not (coalesce(current_user = 'authenticated' and (old."author" = (select auth.uid()) and old."status" = 'draft'), false))) then
+    raise exception 'doc: author can''t be changed here' using errcode = '42501';
+  end if;
+  if new."reviewer" is distinct from old."reviewer" and (not (coalesce(current_user = 'authenticated' and (old."author" = (select auth.uid()) and old."status" = 'draft'), false))) then
+    raise exception 'doc: reviewer can''t be changed here' using errcode = '42501';
+  end if;
+  if new."title" is distinct from old."title" and (not (coalesce(current_user = 'authenticated' and (old."author" = (select auth.uid()) and old."status" = 'draft'), false))) then
+    raise exception 'doc: title can''t be changed here' using errcode = '42501';
+  end if;
+  return new;
+end $svetra$;
+create trigger "svetra_guard" before update on "public"."doc"
+  for each row execute function "svetra"."guard_doc"();

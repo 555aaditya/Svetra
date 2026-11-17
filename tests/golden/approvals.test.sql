@@ -52,7 +52,7 @@ create function svetra_test.executes(p_role text, p_schema text, p_name text) re
   where n.nspname = p_schema and p.proname = p_name
 $$;
 
-select plan(59);
+select plan(70);
 
 -- Test data, inserted as the database owner
 select lives_ok($svetra$insert into auth.users (id, email) values ('5e7a0000-0000-4000-8000-000000000001', 'alice@svetra.test'), ('5e7a0000-0000-4000-8000-000000000002', 'bob@svetra.test'), ('5e7a0000-0000-4000-8000-000000000003', 'carol@svetra.test')$svetra$, 'test data: people');
@@ -74,6 +74,8 @@ select is(svetra_test.try('anon', null, $svetra$update "public"."doc" set "statu
 select is(svetra_test.try('anon', null, $svetra$update "public"."doc" set "status" = 'draft' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'anon can''t set the status of Doc b to draft');
 select is(svetra_test.try('anon', null, $svetra$update "public"."doc" set "status" = 'approved' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'anon can''t set the status of Doc b to approved');
 select is(svetra_test.try('anon', null, $svetra$update "public"."doc" set "status" = 'rejected' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'anon can''t set the status of Doc b to rejected');
+select is(svetra_test.try('anon', null, $svetra$update "public"."doc" set "title" = 'svetra b' where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'anon can''t change the title of Doc a');
+select is(svetra_test.try('anon', null, $svetra$update "public"."doc" set "title" = 'svetra a' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'anon can''t change the title of Doc b');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select 1 from "public"."doc" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'allowed', 'alice can see Doc a');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select 1 from "public"."doc" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'allowed', 'alice can see Doc b');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."doc" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'allowed', 'alice can change Doc a');
@@ -88,6 +90,11 @@ select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."doc" set "status" = 'draft' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'alice can''t set the status of Doc b to draft');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."doc" set "status" = 'approved' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'allowed', 'alice can set the status of Doc b to approved');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."doc" set "status" = 'rejected' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'allowed', 'alice can set the status of Doc b to rejected');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."doc" set "title" = 'svetra b' where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'allowed', 'alice can change the title of Doc a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."doc" set "status" = 'submitted', "title" = 'svetra b' where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'allowed', 'alice can set the status of Doc a to submitted and change the title');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."doc" set "title" = 'svetra a' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'alice can''t change the title of Doc b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."doc" set "status" = 'approved', "title" = 'svetra a' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'alice can''t set the status of Doc b to approved and change the title');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."doc" set "status" = 'rejected', "title" = 'svetra a' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'alice can''t set the status of Doc b to rejected and change the title');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select 1 from "public"."doc" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'bob can''t see Doc a');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select 1 from "public"."doc" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'allowed', 'bob can see Doc b');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."doc" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'bob can''t change Doc a');
@@ -102,6 +109,8 @@ select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."doc" set "status" = 'draft' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'bob can''t set the status of Doc b to draft');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."doc" set "status" = 'approved' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'bob can''t set the status of Doc b to approved');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."doc" set "status" = 'rejected' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'bob can''t set the status of Doc b to rejected');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."doc" set "title" = 'svetra b' where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'bob can''t change the title of Doc a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$update "public"."doc" set "title" = 'svetra a' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'bob can''t change the title of Doc b');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select 1 from "public"."doc" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$, 'aal2'), 'denied', 'carol can''t see Doc a');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select 1 from "public"."doc" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2'), 'denied', 'carol can''t see Doc b');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."doc" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$, 'aal2'), 'denied', 'carol can''t change Doc a');
@@ -116,6 +125,8 @@ select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."doc" set "status" = 'draft' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2'), 'denied', 'carol can''t set the status of Doc b to draft');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."doc" set "status" = 'approved' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2'), 'denied', 'carol can''t set the status of Doc b to approved');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."doc" set "status" = 'rejected' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2'), 'denied', 'carol can''t set the status of Doc b to rejected');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."doc" set "title" = 'svetra b' where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$, 'aal2'), 'denied', 'carol can''t change the title of Doc a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$update "public"."doc" set "title" = 'svetra a' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2'), 'denied', 'carol can''t change the title of Doc b');
 
 select * from finish();
 rollback;
