@@ -38,6 +38,10 @@ end $$;
 set request.jwt.claim.sub = 'b0000000-0000-0000-0000-000000000000';
 do $$ begin
   if (select count(*) from public.doc) <> 1 then raise exception 'the reviewer could not see a submitted document'; end if;
+  -- The column rule: approving is allowed, but not together with a change to the title.
+  begin update public.doc set status = 'approved', title = 'hacked'; raise exception 'the reviewer approved and retitled at once';
+  exception when insufficient_privilege then null; end;
+  if (select title from public.doc) <> 'renamed' then raise exception 'the reviewer changed the title'; end if;
   begin update public.doc set status = 'draft'; raise exception 'the reviewer sent it back to draft';
   exception when insufficient_privilege then null; end;
   begin update public.doc set reviewer = 'c0000000-0000-0000-0000-000000000000'; raise exception 'the reviewer reassigned the document';
