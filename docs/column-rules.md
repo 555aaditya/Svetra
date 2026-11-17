@@ -2,7 +2,7 @@
 
 This document specifies a rule for which **fields** an update may change. When the code and this document disagree, that's a bug in one of them.
 
-**Status: draft for review.** The decisions marked **Open** need the maintainer's answer before building. Nothing here is built.
+**Status: built in 0.9 (unreleased).** The open decisions took the recommendations: the allow-list `only` (C1), a field is free when some applicable permissive policy frees it (C2), the service role, owner and hole bodies are exempt (C3), `only` on restrictive policies with the opposite rule (C4), the guard in the generated schema (C5), `immutable` later and separately (C6), and no guard on insert (C7).
 
 **Done when:** the approvals app from the agent evaluation (`eval/agent/prompts/approvals.md`) is written entirely in `svetra.yaml`, with no hole and no hand-written SQL, passes every one of its 24 oracle checks, and the generated access tests prove the column rule on the database.
 
