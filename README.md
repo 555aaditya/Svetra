@@ -91,6 +91,27 @@ Your IT team can give you the certificate. On macOS it's usually in the System k
 
 Or with Rust 1.88+: `cargo install svetra`. Windows builds are also on the [releases page](https://github.com/555aaditya/Svetra/releases).
 
+## Quick start
+
+```sh
+svetra init                      # skill, MCP server and a starter svetra.yaml, for Claude Code
+svetra validate svetra.yaml      # every problem at once, with a fix for each
+svetra compile svetra.yaml       # SQL, TypeScript and Zod, and the access tests
+supabase test db                 # the tests, run on your database as real users
+```
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `validate` | Checks `svetra.yaml`; positions, stable codes, fixes |
+| `compile` | Writes the schema, row-level security, types and access tests |
+| `explain`, `context`, `graph` | Your app in plain English, compact context for agents, a diagram |
+| `view` | One page: who can see and change what |
+| `diff`, `plan` | Classifies a change as safe, breaking or destructive, and keeps renamed data |
+| `check` | Finds leaks in a database you already have, no `svetra.yaml` needed |
+| `mcp`, `init` | Serves all of this to your agent; sets up a project |
+
 ## What works today: `svetra validate`
 
 ```sh
