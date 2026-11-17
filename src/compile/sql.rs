@@ -117,6 +117,17 @@ pub fn schema_with(doc: &Document, bodies: &HashMap<String, String>) -> String {
     if !policies.is_empty() {
         out += &format!("\n-- Policies\n{}\n", policies.join("\n\n"));
     }
+    let guards: Vec<String> = doc
+        .entities
+        .iter()
+        .filter_map(|e| guard(e, doc, &entities))
+        .collect();
+    if !guards.is_empty() {
+        out += &format!(
+            "\n-- Guards\ncreate schema if not exists \"svetra\";\n\n{}",
+            guards.join("\n")
+        );
+    }
     if !doc.holes.is_empty() {
         let holes: Vec<String> = doc
             .holes
@@ -129,6 +140,83 @@ pub fn schema_with(doc: &Document, bodies: &HashMap<String, String>) -> String {
         );
     }
     out
+}
+
+/// The guard for fields an update may not change (docs/column-rules.md): a `before update` row
+/// trigger that refuses, as SQLSTATE 42501, an update through the API that changes a field the
+/// policies covering the person don't free. `None` when no policy on the entity has an `only`.
+fn guard(e: &Entity, doc: &Document, entities: &HashMap<&str, &Entity>) -> Option<String> {
+    let updates: Vec<&Policy> = doc
+        .policies
+        .iter()
+        .filter(|p| p.on.name == e.name && p.allow.contains(&Action::Update))
+        .collect();
+    let limited = |p: &Policy, field: &str| {
+        p.only
+            .as_ref()
+            .is_some_and(|only| !only.iter().any(|f| f.name == field))
+    };
+    let fields: Vec<&Field> = e
+        .fields
+        .iter()
+        .filter(|f| !f.primary && updates.iter().any(|p| limited(p, &f.name)))
+        .collect();
+    if fields.is_empty() {
+        return None;
+    }
+    let cx = Ctx {
+        entity: e,
+        entities,
+        params: false,
+        old: true,
+    };
+    // Whether a policy covers the person: their database role, and the policy's `when` on the old row.
+    // A null counts as not covering, so a missing value can never free a field.
+    let applies = |p: &Policy| {
+        let role = match p.role {
+            Role::Authenticated => "current_user = 'authenticated'",
+            Role::Anon => "current_user = 'anon'",
+            Role::Anyone => "current_user in ('anon', 'authenticated')",
+        };
+        let when = expr_sql(&expr::parse(&p.when).expect("validated expression"), &cx);
+        format!("coalesce({role} and ({when}), false)")
+    };
+    let table_name = snake(&e.name);
+    let mut body = String::new();
+    for f in fields {
+        // Locked by a restrictive policy that covers the person and leaves the field out, or
+        // by every permissive policy that covers them (none leaves it free).
+        let restrictive: Vec<String> = updates
+            .iter()
+            .filter(|p| p.restrictive && limited(p, &f.name))
+            .map(|p| applies(p))
+            .collect();
+        let free: Vec<String> = updates
+            .iter()
+            .filter(|p| !p.restrictive && !limited(p, &f.name))
+            .map(|p| applies(p))
+            .collect();
+        let mut locked = Vec::new();
+        if !restrictive.is_empty() {
+            locked.push(format!("({})", restrictive.join(" or ")));
+        }
+        locked.push(if free.is_empty() {
+            "true".to_string()
+        } else {
+            format!("not ({})", free.join(" or "))
+        });
+        let message = lit(&format!("{table_name}: {} can't be changed here", f.name));
+        body += &format!(
+            "  if new.{c} is distinct from old.{c} and ({}) then\n    raise exception {message} using errcode = '42501';\n  end if;\n",
+            locked.join(" or "),
+            c = q(&f.name)
+        );
+    }
+    let function = q(&format!("guard_{table_name}"));
+    Some(format!(
+        "create function \"svetra\".{function}() returns trigger language plpgsql as $svetra$\nbegin\n  -- Only people calling through the API are checked: the roles row-level security applies to.\n  if current_user not in ('anon', 'authenticated') then return new; end if;\n{body}  return new;\nend $svetra$;\ncreate trigger \"svetra_guard\" before update on {}\n  for each row execute function \"svetra\".{function}();\n",
+        table(&e.name)
+    ))
 }
 
 fn param_type(t: &ParamType, entities: &HashMap<&str, &Entity>) -> String {
