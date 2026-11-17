@@ -132,6 +132,7 @@ Using a form where it isn't allowed is `SVT003`.
 | `allow` | yes | Non-empty list of `select`, `insert`, `update`, `delete` |
 | `when` | yes | Boolean expression a row must satisfy. For an update it is the condition on the row **before**; see `check` |
 | `check` | no | The condition the row must satisfy **after** an update (`WITH CHECK`). When absent it is `when`. Only for a policy that allows `update` (`SVT033` otherwise); typed like `when` |
+| `only` | no | The fields an update allowed through this policy may change; every other field must stay as it is, so a column added later stays locked. Without it the policy frees every field. At least one field of the entity, never its primary key (`SVT002`); only for a policy that allows `update` (`SVT035`). See [column-rules.md](column-rules.md) |
 | `restrictive` | no | `true`: the policy must hold **in addition to** at least one permissive policy that allows the action, and never grants access by itself. Default `false` |
 | `as` | no | `authenticated` (default): signed-in people. `anyone`: everyone, signed in or not. `anon`: only people who aren't signed in, which is rarely right, because signed-in people then get less (`SVT007`) |
 
@@ -320,6 +321,8 @@ holes:
 | `SVT032` | error | In `svetra compile`: a hole body that doesn't end with `;`, typically a whole `begin … end` function body. The generated function wouldn't parse. Reported against `supabase/holes/<name>.sql`, and nothing is written | `fix_hole_body` |
 | `SVT033` | error | A policy has a `check` but doesn't allow `update`: only an update has a row after it | `remove_check` |
 | `SVT034` | warning | Two permissive update policies combine into a transition neither allows alone: the old row passes one policy's `when` and the new row passes the other's `check`, so the update is allowed although no single policy allows it | `merge_policies` |
+| `SVT035` | error | A policy has `only` but doesn't allow `update`: only an update changes fields | `remove_only` |
+| `SVT036` | warning | A person is covered, on some row, by two permissive update policies that disagree about a field: one has an `only` that leaves it out and another frees it, so the first one's limit has no effect for that person | `free_or_limit` |
 | `SVT031` | info | In `svetra plan`: `was` names a rename that's already applied, because the design the database has already uses the new name. Remove it | `remove_was` |
 | `SVT001` | error | Entity exposed through the API has no policy. Mark it `private: true` or add a policy | `add_policy` |
 | `SVT002` | error | Reference to an entity or field that doesn't exist | `fix_reference` |
