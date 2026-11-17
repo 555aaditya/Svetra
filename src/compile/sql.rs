@@ -3,6 +3,7 @@
 
 use super::expr::{Ctx, sql as expr_sql};
 use super::names::{lit, q, snake, table};
+use crate::diag::{Code, Diagnostic};
 use crate::expr;
 use crate::model::*;
 use std::collections::HashMap;
@@ -17,6 +18,62 @@ pub fn schema(doc: &Document) -> String {
 /// `supabase/holes/<name>.sql` when that file doesn't exist.
 pub fn stub(hole: &str) -> String {
     format!("  raise exception '{hole} is not written yet: edit supabase/holes/{hole}.sql';\n")
+}
+
+/// A problem with a hand-written hole body that would make the generated function invalid, found
+/// without a database: Svetra puts the body between its own `begin` and `end`, so the body must be
+/// statements, each ending with `;`. An agent that writes a whole function body, ending in `end`
+/// with no `;`, leaves a stray `end` and a migration that doesn't parse (SVT032).
+pub fn body_problem(hole: &str, body: &str) -> Option<Diagnostic> {
+    let mut text = body.trim_end();
+    // Trailing comments don't count: `-- note` lines and a final `/* note */`.
+    loop {
+        let before = text;
+        if text.ends_with("*/")
+            && let Some(start) = text.rfind("/*")
+        {
+            text = text[..start].trim_end();
+        }
+        if let Some(last) = text.lines().next_back()
+            && last.trim_start().starts_with("--")
+        {
+            text = text[..text.len() - last.len()].trim_end();
+        }
+        if text == before {
+            break;
+        }
+    }
+    if text.is_empty() || text.ends_with(';') {
+        return None;
+    }
+    let line = text.lines().count().max(1);
+    let wrapped = text
+        .split_whitespace()
+        .next()
+        .is_some_and(|w| w.eq_ignore_ascii_case("begin"));
+    let (message, hint) = if wrapped {
+        (
+            format!(
+                "The body of hole `{hole}` is a whole begin … end block with no `;` after it, so it breaks the function Svetra wraps around it: Svetra already adds the outer begin and end."
+            ),
+            "Delete the outer `begin` and `end` and keep only the statements, or end the block with `end;`.",
+        )
+    } else {
+        (
+            format!(
+                "The body of hole `{hole}` doesn't end with `;`, so the function Svetra wraps around it won't parse."
+            ),
+            "End the last statement with `;`.",
+        )
+    };
+    Some(Diagnostic {
+        code: Code::Svt032,
+        path: format!("holes.{hole}.body"),
+        line,
+        col: 0,
+        message,
+        hint: hint.into(),
+    })
 }
 
 /// The full schema, with each hole's body taken from `bodies` (by hole name), or a stub.

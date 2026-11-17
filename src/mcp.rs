@@ -138,6 +138,10 @@ fn call(name: &str, args: &Value) -> Option<Value> {
                 ),
                 Err(Failure::Read(e)) => unreadable(e),
                 Err(Failure::Invalid(d)) => text(diagnostics(file, &d), true),
+                Err(Failure::HoleBodies(bodies)) => text(
+                    json!({ "hole_bodies": bodies.iter().map(|(path, d)| diagnostics(path, std::slice::from_ref(d))).collect::<Vec<_>>() }),
+                    true,
+                ),
                 Err(Failure::Write(e)) => text(json!({ "error": e }), true),
             }
         }

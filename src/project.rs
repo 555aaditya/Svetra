@@ -33,6 +33,9 @@ pub enum Failure {
     Invalid(Vec<Diagnostic>),
     /// A file couldn't be written.
     Write(String),
+    /// Hand-written hole bodies that would make the generated SQL invalid: the body file's path and
+    /// what is wrong with it (SVT032). Nothing was written.
+    HoleBodies(Vec<(String, Diagnostic)>),
 }
 
 /// Write to a temporary file in the same folder, then rename, so a crash never leaves half a file.
@@ -82,6 +85,18 @@ pub fn compile(file: &Path, check: bool) -> Result<Compiled, Failure> {
             }
             Err(_) => {}
         }
+    }
+    let broken: Vec<(String, Diagnostic)> = doc
+        .holes
+        .iter()
+        .filter_map(|h| {
+            let body = bodies.get(&h.name)?;
+            crate::compile::sql::body_problem(&h.name, body)
+                .map(|d| (format!("supabase/holes/{}.sql", h.name), d))
+        })
+        .collect();
+    if !broken.is_empty() {
+        return Err(Failure::HoleBodies(broken));
     }
     let (outputs, notes) =
         crate::compile::compile_with(&src, &name, &bodies).map_err(Failure::Invalid)?;

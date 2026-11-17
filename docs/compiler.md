@@ -246,6 +246,8 @@ Each hole compiles to two functions, plus a role that holds exactly its declared
    Only the migration's role may execute it, so no caller can pass in someone else's id.
 3. **The callable function,** `public.<name>`, which the app calls with `supabase.rpc('<name>', …)`. It's generated in full, with no hand-written code. It's `security definer`, so it can call the body function, passing `auth.uid()` as `p_caller` and the arguments as they came. Execute is granted to the hole's `as` roles and revoked from everyone else, so a logged-out visitor calling an `authenticated` hole gets "permission denied". Both functions revoke execute from `public`, `anon` and `authenticated` by name before granting it, because Supabase grants execute on every new function in `public` to `anon` and `authenticated` directly, which a revoke from `public` alone leaves in place.
 
+**A body that is a whole function** (`begin … end` with no `;`), or any body whose last statement has no `;`, is refused with `SVT032`, reported against `supabase/holes/<name>.sql`, before anything is written: the function Svetra puts around it would not parse.
+
 **The stub body** returns nothing useful and says so: `raise exception 'transfer is not written yet: edit supabase/holes/transfer.sql';`. A hole with a stub still compiles, applies and passes the access tests, because the guard runs before it.
 
 **`--check`** compares the schema including the current bodies, so an edited body that hasn't been compiled shows up as out of date.
