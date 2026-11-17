@@ -296,6 +296,14 @@
           "description": "A boolean expression each row must satisfy.",
           "type": "string"
         },
+        "check": {
+          "description": "The condition the row must satisfy after an update (WITH CHECK). Defaults to `when`. Only for policies that allow update.",
+          "type": "string"
+        },
+        "restrictive": {
+          "description": "true: must hold in addition to a permissive policy for the same action; never grants access on its own.",
+          "type": "boolean"
+        },
         "as": {
           "description": "Who the policy applies to: authenticated (signed-in people, the default), anyone (signed in or not) or anon (only people who aren't signed in).",
           "enum": [

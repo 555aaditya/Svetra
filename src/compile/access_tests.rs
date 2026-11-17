@@ -3,6 +3,7 @@
 //! the rules here, never from the generated SQL, so the two can disagree when one is wrong.
 
 use super::names::{lit, q, table};
+use crate::diag::{Code, Diagnostic};
 use crate::expr::{self, Expr, Op};
 use crate::model::*;
 use std::cell::Cell;
@@ -115,14 +116,24 @@ impl<'a> World<'a> {
             }
             FieldType::Enum(values) => text(values[k % values.len()].clone()),
             FieldType::Json => text(format!("{{\"svetra\": \"{r}\"}}")),
-            FieldType::User => text(
-                if k.is_multiple_of(2) {
-                    &self.alice
-                } else {
-                    &self.bob
-                }
-                .clone(),
-            ),
+            // The first `user` field is alice on rows a and c and bob on b and d; a second one flips,
+            // so a rule that compares two people (an author and a reviewer) sees two different ones.
+            FieldType::User => {
+                let nth = e
+                    .fields
+                    .iter()
+                    .take_while(|x| x.name != field.name)
+                    .filter(|x| x.ty == FieldType::User)
+                    .count();
+                text(
+                    if k.is_multiple_of(2) == nth.is_multiple_of(2) {
+                        &self.alice
+                    } else {
+                        &self.bob
+                    }
+                    .clone(),
+                )
+            }
             FieldType::Ref(t) => {
                 let (ti, target) = self.entity(&t.name);
                 let pk = primary(target);
@@ -160,6 +171,8 @@ enum SwapTo {
     User(String),
     /// A `ref` field pointed at this row of its target.
     Row(usize),
+    /// An enum or bool field set to this value.
+    Value(Val),
 }
 
 /// Where a rule is evaluated: one row of one entity, for one person.
@@ -262,6 +275,10 @@ fn eval(e: &Expr, env: &Env) -> Val {
                     field,
                     to: SwapTo::User(id),
                 }) if field == f => Val::Text(id.clone()),
+                Some(Swap {
+                    field,
+                    to: SwapTo::Value(v),
+                }) if field == f => v.clone(),
                 Some(Swap {
                     field,
                     to: SwapTo::Row(j),
@@ -381,8 +398,84 @@ fn eval(e: &Expr, env: &Env) -> Val {
     }
 }
 
+/// A field, and each value to set it to: (SQL literal, rule value, words).
+type Transition<'a> = (&'a Field, Vec<(String, Val, String)>);
+
+/// The own fields an expression reads (one-segment paths).
+fn reads(e: &Expr, out: &mut Vec<String>) {
+    match e {
+        Expr::Path(p) if p.len() == 1 => out.push(p[0].clone()),
+        Expr::Call(_, args) => args.iter().for_each(|a| reads(a, out)),
+        Expr::Neg(x) | Expr::Not(x) => reads(x, out),
+        Expr::In(x, items) => {
+            reads(x, out);
+            items.iter().for_each(|i| reads(i, out));
+        }
+        Expr::Bin(_, l, r) => {
+            reads(l, out);
+            reads(r, out);
+        }
+        _ => {}
+    }
+}
+
+/// Which row an update's rule is read on: the row as it is (`when`, PostgreSQL's `USING`) or as the
+/// update leaves it (`check`, or `when` without one, PostgreSQL's `WITH CHECK`). Only an update
+/// has a `check`, so for every other action the two are the same.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    Old,
+    New,
+}
+
+fn condition(p: &Policy, phase: Phase) -> &str {
+    match phase {
+        Phase::New => p.check.as_deref().unwrap_or(&p.when),
+        Phase::Old => &p.when,
+    }
+}
+
+/// Does the policy apply to this person's database role, on this entity and action?
+fn covers(p: &Policy, person: &Person, entity: &str, a: Action) -> bool {
+    let applies = match p.role {
+        Role::Anyone => true,
+        Role::Anon => person.id.is_none(),
+        Role::Authenticated => person.id.is_some(),
+    };
+    applies && p.on.name == entity && p.allow.contains(&a)
+}
+
+/// `Some(true)` or `Some(false)` for the rule on this row, `None` when it can't be evaluated.
+fn holds(
+    world: &World,
+    person: &Person,
+    ei: usize,
+    k: usize,
+    swap: Option<&Swap>,
+    rule: &str,
+) -> Option<bool> {
+    let unsure = Cell::new(false);
+    let env = Env {
+        world,
+        ei,
+        k,
+        person,
+        swap,
+        unsure: &unsure,
+    };
+    let v = eval(&expr::parse(rule).expect("validated"), &env);
+    if unsure.get() {
+        None
+    } else {
+        Some(v == Val::Bool(true))
+    }
+}
+
 /// Does some rule let `person` do `action` on row `k` of entity `ei`? `None` when a rule that
-/// could decide it can't be evaluated, so the check is skipped rather than guessed.
+/// could decide it can't be evaluated, so the check is skipped rather than guessed. As in
+/// PostgreSQL: some permissive policy must hold (they combine with `or`), and every restrictive
+/// one must hold too; null counts as not holding.
+#[allow(clippy::too_many_arguments)]
 fn allowed(
     doc: &Document,
     world: &World,
@@ -390,39 +483,139 @@ fn allowed(
     ei: usize,
     k: usize,
     a: Action,
+    phase: Phase,
     swap: Option<&Swap>,
 ) -> Option<bool> {
     let name = &world.entities[ei].name;
-    let mut unknown = false;
-    for p in &doc.policies {
-        let applies = match p.role {
-            Role::Anyone => true,
-            Role::Anon => person.id.is_none(),
-            Role::Authenticated => person.id.is_some(),
-        };
-        if !(applies && &p.on.name == name && p.allow.contains(&a)) {
-            continue;
+    let (mut granted, mut grant_unknown) = (false, false);
+    let (mut refused, mut limit_unknown) = (false, false);
+    for p in doc.policies.iter().filter(|p| covers(p, person, name, a)) {
+        match holds(world, person, ei, k, swap, condition(p, phase)) {
+            None if p.restrictive => limit_unknown = true,
+            None => grant_unknown = true,
+            Some(held) if p.restrictive => refused |= !held,
+            Some(held) => granted |= held,
         }
-        let unsure = Cell::new(false);
-        let env = Env {
-            world,
-            ei,
-            k,
-            person,
-            swap,
-            unsure: &unsure,
-        };
-        let v = eval(&expr::parse(&p.when).expect("validated"), &env);
-        if unsure.get() {
-            unknown = true;
-        } else if v == Val::Bool(true) {
-            return Some(true);
+    }
+    let permissive = if granted {
+        Some(true)
+    } else if grant_unknown {
+        None
+    } else {
+        Some(false)
+    };
+    let restrictive = if refused {
+        Some(false)
+    } else if limit_unknown {
+        None
+    } else {
+        Some(true)
+    };
+    both(permissive, restrictive)
+}
+
+/// An update by `person` of row `k`, with `swap` applied to the new row: the old row must pass
+/// the update rules and the new row must pass them again (`check`), and, because the generated
+/// update reads the row with a `where`, both rows must pass the select rules too.
+fn update_allowed(
+    doc: &Document,
+    world: &World,
+    person: &Person,
+    ei: usize,
+    k: usize,
+    swap: Option<&Swap>,
+) -> Option<bool> {
+    let old = both(
+        allowed(doc, world, person, ei, k, Action::Select, Phase::Old, None),
+        allowed(doc, world, person, ei, k, Action::Update, Phase::Old, None),
+    );
+    let new = both(
+        allowed(doc, world, person, ei, k, Action::Update, Phase::New, swap),
+        allowed(doc, world, person, ei, k, Action::Select, Phase::Old, swap),
+    );
+    both(old, new)
+}
+
+/// The same update, but allowed by one single policy: the old row passes *its* `when` and the new
+/// row passes *its* `check`. PostgreSQL combines the two across policies independently, so an
+/// update can be allowed although no one policy allows it (SVT034).
+fn update_allowed_by_one(
+    doc: &Document,
+    world: &World,
+    person: &Person,
+    ei: usize,
+    k: usize,
+    swap: Option<&Swap>,
+) -> Option<bool> {
+    let name = &world.entities[ei].name;
+    let selects = both(
+        allowed(doc, world, person, ei, k, Action::Select, Phase::Old, None),
+        allowed(doc, world, person, ei, k, Action::Select, Phase::Old, swap),
+    );
+    let restricted = both(
+        allowed_restrictions(doc, world, person, ei, k, Phase::Old, None),
+        allowed_restrictions(doc, world, person, ei, k, Phase::New, swap),
+    );
+    let mut unknown = false;
+    for p in doc
+        .policies
+        .iter()
+        .filter(|p| !p.restrictive && covers(p, person, name, Action::Update))
+    {
+        let both_rows = both(
+            holds(world, person, ei, k, None, condition(p, Phase::Old)),
+            holds(world, person, ei, k, swap, condition(p, Phase::New)),
+        );
+        match both_rows {
+            Some(true) => return both(Some(true), both(selects, restricted)),
+            None => unknown = true,
+            Some(false) => {}
         }
     }
     if unknown { None } else { Some(false) }
 }
 
-/// The names of the rules that let `person` do `action` on row `k` of entity `ei`.
+/// Every restrictive update policy holds on the row (the restrictive half of `allowed`).
+fn allowed_restrictions(
+    doc: &Document,
+    world: &World,
+    person: &Person,
+    ei: usize,
+    k: usize,
+    phase: Phase,
+    swap: Option<&Swap>,
+) -> Option<bool> {
+    let name = &world.entities[ei].name;
+    let (mut refused, mut unknown) = (false, false);
+    for p in doc
+        .policies
+        .iter()
+        .filter(|p| p.restrictive && covers(p, person, name, Action::Update))
+    {
+        match holds(world, person, ei, k, swap, condition(p, phase)) {
+            None => unknown = true,
+            Some(held) => refused |= !held,
+        }
+    }
+    if refused {
+        Some(false)
+    } else if unknown {
+        None
+    } else {
+        Some(true)
+    }
+}
+
+/// Both must hold: `None` if either is unknown and the other doesn't already rule it out.
+fn both(x: Option<bool>, y: Option<bool>) -> Option<bool> {
+    match (x, y) {
+        (Some(false), _) | (_, Some(false)) => Some(false),
+        (Some(true), Some(true)) => Some(true),
+        _ => None,
+    }
+}
+
+/// The names of the permissive rules that let `person` do `action` on row `k` of entity `ei`.
 fn allowing(
     doc: &Document,
     world: &World,
@@ -434,27 +627,8 @@ fn allowing(
     let name = &world.entities[ei].name;
     doc.policies
         .iter()
-        .filter(|p| {
-            let applies = match p.role {
-                Role::Anyone => true,
-                Role::Anon => person.id.is_none(),
-                Role::Authenticated => person.id.is_some(),
-            };
-            applies && &p.on.name == name && p.allow.contains(&a)
-        })
-        .filter(|p| {
-            let unsure = Cell::new(false);
-            let env = Env {
-                world,
-                ei,
-                k,
-                person,
-                swap: None,
-                unsure: &unsure,
-            };
-            !unsure.get()
-                && eval(&expr::parse(&p.when).expect("validated"), &env) == Val::Bool(true)
-        })
+        .filter(|p| !p.restrictive && covers(p, person, name, a))
+        .filter(|p| holds(world, person, ei, k, None, &p.when) == Some(true))
         .map(|p| p.name.clone())
         .collect()
 }
@@ -488,20 +662,107 @@ pub struct TestPerson {
     pub second_factor: bool,
 }
 
+/// An update PostgreSQL allows although no single policy does (SVT034): the old row passes one
+/// policy's `when`, and the new row passes another's `check`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hazard {
+    pub entity: String,
+    pub person: String,
+    /// The change, as a sentence: "set the status of Doc a to submitted".
+    pub what: String,
+    /// The policies whose `when` holds on the row as it is.
+    pub from: Vec<String>,
+    /// The policies whose `check` holds on the row afterwards.
+    pub to: Vec<String>,
+}
+
 /// The generated test file, and its checks as data.
 pub struct Analysis {
     pub text: String,
     pub people: Vec<TestPerson>,
     pub checks: Vec<Check>,
+    pub hazards: Vec<Hazard>,
 }
 
-/// Both must hold: `None` if either is unknown and the other doesn't already rule it out.
-fn both(x: Option<bool>, y: Option<bool>) -> Option<bool> {
-    match (x, y) {
-        (Some(false), _) | (_, Some(false)) => Some(false),
-        (Some(true), Some(true)) => Some(true),
-        _ => None,
+/// Records the update as a hazard when PostgreSQL allows it and no one policy does.
+#[allow(clippy::too_many_arguments)]
+fn note_hazard(
+    hazards: &mut Vec<Hazard>,
+    doc: &Document,
+    world: &World,
+    person: &Person,
+    ei: usize,
+    k: usize,
+    swap: &Swap,
+    what: &str,
+    expected: Option<bool>,
+) {
+    if expected != Some(true)
+        || update_allowed_by_one(doc, world, person, ei, k, Some(swap)) != Some(false)
+    {
+        return;
     }
+    let name = &world.entities[ei].name;
+    let holding = |phase: Phase, swap: Option<&Swap>| -> Vec<String> {
+        doc.policies
+            .iter()
+            .filter(|p| !p.restrictive && covers(p, person, name, Action::Update))
+            .filter(|p| {
+                let row = if phase == Phase::Old { None } else { swap };
+                holds(world, person, ei, k, row, condition(p, phase)) == Some(true)
+            })
+            .map(|p| p.name.clone())
+            .collect()
+    };
+    let (from, to) = (holding(Phase::Old, None), holding(Phase::New, Some(swap)));
+    if !hazards
+        .iter()
+        .any(|h| h.entity == *name && h.from == from && h.to == to)
+    {
+        hazards.push(Hazard {
+            entity: name.clone(),
+            person: person.name.clone(),
+            what: what.to_string(),
+            from,
+            to,
+        });
+    }
+}
+
+/// The SVT034 warnings for a validated design: updates only a *combination* of policies allows.
+pub fn hazards(doc: &Document) -> Vec<Diagnostic> {
+    // Needs two permissive update policies on one entity; skip the analysis otherwise.
+    let combine = doc.entities.iter().any(|e| {
+        doc.policies
+            .iter()
+            .filter(|p| !p.restrictive && p.on.name == e.name && p.allow.contains(&Action::Update))
+            .count()
+            >= 2
+    });
+    if !combine {
+        return Vec::new();
+    }
+    analyse(doc)
+        .hazards
+        .iter()
+        .filter_map(|h| {
+            let first = doc.policies.iter().find(|p| h.from.first() == Some(&p.name))?;
+            Some(Diagnostic {
+                code: Code::Svt034,
+                path: format!("policies.{}", first.name),
+                line: first.pos.line,
+                col: first.pos.col,
+                message: format!(
+                    "{} can {}: policy `{}` allows it on the row as it is and `{}` on the row afterwards, but neither allows it alone.",
+                    h.person,
+                    h.what,
+                    h.from.join("` or `"),
+                    h.to.join("` or `")
+                ),
+                hint: "Merge the two into one policy with a `when` and a `check`, or make their `check` conditions match.".into(),
+            })
+        })
+        .collect()
 }
 
 /// Entities in an order where every ref target comes first; file order breaks ties and cycles.
@@ -735,7 +996,54 @@ pub fn analyse(doc: &Document) -> Analysis {
             lit(&format!("alice can't give herself the {} role", r.name))
         ));
     }
+    let mut hazards: Vec<Hazard> = Vec::new();
     for (ei, e) in world.entities.iter().enumerate().take(tables) {
+        // The fields a rule with a `check` reads, and each value to try them at.
+        let updates: Vec<&Policy> = doc
+            .policies
+            .iter()
+            .filter(|p| p.on.name == e.name && p.allow.contains(&Action::Update))
+            .collect();
+        let mut transitions: Vec<Transition> = Vec::new();
+        if updates.iter().any(|p| p.check.is_some()) {
+            let mut mentioned = Vec::new();
+            for p in &updates {
+                for rule in [Some(&p.when), p.check.as_ref()].into_iter().flatten() {
+                    reads(&expr::parse(rule).expect("validated"), &mut mentioned);
+                }
+            }
+            for f in e
+                .fields
+                .iter()
+                .filter(|f| !f.primary && mentioned.contains(&f.name))
+            {
+                // A value another row holds would break a one-field unique rule, and a
+                // constraint naming the field could reject the new value: skip both.
+                let alone = f.unique
+                    || e.unique
+                        .iter()
+                        .any(|u| u.fields.len() == 1 && u.fields[0].name == f.name);
+                if alone
+                    || e.constraints
+                        .iter()
+                        .any(|c| c.expr.contains(f.name.as_str()))
+                {
+                    continue;
+                }
+                let values: Vec<(String, Val, String)> = match &f.ty {
+                    FieldType::Enum(vs) => vs
+                        .iter()
+                        .map(|v| (lit(v), Val::Text(v.clone()), v.clone()))
+                        .collect(),
+                    FieldType::Bool => [true, false]
+                        .iter()
+                        .map(|b| (b.to_string(), Val::Bool(*b), b.to_string()))
+                        .collect(),
+                    _ => continue,
+                };
+                transitions.push((f, values));
+            }
+        }
         for p in &people {
             let mut check =
                 |what: String,
@@ -786,7 +1094,7 @@ pub fn analyse(doc: &Document) -> Analysis {
                 }
                 continue;
             }
-            let can = |k, a| allowed(doc, &world, p, ei, k, a, None);
+            let can = |k, a| allowed(doc, &world, p, ei, k, a, Phase::Old, None);
             for k in 0..2 {
                 let tag = Some(("see", k, Action::Select));
                 check(
@@ -797,7 +1105,7 @@ pub fn analyse(doc: &Document) -> Analysis {
                 );
             }
             for k in 0..2 {
-                let ok = both(can(k, Action::Select), can(k, Action::Update));
+                let ok = update_allowed(doc, &world, p, ei, k, None);
                 let tag = Some(("change", k, Action::Update));
                 check(row("change", k), update(&world, ei, k), ok, tag);
             }
@@ -814,28 +1122,47 @@ pub fn analyse(doc: &Document) -> Analysis {
                     Some(("create", k, Action::Insert)),
                 );
             }
+            // Changing a field a rule with a `check` reads to each value it can take: a draft
+            // becomes submitted, a submitted one approved, and nothing else (docs/update-check.md).
+            for (k, r) in ROWS.iter().enumerate().take(2) {
+                for (f, values) in &transitions {
+                    for (sql_value, value, word) in values {
+                        if &world.field_value(ei, &f.name, k) == value {
+                            continue;
+                        }
+                        let swap = Swap {
+                            field: &f.name,
+                            to: SwapTo::Value(value.clone()),
+                        };
+                        let sql = format!(
+                            "update {} set {} = {sql_value} where {}",
+                            table(&e.name),
+                            q(&f.name),
+                            key(&world, ei, k)
+                        );
+                        let expected = update_allowed(doc, &world, p, ei, k, Some(&swap));
+                        let what = format!("set the {} of {} {r} to {word}", f.name, e.name);
+                        note_hazard(&mut hazards, doc, &world, p, ei, k, &swap, &what, expected);
+                        check(what, sql, expected, None);
+                    }
+                }
+            }
             // Changing who owns a row, or what it belongs to: the rule must hold on the row as
             // the update leaves it, so a person can't take a row over, give it away, or move it
             // out of their scope.
             let Some(me) = &p.id else { continue };
             for (k, r) in ROWS.iter().enumerate().take(2) {
-                let before = both(can(k, Action::Select), can(k, Action::Update));
                 for f in e.fields.iter().filter(|f| !f.primary) {
                     let (to, value, words) = match &f.ty {
                         FieldType::User => {
-                            let other = if k.is_multiple_of(2) {
-                                &world.bob
-                            } else {
-                                &world.alice
-                            };
-                            let mine = world.value(ei, f, k).1 == Val::Text(me.clone());
-                            let (id, who) = if mine {
-                                (
-                                    other.clone(),
-                                    if k.is_multiple_of(2) { "bob" } else { "alice" },
-                                )
-                            } else {
+                            let current = world.value(ei, f, k).1;
+                            let mine = current == Val::Text(me.clone());
+                            let (id, who) = if !mine {
                                 (me.clone(), "themselves")
+                            } else if current == Val::Text(world.alice.clone()) {
+                                (world.bob.clone(), "bob")
+                            } else {
+                                (world.alice.clone(), "alice")
                             };
                             (SwapTo::User(id.clone()), lit(&id), format!("to {who}"))
                         }
@@ -864,12 +1191,9 @@ pub fn analyse(doc: &Document) -> Analysis {
                         continue;
                     }
                     let swap = Swap { field: &f.name, to };
-                    // Postgres checks the new row against the update rules and, because the
-                    // update reads the row (`where`), against the select rules too.
-                    let after = both(
-                        allowed(doc, &world, p, ei, k, Action::Update, Some(&swap)),
-                        allowed(doc, &world, p, ei, k, Action::Select, Some(&swap)),
-                    );
+                    // Postgres checks the new row against the update rules (`check`) and, because
+                    // the update reads the row (`where`), against the select rules too.
+                    let expected = update_allowed(doc, &world, p, ei, k, Some(&swap));
                     let verb = if matches!(f.ty, FieldType::User) {
                         "set"
                     } else {
@@ -881,12 +1205,9 @@ pub fn analyse(doc: &Document) -> Analysis {
                         q(&f.name),
                         key(&world, ei, k)
                     );
-                    check(
-                        format!("{verb} the {} of {} {r} {words}", f.name, e.name),
-                        sql,
-                        both(before, after),
-                        None,
-                    );
+                    let what = format!("{verb} the {} of {} {r} {words}", f.name, e.name);
+                    note_hazard(&mut hazards, doc, &world, p, ei, k, &swap, &what, expected);
+                    check(what, sql, expected, None);
                 }
             }
         }
@@ -1083,6 +1404,7 @@ pub fn analyse(doc: &Document) -> Analysis {
         text,
         people,
         checks: found,
+        hazards,
     }
 }
 

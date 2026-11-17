@@ -165,4 +165,7 @@ fn bookings_and_teams_sql_and_types_match_golden_files() {
     let src = include_str!("fixtures/teams.yaml");
     assert_eq!(compile(src), include_str!("golden/teams.sql"));
     assert_eq!(types(src), include_str!("golden/teams.ts"));
+    let src = include_str!("fixtures/approvals.yaml");
+    assert_eq!(compile(src), include_str!("golden/approvals.sql"));
+    assert_eq!(types(src), include_str!("golden/approvals.ts"));
 }

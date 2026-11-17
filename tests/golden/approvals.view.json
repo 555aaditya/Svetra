@@ -1,0 +1,488 @@
+{
+  "svetra": "0.1",
+  "system": "Approvals",
+  "revision": "e61a45fe0482",
+  "people": [
+    {
+      "id": "anon",
+      "label": "Someone not signed in"
+    },
+    {
+      "id": "alice",
+      "label": "A signed-in person"
+    },
+    {
+      "id": "bob",
+      "label": "Another signed-in person"
+    },
+    {
+      "id": "carol",
+      "label": "A signed-in person who owns nothing"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Doc",
+      "label": "Docs",
+      "private": false,
+      "fields": [
+        "the signed-in person who owns it (required)",
+        "reviewer: a signed-in person (required)",
+        "title: text (required)",
+        "status: one of draft, submitted, approved or rejected (required) (starts as draft)"
+      ],
+      "links": []
+    }
+  ],
+  "cells": [
+    {
+      "person": "anon",
+      "entity": "Doc",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's doc",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's doc",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see docs any other way."
+      ],
+      "rules": [
+        "Signed-in people can see a doc when its author is them.",
+        "Signed-in people can see a doc when its reviewer is them and its status is not draft."
+      ],
+      "tests": [
+        4,
+        5
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Doc",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's doc",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's doc",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a doc when its author is them and its status is draft."
+      ],
+      "tests": [
+        10,
+        11
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Doc",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's doc",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's doc",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change a doc when its author is them and its status is draft. After the change, its author is them and its status is draft or submitted.",
+        "Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected."
+      ],
+      "tests": [
+        6,
+        7
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Doc",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's doc",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's doc",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can delete a doc when its author is them and its status is draft."
+      ],
+      "tests": [
+        8,
+        9
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Doc",
+      "action": "see",
+      "access": "all",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own doc",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's doc",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see a doc when its author is them.",
+        "Signed-in people can see a doc when its reviewer is them and its status is not draft."
+      ],
+      "rules": [
+        "Signed-in people can see a doc when its author is them.",
+        "Signed-in people can see a doc when its reviewer is them and its status is not draft."
+      ],
+      "tests": [
+        18,
+        19
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Doc",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own doc",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's doc",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a doc when its author is them and its status is draft."
+      ],
+      "tests": [
+        24,
+        25
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Doc",
+      "action": "change",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own doc",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's doc",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can change a doc when its author is them and its status is draft. After the change, its author is them and its status is draft or submitted.",
+        "Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected."
+      ],
+      "rules": [
+        "Signed-in people can change a doc when its author is them and its status is draft. After the change, its author is them and its status is draft or submitted.",
+        "Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected."
+      ],
+      "tests": [
+        20,
+        21
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Doc",
+      "action": "delete",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own doc",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's doc",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can delete a doc when its author is them and its status is draft."
+      ],
+      "rules": [
+        "Signed-in people can delete a doc when its author is them and its status is draft."
+      ],
+      "tests": [
+        22,
+        23
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Doc",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's doc",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own doc",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see a doc when its author is them."
+      ],
+      "rules": [
+        "Signed-in people can see a doc when its author is them.",
+        "Signed-in people can see a doc when its reviewer is them and its status is not draft."
+      ],
+      "tests": [
+        32,
+        33
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Doc",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's doc",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own doc",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a doc when its author is them and its status is draft."
+      ],
+      "tests": [
+        38,
+        39
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Doc",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's doc",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own doc",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change a doc when its author is them and its status is draft. After the change, its author is them and its status is draft or submitted.",
+        "Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected."
+      ],
+      "tests": [
+        34,
+        35
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Doc",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's doc",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own doc",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can delete a doc when its author is them and its status is draft."
+      ],
+      "tests": [
+        36,
+        37
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Doc",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's doc",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's doc",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see docs any other way."
+      ],
+      "rules": [
+        "Signed-in people can see a doc when its author is them.",
+        "Signed-in people can see a doc when its reviewer is them and its status is not draft."
+      ],
+      "tests": [
+        46,
+        47
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Doc",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's doc",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's doc",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a doc when its author is them and its status is draft."
+      ],
+      "tests": [
+        52,
+        53
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Doc",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's doc",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's doc",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change a doc when its author is them and its status is draft. After the change, its author is them and its status is draft or submitted.",
+        "Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected."
+      ],
+      "tests": [
+        48,
+        49
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Doc",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's doc",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's doc",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can delete a doc when its author is them and its status is draft."
+      ],
+      "tests": [
+        50,
+        51
+      ]
+    }
+  ],
+  "holes": [],
+  "signing_in": [
+    "People sign in with email (a password or an emailed link).",
+    "Anyone can create an account.",
+    "People confirm their email address before they can sign in.",
+    "Passwords need at least 10 characters."
+  ],
+  "before_going_live": [
+    "Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.",
+    "Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in."
+  ]
+}

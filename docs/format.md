@@ -130,14 +130,19 @@ Using a form where it isn't allowed is `SVT003`.
 |---|---|---|
 | `on` | yes | The entity the policy protects (`SVT002` if unknown) |
 | `allow` | yes | Non-empty list of `select`, `insert`, `update`, `delete` |
-| `when` | yes | Boolean expression a row must satisfy |
+| `when` | yes | Boolean expression a row must satisfy. For an update it is the condition on the row **before**; see `check` |
+| `check` | no | The condition the row must satisfy **after** an update (`WITH CHECK`). When absent it is `when`. Only for a policy that allows `update` (`SVT033` otherwise); typed like `when` |
+| `restrictive` | no | `true`: the policy must hold **in addition to** at least one permissive policy that allows the action, and never grants access by itself. Default `false` |
 | `as` | no | `authenticated` (default): signed-in people. `anyone`: everyone, signed in or not. `anon`: only people who aren't signed in, which is rarely right, because signed-in people then get less (`SVT007`) |
 
 - **Row-level security is on for every table.** That holds whether or not a policy exists, so access is denied by default.
 - **Each action becomes one PostgreSQL policy**, named `<policy>_<action>` when the policy allows more than one action:
   - `select` and `delete` use `when` as the `using` clause.
   - `insert` uses it as the `with check` clause.
-  - `update` uses it as both.
+  - `update` uses `when` as the `using` clause and `check` (or `when`, when there is no `check`) as the `with check` clause.
+- **`check` lets a rule say what an update may turn a row into.** `when: "status == 'draft'"` with `check: "status in ['draft', 'submitted']"` lets a draft stay a draft or become submitted, and nothing else. Without a `check`, the row must satisfy `when` both before and after, which can't express a state change.
+- **Permissive policies combine with `or`, separately for the old row and the new row,** exactly as PostgreSQL does. An update is allowed when the old row passes *some* policy's `when` and the new row passes *some* policy's `check`, which need not be the same policy: with `using (x = 1) with check (x = 1)` in one policy and `using (x = 2) with check (x = 3)` in another, a row with `x = 1` **can** be updated to `x = 3` (checked on PostgreSQL 16). `svetra validate` warns when that happens by accident (`SVT034`).
+- **A restrictive policy only narrows.** All restrictive policies for an action must hold, each on its own `when` (and `check` for updates), on top of one permissive policy. It compiles to `create policy ... as restrictive`. An entity with only restrictive policies lets nobody in, which is `SVT001`.
 - **`auth.user` compiles to `(select auth.uid())`**, the form Supabase recommends for performance.
 - **A one-hop path compiles to a scalar subquery** on the referenced row's primary key (see `compiler.md`).
 - **A policy on a private entity does nothing**, so it's a warning (`SVT027`).
@@ -313,6 +318,8 @@ holes:
 | `SVT029` | error | A value has the wrong kind, such as a string where a list or bool is expected | `fix_value` |
 | `SVT030` | error | A rename can't be right: `was` names an entity or field that is still in this design, or (in `svetra plan`) nothing in the design the database has | `fix_rename` |
 | `SVT032` | error | In `svetra compile`: a hole body that doesn't end with `;`, typically a whole `begin … end` function body. The generated function wouldn't parse. Reported against `supabase/holes/<name>.sql`, and nothing is written | `fix_hole_body` |
+| `SVT033` | error | A policy has a `check` but doesn't allow `update`: only an update has a row after it | `remove_check` |
+| `SVT034` | warning | Two permissive update policies combine into a transition neither allows alone: the old row passes one policy's `when` and the new row passes the other's `check`, so the update is allowed although no single policy allows it | `merge_policies` |
 | `SVT031` | info | In `svetra plan`: `was` names a rename that's already applied, because the design the database has already uses the new name. Remove it | `remove_was` |
 | `SVT001` | error | Entity exposed through the API has no policy. Mark it `private: true` or add a policy | `add_policy` |
 | `SVT002` | error | Reference to an entity or field that doesn't exist | `fix_reference` |

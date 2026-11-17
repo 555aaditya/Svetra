@@ -171,6 +171,10 @@ pub struct Policy {
     pub on: NameRef,
     pub allow: Vec<Action>,
     pub when: String,
+    /// The condition on the row after an update (`WITH CHECK`); `when` when absent.
+    pub check: Option<String>,
+    /// Holds in addition to a permissive policy, never granting access by itself.
+    pub restrictive: bool,
     pub role: Role,
 }
 

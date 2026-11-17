@@ -133,6 +133,8 @@ Constraints and policy conditions translate like this:
 
 ### Policies
 
+An update policy compiles to `using (<when>) with check (<check>)`, where `<check>` is the policy's `check`, or `<when>` when it has none. A `restrictive: true` policy compiles to `create policy ... as restrictive`.
+
 - `select` and `delete` put the condition in `using (...)`.
 - `insert` puts it in `with check (...)`.
 - `update` puts it in both.
@@ -328,6 +330,9 @@ For every reachable entity and every person:
 | create `c`, create `d` | `insert` the candidate row | Some `insert` rule holds on the new row |
 | change who owns `a` or `b`, or what it belongs to | `update` one `user` or `ref` field of the row: a `user` field to the person themselves (or, on their own row, to the other owner), a `ref` to the target's other row. Signed-in people only | The row can be changed (as above), **and** some `update` rule and some `select` rule hold on the row as the update leaves it. This is how a person could take a row over, give it away, or move it out of their scope |
 
+| change a field a rule with a `check` reads, to each value | `update` that one `enum` or `bool` field to each of its values (each enum value, or `true` and `false`), skipping the value the row already has | The row can be changed from where it is (an update rule's `when` holds, and some `select` rule), **and** the row as the update leaves it passes an update rule's `check` and a `select` rule. This is how a draft becomes submitted and nothing else. Generated only for an entity with a policy that has a `check`, so a design without one gets none |
+
+- **Rules combine as PostgreSQL combines them.** Some permissive policy must hold, and every restrictive policy must hold too; null counts as not holding. For an update, the old row is read against the update policies' `when`, and the new row against their `check` (`when` when there is none) and against the select policies. The two sides combine **independently across policies**: the old row may pass one policy and the new row another (checked on PostgreSQL 16, docs/update-check.md). `svetra validate` warns (`SVT034`) when a check in the tests exposes such a combination.
 - **Rules that apply to a person:** `anon` gets rules with `as: anon` or `as: anyone`. Everyone signed in gets `as: authenticated` (the default) or `as: anyone`.
 - **Private entities** get two checks for `anon` and for `alice`: see `a` and create `c`. Both must be denied, because the API has no grants on them.
 - **Fields a declared constraint names,** and a field alone in a `unique` rule when the new value is another row's, get no change-who-owns check, because the database could reject the value for that reason instead.

@@ -453,11 +453,36 @@ fn access(e: &Entity, doc: &Document, _entities: &HashMap<&str, &Entity>) -> Vec
             sentence(&many)
         )];
     }
+    // Restrictive policies only narrow, so they don't get a sentence of their own: each sentence
+    // they narrow ends with the limit instead (docs/update-check.md).
     let policies: Vec<&Policy> = doc
         .policies
         .iter()
-        .filter(|p| p.on.name == e.name)
+        .filter(|p| p.on.name == e.name && !p.restrictive)
         .collect();
+    let limits: Vec<&Policy> = doc
+        .policies
+        .iter()
+        .filter(|p| p.on.name == e.name && p.restrictive)
+        .collect();
+    // The end of a sentence: what a restrictive policy adds, and, for an update, what must hold
+    // after the change.
+    let ending = |p: &Policy| -> String {
+        let mut text = String::new();
+        for r in limits
+            .iter()
+            .filter(|r| r.allow.iter().any(|a| p.allow.contains(a)))
+        {
+            let c = expr::parse(&r.when).expect("validated expression");
+            text += &format!(", and only when {}", english(&c, Style::Policy));
+        }
+        text += ".";
+        if let Some(check) = &p.check {
+            let c = expr::parse(check).expect("validated expression");
+            text += &format!(" After the change, {}.", english(&c, Style::Policy));
+        }
+        text
+    };
     let mut out = Vec::new();
     for p in &policies {
         let verbs: Vec<String> = p
@@ -498,7 +523,7 @@ fn access(e: &Entity, doc: &Document, _entities: &HashMap<&str, &Entity>) -> Vec
                 }
                 _ => format!("Some people can {} {many}.", list(&verbs, "and")),
             };
-            out.push(line);
+            out.push(format!("{}{}", line.trim_end_matches('.'), ending(p)));
             continue;
         }
         let who = match p.role {
@@ -515,7 +540,11 @@ fn access(e: &Entity, doc: &Document, _entities: &HashMap<&str, &Entity>) -> Vec
                 english(&parsed, Style::Policy)
             )
         };
-        out.push(format!("{who} can {} {what}.", list(&verbs, "and")));
+        out.push(format!(
+            "{who} can {} {what}{}",
+            list(&verbs, "and"),
+            ending(p)
+        ));
     }
     let sees = policies.iter().any(|p| p.allow.contains(&Action::Select));
     out.push(if sees {

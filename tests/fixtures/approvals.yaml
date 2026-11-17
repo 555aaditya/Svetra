@@ -1,0 +1,47 @@
+svetra: "0.1"
+system: Approvals
+
+auth:
+  sign_in: [email]
+
+entities:
+  Doc:
+    fields:
+      id:       { type: uuid, primary: true }
+      author:   { type: user, required: true }
+      reviewer: { type: user, required: true }
+      title:    { type: text, required: true }
+      status:   { type: enum, values: [draft, submitted, approved, rejected], default: draft, required: true }
+    constraints:
+      different_people: "author != reviewer"
+    indexes:
+      - [author]
+      - [reviewer]
+
+policies:
+  authors_see:
+    on: Doc
+    allow: [select]
+    when: "author == auth.user"
+  reviewers_see:
+    on: Doc
+    allow: [select]
+    when: "reviewer == auth.user and status != 'draft'"
+  authors_start:
+    on: Doc
+    allow: [insert]
+    when: "author == auth.user and status == 'draft'"
+  authors_edit:
+    on: Doc
+    allow: [update]
+    when: "author == auth.user and status == 'draft'"
+    check: "author == auth.user and status in ['draft', 'submitted']"
+  reviewers_decide:
+    on: Doc
+    allow: [update]
+    when: "reviewer == auth.user and status == 'submitted'"
+    check: "reviewer == auth.user and status in ['approved', 'rejected']"
+  authors_delete_drafts:
+    on: Doc
+    allow: [delete]
+    when: "author == auth.user and status == 'draft'"

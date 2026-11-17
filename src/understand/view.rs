@@ -105,10 +105,11 @@ pub fn model(doc: &Document, src: &str) -> Value {
     for p in &people {
         for e in &doc.entities {
             let lines = parts::access(doc, e);
+            // `explain` gives a sentence to each permissive policy; a restrictive one narrows them.
             let policies: Vec<&Policy> = doc
                 .policies
                 .iter()
-                .filter(|x| x.on.name == e.name)
+                .filter(|x| x.on.name == e.name && !x.restrictive)
                 .collect();
             let sentence_of = |name: &str| {
                 policies

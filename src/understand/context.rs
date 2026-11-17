@@ -112,8 +112,13 @@ pub fn context(doc: &Document) -> String {
             Role::Anon => "anon",
             Role::Anyone => "anyone",
         };
+        let kind = if p.restrictive { "restrictive " } else { "" };
+        let after = p
+            .check
+            .as_ref()
+            .map_or(String::new(), |c| format!(" check {c}"));
         out += &format!(
-            "policy {}: {} {} {role} when {}\n",
+            "{kind}policy {}: {} {} {role} when {}{after}\n",
             p.name,
             p.on.name,
             actions.join(","),

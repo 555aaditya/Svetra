@@ -311,6 +311,12 @@ fn policy(p: &Policy, entities: &HashMap<&str, &Entity>) -> Vec<String> {
         params: false,
     };
     let cond = expr_sql(&expr::parse(&p.when).expect("validated expression"), &cx);
+    // The condition on the row after an update: `check`, or `when` when there is none.
+    let after = p.check.as_ref().map_or_else(
+        || cond.clone(),
+        |c| expr_sql(&expr::parse(c).expect("validated expression"), &cx),
+    );
+    let kind = if p.restrictive { " as restrictive" } else { "" };
     let role = match p.role {
         Role::Authenticated => "authenticated",
         Role::Anon => "anon",
@@ -323,7 +329,7 @@ fn policy(p: &Policy, entities: &HashMap<&str, &Entity>) -> Vec<String> {
                 Action::Select => ("select", format!("using ({cond})")),
                 Action::Delete => ("delete", format!("using ({cond})")),
                 Action::Insert => ("insert", format!("with check ({cond})")),
-                Action::Update => ("update", format!("using ({cond})\n  with check ({cond})")),
+                Action::Update => ("update", format!("using ({cond})\n  with check ({after})")),
             };
             let name = if p.allow.len() == 1 {
                 p.name.clone()
@@ -331,7 +337,7 @@ fn policy(p: &Policy, entities: &HashMap<&str, &Entity>) -> Vec<String> {
                 format!("{}_{action}", p.name)
             };
             format!(
-                "create policy {} on {}\n  for {action} to {role}\n  {clauses};",
+                "create policy {} on {}{kind}\n  for {action} to {role}\n  {clauses};",
                 q(&name),
                 table(&e.name)
             )
