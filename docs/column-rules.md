@@ -34,3 +34,35 @@ policies:
 - **It never grants anything.** `unchanged` only refuses updates that would otherwise be allowed. A policy with `unchanged` and a `when` that never holds locks nothing.
 - **The primary key** can't be listed: it is never changed through the API, and the checks identify rows by it (`SVT002`).
 - **Insert and delete are unaffected.** A new row has no old values; a deleted row has no new ones.
+
+## 2. When several policies apply to the same update
+
+A person can be covered by more than one update policy on the same row: an author who is also a reviewer, or an admin policy beside a member policy. Permissive policies combine with `or`, so the rule for fields must follow the same idea:
+
+> **A field is locked for an update by person P on row R when no permissive update policy that applies to P on R leaves it free.**
+>
+> A permissive policy **applies** to P on R when its `when` holds on R (the old row) for P's database role. It **leaves a field free** when the field isn't in its `unchanged`.
+
+So `unchanged` on one policy cannot take away something another applicable policy grants: an author's own policy that lets them retitle keeps working even when the same person also holds a reviewer's policy that locks the title. This mirrors how a grant works everywhere else in Svetra.
+
+**Restrictive policies** (docs/update-check.md) may also have `unchanged`, and for them it is the other way round: **a field is locked if any applicable restrictive policy lists it**, whatever the permissive ones say. A restrictive policy exists to narrow, so "while an order is paid, nobody changes its total" is one restrictive rule:
+
+```yaml
+  paid_orders_are_final:
+    on: Order
+    allow: [update]
+    restrictive: true
+    when: "status == 'paid'"
+    unchanged: [total, customer]
+```
+
+Putting it together, an update of row R by person P is refused when any field it changes is locked as above; otherwise the ordinary rules (`when`, `check`, restrictive policies, select policies) decide, exactly as before.
+
+**Example, on the approvals app.** Alice wrote document D and bob reviews it, and D is submitted.
+
+| Update by bob | Result | Why |
+|---|---|---|
+| status `submitted` → `approved` | allowed | `reviewers_decide` applies, the status isn't in its `unchanged`, and the `check` holds |
+| title changed, status unchanged | refused | the `check` fails (status must become approved or rejected); the column rule isn't even reached |
+| status → `approved` **and** title changed | **refused** | the `check` holds, but `title` is in `reviewers_decide`'s `unchanged`, and no other policy applies to bob on D that leaves it free. This is the case no row policy can express |
+| status → `approved`, title "changed" to the same text | allowed | not a change |
