@@ -162,3 +162,32 @@ The expected results come from the evaluator, which reads the policies, never th
 ```
 
 With this single added line, the whole prompt is in `svetra.yaml`: the author's rules, the reviewer's, the transitions, and the column rule. No hole, no hand-written SQL, and every one of the 24 oracle checks is expected to pass, including "the reviewer cannot approve and retitle at once". Add a `notes` column to `Doc` next month and the reviewer still can't edit it, with no change to the rule.
+
+## Open decisions
+
+| # | Question | Recommendation |
+|---|---|---|
+| **C1** | An allow-list (`only: [status]`) or a deny-list (`unchanged: [title, author]`)? | **`only`.** It fails closed: a column added later stays locked for the people the rule limits. The deny-list is the same power but leaves new columns open, a leak by omission. Naming: `only` reads as the prompt does ("can change only the status"); alternatives `changes:` or `may_change:` |
+| **C2** | How policies combine: a field is free when **some** applicable permissive policy frees it, or locked when **any** one locks it? | **Some frees it** (section 2). It follows the "permissive policies add up" meaning that everything else in Svetra has, and the warning `SVT036` catches the surprising case. The other reading makes a policy able to take away what another grants |
+| **C3** | The service role, the table owner and hole bodies are exempt (the trigger only checks `anon` and `authenticated`) | **Yes, and say so in `explain`'s "before going live".** They bypass row-level security too, so a rule that bound them but not policies would be inconsistent. A hole is the right place for an administrator's tool |
+| **C4** | Should `only` be allowed on restrictive policies? | **Yes**, with the opposite combining rule (any applicable restrictive policy that omits a field locks it). It is the natural way to say "while paid, only notes change" |
+| **C5** | Where do the generated trigger and function live? | In a `svetra` schema next to `svetra.has_role` (the API doesn't expose it), named `guard_<table>` and `svetra_guard`, in the generated schema file, so `compile --check` and `supabase db diff` treat them like everything else Svetra writes |
+| **C6** | Also add a field flag `immutable: true` (never changes after creation, for everyone), as sugar compiled to column privileges or to the same guard? | **Later, separately.** It is simpler than `only`, but the approvals rule is the evidence for this one, and the tests would be shared |
+| **C7** | Should the guard also protect insert, by refusing an insert that sets a field the policy doesn't allow? | **No.** A column rule is about changing what is there. For insert, `when` already is the check on the new row |
+
+## Build order, once approved
+
+1. **Format:** `only` in the loader, JSON Schema and `docs/format.md`; `SVT035`, `SVT002` and `SVT029` for the bad cases; the model and `plan`'s comparison.
+2. **Compile:** the guard function and trigger, with the old-row expression compiler (`old."col"`).
+3. **The evaluator:** lock computation from section 2, a `Swap` that holds several changed fields, and the three kinds of check in section 4, with `approvals` gaining the line in section 8 (its goldens change, which is the point).
+4. **`SVT036`,** computed by the same evaluator.
+5. **`explain`, `context`, `view` and `plan`.**
+6. **Real databases:** `pg-check.sh` and `supabase-check.sh` run the approvals app with its breakages (trigger dropped, trigger disabled, a field removed from the guard, restrictive lock ignored).
+7. **The agent evaluation again** on the approvals prompt: how many agents still write a trigger by hand?
+
+## Tests
+
+- **Every existing golden file unchanged** (no `only` anywhere).
+- **The approvals app passes all 24 oracle checks of the agent evaluation** when built from `svetra.yaml` alone, on plain PostgreSQL 16 and on a real Supabase.
+- **Each deliberate breakage fails exactly the checks it should,** and `svetra check` finds nothing critical.
+- **The evaluator against PostgreSQL,** for random policy sets that include `only`: the expected result equals what the database does (extending the differential-testing idea in the research notes).
