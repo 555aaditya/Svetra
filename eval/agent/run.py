@@ -197,7 +197,17 @@ def artifacts(work):
         for f in os.listdir(d):
             if f.endswith(".sql"):
                 tests += open(os.path.join(d, f)).read().count("select is(")
-    return {"svetra_yaml": os.path.exists(os.path.join(work, "svetra.yaml")), "generated_access_tests": tests}
+    design = os.path.join(work, "svetra.yaml")
+    text = open(design).read() if os.path.exists(design) else ""
+    return {
+        "svetra_yaml": bool(text),
+        "generated_access_tests": tests,
+        # What the design needed beyond policies: hand-written functions, and policies that say what
+        # an update turns a row into.
+        "holes": len(re.findall(r"^\s+kind:\s*function", text, re.M)),
+        "checks": len(re.findall(r"^\s+check:", text, re.M)),
+        "restrictive": len(re.findall(r"^\s+restrictive:\s*true", text, re.M)),
+    }
 
 
 def check(work, oracle, svetra_bin, name, applied_before=None):
@@ -415,7 +425,8 @@ def main():
                     print(f"  {name}: {res['passed']}/{res['total']} checks, {res['leaks']} leaks, "
                           f"{res['too_strict']} too strict, svetra check {res['svetra_check']}, "
                           f"${meta.get('cost_usd')}, {meta.get('num_turns')} turns", flush=True)
-                json.dump({"prompt": prompt, "condition": cond, "seed": seed, "model": a.model, "agent": meta,
+                json.dump({"prompt": prompt, "condition": cond, "seed": seed, "model": a.model,
+                           "svetra": sh([a.svetra, "--version"]).stdout.strip(), "agent": meta,
                            "applied_before": before, "check": res}, open(os.path.join(base, "run.json"), "w"), indent=1)
                 rows.append((name, meta, res))
     print("\n| run | applied | passed | leaks | too strict | critical | cost | turns | output tokens | svetra tools | access tests |")

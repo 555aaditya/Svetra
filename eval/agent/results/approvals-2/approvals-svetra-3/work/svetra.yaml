@@ -1,0 +1,45 @@
+svetra: "0.1"
+system: App
+
+auth:
+  sign_in: [email]
+
+entities:
+  Doc:
+    fields:
+      id:       { type: uuid, primary: true }
+      author:   { type: user, required: true }
+      reviewer: { type: user, required: true }
+      title:    { type: text, required: true }
+      status:   { type: enum, values: [draft, submitted, approved, rejected], default: draft, required: true }
+    indexes:
+      - [author]
+      - [reviewer]
+
+policies:
+  author_sees_own:
+    on: Doc
+    allow: [select]
+    when: "author == auth.user"
+  reviewer_sees_submitted:
+    on: Doc
+    allow: [select]
+    when: "reviewer == auth.user and status != 'draft'"
+  author_creates_draft:
+    on: Doc
+    allow: [insert]
+    when: "author == auth.user and reviewer != auth.user and status == 'draft'"
+  author_edits_or_submits_draft:
+    on: Doc
+    allow: [update]
+    when: "author == auth.user and status == 'draft'"
+    check: "author == auth.user and reviewer != auth.user and status in ['draft', 'submitted']"
+  author_deletes_draft:
+    on: Doc
+    allow: [delete]
+    when: "author == auth.user and status == 'draft'"
+  reviewer_decides:
+    on: Doc
+    allow: [update]
+    when: "reviewer == auth.user and status == 'submitted' and author != auth.user"
+    check: "reviewer == auth.user and status in ['approved', 'rejected']"
