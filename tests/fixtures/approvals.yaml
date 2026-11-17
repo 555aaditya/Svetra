@@ -41,6 +41,7 @@ policies:
     allow: [update]
     when: "reviewer == auth.user and status == 'submitted'"
     check: "reviewer == auth.user and status in ['approved', 'rejected']"
+    only: [status]
   authors_delete_drafts:
     on: Doc
     allow: [delete]
