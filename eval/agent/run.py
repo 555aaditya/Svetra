@@ -207,6 +207,13 @@ def artifacts(work):
         "holes": len(re.findall(r"^\s+kind:\s*function", text, re.M)),
         "checks": len(re.findall(r"^\s+check:", text, re.M)),
         "restrictive": len(re.findall(r"^\s+restrictive:\s*true", text, re.M)),
+        "only": len(re.findall(r"^\s+only:", text, re.M)),
+        # A hand-written trigger in the migration: the rule is outside the design.
+        "hand_written_triggers": sum(
+            open(os.path.join(work, "supabase", "migrations", f)).read().count("create trigger")
+            for f in (os.listdir(os.path.join(work, "supabase", "migrations")) if os.path.isdir(os.path.join(work, "supabase", "migrations")) else [])
+            if f.endswith(".sql")
+        ) - (1 if "only:" in text else 0),
     }
 
 
