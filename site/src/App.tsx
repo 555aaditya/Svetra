@@ -101,7 +101,7 @@ export function App() {
           <ol className="grid gap-4 md:grid-cols-3">
             {[
               ["Design", "You and your agent write svetra.yaml: the data, the rules, who can see what, and how people sign in."],
-              ["Compile", "Svetra checks it with 21 rules, then writes the Postgres schema, row-level security, types, access tests and fenced-in custom code."],
+              ["Compile", "Svetra checks it with 24 rules, then writes the Postgres schema, row-level security, types, access tests and fenced-in custom code."],
               ["Prove", "supabase test db runs the access tests as real users. Every person, action and row, checked."],
             ].map(([t, b], i) => (
               <li key={t} className="rounded-xl border border-separator-border p-6">
