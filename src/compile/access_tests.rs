@@ -164,6 +164,28 @@ fn primary(e: &Entity) -> &Field {
 struct Swap<'s> {
     field: &'s str,
     to: SwapTo,
+    /// Another field the same update changes.
+    and: Option<&'s Swap<'s>>,
+}
+
+impl Swap<'_> {
+    /// The new value of `field` in this update, if it changes it.
+    fn of(&self, field: &str) -> Option<&SwapTo> {
+        if self.field == field {
+            Some(&self.to)
+        } else {
+            self.and.and_then(|s| s.of(field))
+        }
+    }
+
+    /// Every field this update changes.
+    fn fields(&self) -> Vec<&str> {
+        let mut out = vec![self.field];
+        if let Some(s) = self.and {
+            out.extend(s.fields());
+        }
+        out
+    }
 }
 
 enum SwapTo {
@@ -270,19 +292,10 @@ fn eval(e: &Expr, env: &Env) -> Val {
             [a, b] if a == "auth" && b == "user" => {
                 env.person.id.clone().map_or(Val::Null, Val::Text)
             }
-            [f] => match env.swap {
-                Some(Swap {
-                    field,
-                    to: SwapTo::User(id),
-                }) if field == f => Val::Text(id.clone()),
-                Some(Swap {
-                    field,
-                    to: SwapTo::Value(v),
-                }) if field == f => v.clone(),
-                Some(Swap {
-                    field,
-                    to: SwapTo::Row(j),
-                }) if field == f => {
+            [f] => match env.swap.and_then(|s| s.of(f)) {
+                Some(SwapTo::User(id)) => Val::Text(id.clone()),
+                Some(SwapTo::Value(v)) => v.clone(),
+                Some(SwapTo::Row(j)) => {
                     let e = env.world.entities[env.ei];
                     let FieldType::Ref(t) =
                         &e.fields.iter().find(|x| &x.name == f).expect("a ref").ty
@@ -296,11 +309,8 @@ fn eval(e: &Expr, env: &Env) -> Val {
             },
             [r, f] => {
                 let e = env.world.entities[env.ei];
-                let row = match env.swap {
-                    Some(Swap {
-                        field,
-                        to: SwapTo::Row(j),
-                    }) if field == r => *j,
+                let row = match env.swap.and_then(|s| s.of(r)) {
+                    Some(SwapTo::Row(j)) => *j,
                     _ => env.world.ref_row(e, r, env.k),
                 };
                 let FieldType::Ref(t) = &e
@@ -534,6 +544,77 @@ fn update_allowed(
         allowed(doc, world, person, ei, k, Action::Select, Phase::Old, swap),
     );
     both(old, new)
+}
+
+/// Either holds: `None` if either is unknown and the other isn't already true.
+fn either(x: Option<bool>, y: Option<bool>) -> Option<bool> {
+    match (x, y) {
+        (Some(true), _) | (_, Some(true)) => Some(true),
+        (Some(false), Some(false)) => Some(false),
+        _ => None,
+    }
+}
+
+/// Does the policy leave out `field` from its `only`? A policy without `only` limits nothing.
+fn limits(p: &Policy, field: &str) -> bool {
+    p.only
+        .as_ref()
+        .is_some_and(|only| !only.iter().any(|f| f.name == field))
+}
+
+/// Is `field` locked for an update by `person` of row `k` (docs/column-rules.md, section 2)? A
+/// field is locked when an applicable restrictive policy leaves it out of its `only`, or when no
+/// applicable permissive policy leaves it free (no `only`, or the field is listed). A policy is
+/// applicable when its role matches and its `when` holds on the old row. A field no policy
+/// limits is never locked, and has no guard.
+fn locked(
+    doc: &Document,
+    world: &World,
+    person: &Person,
+    ei: usize,
+    k: usize,
+    field: &str,
+) -> Option<bool> {
+    let name = &world.entities[ei].name;
+    if !doc
+        .policies
+        .iter()
+        .any(|p| &p.on.name == name && p.allow.contains(&Action::Update) && limits(p, field))
+    {
+        return Some(false);
+    }
+    let applicable = |restrictive: bool, wanted: &dyn Fn(&Policy) -> bool| -> Option<bool> {
+        let mut unknown = false;
+        for p in doc.policies.iter().filter(|p| {
+            p.restrictive == restrictive && covers(p, person, name, Action::Update) && wanted(p)
+        }) {
+            match holds(world, person, ei, k, None, &p.when) {
+                Some(true) => return Some(true),
+                None => unknown = true,
+                Some(false) => {}
+            }
+        }
+        if unknown { None } else { Some(false) }
+    };
+    let restricted = applicable(true, &|p| limits(p, field));
+    let freed = applicable(false, &|p| !limits(p, field));
+    either(restricted, freed.map(|f| !f))
+}
+
+/// An update by `person` of row `k` is allowed by the rules, and changes no locked field.
+fn update_expected(
+    doc: &Document,
+    world: &World,
+    person: &Person,
+    ei: usize,
+    k: usize,
+    swap: Option<&Swap>,
+) -> Option<bool> {
+    let mut ok = update_allowed(doc, world, person, ei, k, swap);
+    for field in swap.map(Swap::fields).unwrap_or_default() {
+        ok = both(ok, locked(doc, world, person, ei, k, field).map(|l| !l));
+    }
+    ok
 }
 
 /// The same update, but allowed by one single policy: the old row passes *its* `when` and the new
@@ -1133,6 +1214,7 @@ pub fn analyse(doc: &Document) -> Analysis {
                         let swap = Swap {
                             field: &f.name,
                             to: SwapTo::Value(value.clone()),
+                            and: None,
                         };
                         let sql = format!(
                             "update {} set {} = {sql_value} where {}",
@@ -1140,7 +1222,7 @@ pub fn analyse(doc: &Document) -> Analysis {
                             q(&f.name),
                             key(&world, ei, k)
                         );
-                        let expected = update_allowed(doc, &world, p, ei, k, Some(&swap));
+                        let expected = update_expected(doc, &world, p, ei, k, Some(&swap));
                         let what = format!("set the {} of {} {r} to {word}", f.name, e.name);
                         note_hazard(&mut hazards, doc, &world, p, ei, k, &swap, &what, expected);
                         check(what, sql, expected, None);
@@ -1190,10 +1272,14 @@ pub fn analyse(doc: &Document) -> Analysis {
                     {
                         continue;
                     }
-                    let swap = Swap { field: &f.name, to };
+                    let swap = Swap {
+                        field: &f.name,
+                        to,
+                        and: None,
+                    };
                     // Postgres checks the new row against the update rules (`check`) and, because
                     // the update reads the row (`where`), against the select rules too.
-                    let expected = update_allowed(doc, &world, p, ei, k, Some(&swap));
+                    let expected = update_expected(doc, &world, p, ei, k, Some(&swap));
                     let verb = if matches!(f.ty, FieldType::User) {
                         "set"
                     } else {
