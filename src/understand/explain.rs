@@ -95,6 +95,12 @@ pub fn explain(doc: &Document, diags: &[Diagnostic]) -> String {
     out
 }
 
+/// "its status" or "its title and status": the fields of a policy's `only`, in words.
+fn fields_of(only: &[NameRef]) -> String {
+    let labels: Vec<String> = only.iter().map(|f| label(&f.name)).collect();
+    format!("its {}", list(&labels, "and"))
+}
+
 /// The pieces of `explain`, for `svetra view`, which shows the same sentences.
 pub mod parts {
     use super::*;
@@ -475,11 +481,17 @@ fn access(e: &Entity, doc: &Document, _entities: &HashMap<&str, &Entity>) -> Vec
         {
             let c = expr::parse(&r.when).expect("validated expression");
             text += &format!(", and only when {}", english(&c, Style::Policy));
+            if let Some(only) = &r.only {
+                text += &format!(" (and then only {} can change)", fields_of(only));
+            }
         }
         text += ".";
         if let Some(check) = &p.check {
             let c = expr::parse(check).expect("validated expression");
             text += &format!(" After the change, {}.", english(&c, Style::Policy));
+        }
+        if let Some(only) = &p.only {
+            text += &format!(" They can change only {}.", fields_of(only));
         }
         text
     };
