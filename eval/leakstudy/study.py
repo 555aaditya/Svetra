@@ -105,12 +105,47 @@ def find(args):
     print(json.dumps(stages, indent=1))
 
 
+# Markers of an AI builder or agent, looked for in a shallow clone. Guesses, so the two groups are
+# noisy; the write-up must say so.
+AI_MARKERS = [
+    ("lovable", [".lovable", "lovable-tagger"]),
+    ("bolt", [".bolt", "bolt.new"]),
+    ("cursor", [".cursorrules", ".cursor"]),
+    ("claude", ["CLAUDE.md", ".claude"]),
+    ("agents", ["AGENTS.md"]),
+]
+
+
+def key_of(full_name):
+    """A salted hash, so results can be kept and shared without naming the repo."""
+    os.makedirs(DATA, exist_ok=True)
+    salt_file = os.path.join(DATA, "salt")
+    if not os.path.exists(salt_file):
+        with open(salt_file, "w") as f:
+            f.write(os.urandom(16).hex())
+    salt = open(salt_file).read()
+    return hashlib.sha256((salt + full_name).encode()).hexdigest()[:10]
+
+
+def draw(args):
+    """A seeded random sample of N from the candidates. Groups are decided at run time, from the
+    clone, so the draw is over everything and each group is filled as repos are run."""
+    cands = load("candidates.json")
+    rng = random.Random(args.seed)
+    rng.shuffle(cands)
+    save(f"draw-{args.seed}.json", cands[: args.n])
+    print(f"drew {min(args.n, len(cands))} of {len(cands)} candidates with seed {args.seed}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("find")
+    d = sub.add_parser("draw")
+    d.add_argument("--n", type=int, required=True)
+    d.add_argument("--seed", type=int, required=True)
     args = p.parse_args()
-    {"find": find}[args.cmd](args)
+    {"find": find, "draw": draw}[args.cmd](args)
 
 
 if __name__ == "__main__":
