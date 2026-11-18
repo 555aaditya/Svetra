@@ -39,10 +39,11 @@ Each finding has a stable `kind`, a severity, the object, a message in plain Eng
 | Kind | Severity | When | Message, for example |
 |---|---|---|---|
 | `rls_off` | critical | A table's row-level security is off, and `anon` or `authenticated` has a privilege on it | "Anyone on the internet can read every row of public.orders: row-level security is off." |
-| `open_write` | critical | A permissive `INSERT`, `UPDATE`, `DELETE` or `ALL` policy for `anon` or `public` whose condition is `true` | "Anyone on the internet can change every row of public.orders (policy anyone_edits)." |
+| `open_write` | critical | A permissive `UPDATE`, `DELETE` or `ALL` policy for `anon` or `public` whose condition is `true` | "Anyone on the internet can change every row of public.orders (policy anyone_edits)." |
 | `view_bypass` | critical when the view reads `auth.users`, otherwise warning | A view readable through the API without `security_invoker` | "public.order_summary runs with its owner's rights, so it skips the row-level security of the tables it reads." |
+| `open_insert` | warning | A permissive `INSERT` policy for `anon` or `public` whose check is `true`: people can add rows but not change existing ones, which is often a sign-up or contact form | "Anyone on the internet can add rows to public.contact (policy anyone_adds). Fine for a sign-up or contact form; a problem otherwise." |
 | `open_read` | warning | A permissive `SELECT` or `ALL` policy for `anon` or `public` whose condition is `true` | "Anyone on the internet can read every row of public.posts (policy public_read). Fine for public data; a leak otherwise." |
-| `signed_in_write` | warning | The same `true` write policy for `authenticated` | "Every signed-in person can change every row of public.orders." |
+| `signed_in_write` | warning | The same `true` `UPDATE`, `DELETE` or `ALL` policy for `authenticated` (an open `INSERT` for signed-in people is ordinary and not reported) | "Every signed-in person can change every row of public.orders." |
 | `user_metadata` | warning | A policy's condition reads `user_metadata` or `raw_user_meta_data` | "Policy is_admin trusts user_metadata, which every person can change about themselves." |
 | `definer_function` | warning when `anon` can call it, otherwise info | A `SECURITY DEFINER` function the API can call | "Anyone on the internet can call public.transfer, which runs with its owner's rights. Check it validates the caller." |
 | `mutable_search_path` | warning | A `SECURITY DEFINER` function without a fixed `search_path` | "public.transfer has no fixed search_path, so a caller can make it run their own code." |
