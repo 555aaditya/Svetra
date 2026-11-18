@@ -1,0 +1,2880 @@
+[
+  {
+    "app": "finledger",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "account.owner_reads_own_accounts",
+    "sql": "drop policy \"owner_reads_own_accounts\" on public.\"account\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Account a",
+      "bob can see Account b",
+      "alice can see Transaction a",
+      "alice can see Transaction b",
+      "bob can see Transaction a",
+      "bob can see Transaction b"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "account.owner_reads_own_accounts",
+    "sql": "alter policy \"owner_reads_own_accounts\" on public.\"account\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Account b",
+      "bob can't see Account a"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "account.owner_reads_own_accounts",
+    "sql": "alter policy \"owner_reads_own_accounts\" on public.\"account\" using (not ((owner = ( SELECT auth.uid() AS uid))));",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Account a",
+      "alice can't see Account b",
+      "bob can't see Account a",
+      "bob can see Account b",
+      "alice can see Transaction a",
+      "alice can see Transaction b",
+      "bob can see Transaction a",
+      "bob can see Transaction b"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "account.owner_reads_own_accounts",
+    "sql": "alter policy \"owner_reads_own_accounts\" on public.\"account\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "account.owner_reads_own_accounts",
+    "sql": "alter policy \"owner_reads_own_accounts\" on public.\"account\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Account a",
+      "bob can see Account b",
+      "alice can see Transaction a",
+      "alice can see Transaction b",
+      "bob can see Transaction a",
+      "bob can see Transaction b"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "account.owner_reads_own_accounts",
+    "sql": "create policy svetra_mutant on public.\"account\" for all to authenticated using ((owner = ( SELECT auth.uid() AS uid))) with check ((owner = ( SELECT auth.uid() AS uid)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't change Account a",
+      "alice can't delete Account a",
+      "alice can't create Account c",
+      "bob can't change Account b",
+      "bob can't delete Account b",
+      "bob can't create Account d"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "account.svetra_hole_transfer",
+    "sql": "drop policy \"svetra_hole_transfer\" on public.\"account\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can call transfer on the a rows",
+      "bob can call transfer on the b rows"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "account.svetra_hole_transfer",
+    "sql": "alter policy \"svetra_hole_transfer\" on public.\"account\" to public;",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Account a",
+      "anon can't see Account b",
+      "anon can't change Account a",
+      "anon can't change Account b",
+      "anon can't delete Account a",
+      "anon can't delete Account b",
+      "anon can't create Account c",
+      "anon can't create Account d",
+      "alice can't see Account b",
+      "alice can't change Account a",
+      "alice can't change Account b",
+      "alice can't delete Account a",
+      "alice can't delete Account b",
+      "alice can't create Account c",
+      "alice can't create Account d",
+      "bob can't see Account a",
+      "bob can't change Account a",
+      "bob can't change Account b",
+      "bob can't delete Account a",
+      "bob can't delete Account b",
+      "bob can't create Account c",
+      "bob can't create Account d"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "transaction.owner_reads_own_transactions",
+    "sql": "drop policy \"owner_reads_own_transactions\" on public.\"transaction\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Transaction a",
+      "alice can see Transaction b",
+      "bob can see Transaction a",
+      "bob can see Transaction b"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "transaction.owner_reads_own_transactions",
+    "sql": "alter policy \"owner_reads_own_transactions\" on public.\"transaction\" using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "transaction.owner_reads_own_transactions",
+    "sql": "alter policy \"owner_reads_own_transactions\" on public.\"transaction\" using (not (((( SELECT t.owner\n   FROM account t\n  WHERE (t.id = transaction.source)) = ( SELECT auth.uid() AS uid)) OR (( SELECT t.owner\n   FROM account t\n  WHERE (t.id = transaction.destination)) = ( SELECT auth.uid() AS uid)))));",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Transaction a",
+      "alice can see Transaction b",
+      "bob can see Transaction a",
+      "bob can see Transaction b"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "transaction.owner_reads_own_transactions",
+    "sql": "alter policy \"owner_reads_own_transactions\" on public.\"transaction\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "transaction.owner_reads_own_transactions",
+    "sql": "alter policy \"owner_reads_own_transactions\" on public.\"transaction\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Transaction a",
+      "alice can see Transaction b",
+      "bob can see Transaction a",
+      "bob can see Transaction b"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "transaction.owner_reads_own_transactions",
+    "sql": "create policy svetra_mutant on public.\"transaction\" for all to authenticated using (((( SELECT t.owner\n   FROM account t\n  WHERE (t.id = transaction.source)) = ( SELECT auth.uid() AS uid)) OR (( SELECT t.owner\n   FROM account t\n  WHERE (t.id = transaction.destination)) = ( SELECT auth.uid() AS uid)))) with check (((( SELECT t.owner\n   FROM account t\n  WHERE (t.id = transaction.source)) = ( SELECT auth.uid() AS uid)) OR (( SELECT t.owner\n   FROM account t\n  WHERE (t.id = transaction.destination)) = ( SELECT auth.uid() AS uid))));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't change Transaction a",
+      "alice can't change Transaction b",
+      "alice can't delete Transaction a",
+      "alice can't delete Transaction b",
+      "alice can't create Transaction c",
+      "alice can't create Transaction d",
+      "bob can't change Transaction a",
+      "bob can't change Transaction b",
+      "bob can't delete Transaction a",
+      "bob can't delete Transaction b",
+      "bob can't create Transaction c",
+      "bob can't create Transaction d"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "transaction.svetra_hole_transfer",
+    "sql": "drop policy \"svetra_hole_transfer\" on public.\"transaction\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can call transfer on the a rows",
+      "bob can call transfer on the b rows"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "transaction.svetra_hole_transfer",
+    "sql": "alter policy \"svetra_hole_transfer\" on public.\"transaction\" to public;",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Transaction a",
+      "anon can't see Transaction b",
+      "anon can't change Transaction a",
+      "anon can't change Transaction b",
+      "anon can't delete Transaction a",
+      "anon can't delete Transaction b",
+      "anon can't create Transaction c",
+      "anon can't create Transaction d",
+      "alice can't change Transaction a",
+      "alice can't change Transaction b",
+      "alice can't delete Transaction a",
+      "alice can't delete Transaction b",
+      "alice can't create Transaction c",
+      "alice can't create Transaction d",
+      "bob can't change Transaction a",
+      "bob can't change Transaction b",
+      "bob can't delete Transaction a",
+      "bob can't delete Transaction b",
+      "bob can't create Transaction c",
+      "bob can't create Transaction d"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "table-rls-off",
+    "direction": "widen",
+    "target": "account",
+    "sql": "alter table public.\"account\" disable row level security;",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Account a",
+      "anon can't see Account b",
+      "anon can't change Account a",
+      "anon can't change Account b",
+      "anon can't delete Account a",
+      "anon can't delete Account b",
+      "anon can't create Account c",
+      "anon can't create Account d",
+      "alice can't see Account b",
+      "alice can't change Account a",
+      "alice can't change Account b",
+      "alice can't delete Account a",
+      "alice can't delete Account b",
+      "alice can't create Account c",
+      "alice can't create Account d",
+      "bob can't see Account a",
+      "bob can't change Account a",
+      "bob can't change Account b",
+      "bob can't delete Account a",
+      "bob can't delete Account b",
+      "bob can't create Account c",
+      "bob can't create Account d"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "table-leak-read",
+    "direction": "widen",
+    "target": "account",
+    "sql": "create policy svetra_mutant on public.\"account\" for select to authenticated using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Account b",
+      "bob can't see Account a"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "table-leak-read-anon",
+    "direction": "widen",
+    "target": "account",
+    "sql": "create policy svetra_mutant on public.\"account\" for select to anon using (true);",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Account a",
+      "anon can't see Account b"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "table-leak-write",
+    "direction": "widen",
+    "target": "account",
+    "sql": "create policy svetra_mutant on public.\"account\" for all to authenticated using (true) with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Account b",
+      "alice can't change Account a",
+      "alice can't change Account b",
+      "alice can't delete Account a",
+      "alice can't delete Account b",
+      "alice can't create Account c",
+      "alice can't create Account d",
+      "bob can't see Account a",
+      "bob can't change Account a",
+      "bob can't change Account b",
+      "bob can't delete Account a",
+      "bob can't delete Account b",
+      "bob can't create Account c",
+      "bob can't create Account d"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "table-revoke-read",
+    "direction": "narrow",
+    "target": "account",
+    "sql": "revoke select on public.\"account\" from authenticated, anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Account a",
+      "bob can see Account b",
+      "alice can see Transaction a",
+      "alice can see Transaction b",
+      "bob can see Transaction a",
+      "bob can see Transaction b"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "table-rls-off",
+    "direction": "widen",
+    "target": "transaction",
+    "sql": "alter table public.\"transaction\" disable row level security;",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Transaction a",
+      "anon can't see Transaction b",
+      "anon can't change Transaction a",
+      "anon can't change Transaction b",
+      "anon can't delete Transaction a",
+      "anon can't delete Transaction b",
+      "anon can't create Transaction c",
+      "anon can't create Transaction d",
+      "alice can't change Transaction a",
+      "alice can't change Transaction b",
+      "alice can't delete Transaction a",
+      "alice can't delete Transaction b",
+      "alice can't create Transaction c",
+      "alice can't create Transaction d",
+      "bob can't change Transaction a",
+      "bob can't change Transaction b",
+      "bob can't delete Transaction a",
+      "bob can't delete Transaction b",
+      "bob can't create Transaction c",
+      "bob can't create Transaction d"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "table-leak-read",
+    "direction": "widen",
+    "target": "transaction",
+    "sql": "create policy svetra_mutant on public.\"transaction\" for select to authenticated using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "table-leak-read-anon",
+    "direction": "widen",
+    "target": "transaction",
+    "sql": "create policy svetra_mutant on public.\"transaction\" for select to anon using (true);",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Transaction a",
+      "anon can't see Transaction b"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "table-leak-write",
+    "direction": "widen",
+    "target": "transaction",
+    "sql": "create policy svetra_mutant on public.\"transaction\" for all to authenticated using (true) with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't change Transaction a",
+      "alice can't change Transaction b",
+      "alice can't delete Transaction a",
+      "alice can't delete Transaction b",
+      "alice can't create Transaction c",
+      "alice can't create Transaction d",
+      "bob can't change Transaction a",
+      "bob can't change Transaction b",
+      "bob can't delete Transaction a",
+      "bob can't delete Transaction b",
+      "bob can't create Transaction c",
+      "bob can't create Transaction d"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "table-revoke-read",
+    "direction": "narrow",
+    "target": "transaction",
+    "sql": "revoke select on public.\"transaction\" from authenticated, anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Transaction a",
+      "alice can see Transaction b",
+      "bob can see Transaction a",
+      "bob can see Transaction b"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "hole-no-guard",
+    "direction": "widen",
+    "target": "transfer",
+    "sql": "CREATE OR REPLACE FUNCTION svetra_holes.transfer(p_caller uuid, p_source uuid, p_destination uuid, p_amount numeric)\n RETURNS transaction\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\nbegin\n  declare\n    v_tx \"public\".\"transaction\";\n  begin\n    update \"public\".\"account\" set \"balance\" = \"balance\" - p_amount where \"id\" = p_source;\n    update \"public\".\"account\" set \"balance\" = \"balance\" + p_amount where \"id\" = p_destination;\n    insert into \"public\".\"transaction\" (\"source\", \"destination\", \"amount\", \"status\")\n      values (p_source, p_destination, p_amount, 'committed')\n      returning * into v_tx;\n    return v_tx;\n  end;\nend\n$function$\n;",
+    "outcome": "killed",
+    "failed": [
+      "alice can't call transfer on the b rows",
+      "bob can't call transfer on the a rows"
+    ],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "hole-extra-grant",
+    "direction": "widen",
+    "target": "transfer",
+    "sql": "grant select, insert, update, delete on all tables in schema public to \"svetra_hole_transfer\";",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "hole-body-callable",
+    "direction": "widen",
+    "target": "transfer",
+    "sql": "grant usage on schema svetra_holes to authenticated, anon; grant execute on function svetra_holes.transfer(uuid,uuid,uuid,numeric) to authenticated, anon;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "finledger",
+    "operator": "hole-wrapper-anon",
+    "direction": "widen",
+    "target": "transfer",
+    "sql": "grant execute on function transfer(uuid,uuid,numeric) to anon;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "audit_log.svetra_hole_write_audit",
+    "sql": "drop policy \"svetra_hole_write_audit\" on public.\"audit_log\";",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "audit_log.svetra_hole_write_audit",
+    "sql": "alter policy \"svetra_hole_write_audit\" on public.\"audit_log\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "post.posts_by_author_delete",
+    "sql": "drop policy \"posts_by_author_delete\" on public.\"post\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can delete Post a",
+      "bob can delete Post b"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "post.posts_by_author_delete",
+    "sql": "alter policy \"posts_by_author_delete\" on public.\"post\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't delete Post b",
+      "bob can't delete Post a"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "post.posts_by_author_delete",
+    "sql": "alter policy \"posts_by_author_delete\" on public.\"post\" using (not ((author = ( SELECT auth.uid() AS uid))));",
+    "outcome": "killed",
+    "failed": [
+      "alice can delete Post a",
+      "alice can't delete Post b",
+      "bob can't delete Post a",
+      "bob can delete Post b"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "post.posts_by_author_delete",
+    "sql": "alter policy \"posts_by_author_delete\" on public.\"post\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "post.posts_by_author_delete",
+    "sql": "alter policy \"posts_by_author_delete\" on public.\"post\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can delete Post a",
+      "bob can delete Post b"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "post.posts_by_author_delete",
+    "sql": "create policy svetra_mutant on public.\"post\" for all to authenticated using ((author = ( SELECT auth.uid() AS uid))) with check ((author = ( SELECT auth.uid() AS uid)));",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "post.posts_by_author_insert",
+    "sql": "drop policy \"posts_by_author_insert\" on public.\"post\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can create Post c",
+      "bob can create Post d"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-check-true",
+    "direction": "widen",
+    "target": "post.posts_by_author_insert",
+    "sql": "alter policy \"posts_by_author_insert\" on public.\"post\" with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't create Post d",
+      "bob can't create Post c"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "post.posts_by_author_insert",
+    "sql": "alter policy \"posts_by_author_insert\" on public.\"post\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "post.posts_by_author_insert",
+    "sql": "alter policy \"posts_by_author_insert\" on public.\"post\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can create Post c",
+      "bob can create Post d"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "post.posts_by_author_insert",
+    "sql": "create policy svetra_mutant on public.\"post\" for all to authenticated using ((author = ( SELECT auth.uid() AS uid))) with check ((author = ( SELECT auth.uid() AS uid)));",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "post.posts_by_author_select",
+    "sql": "drop policy \"posts_by_author_select\" on public.\"post\";",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "post.posts_by_author_select",
+    "sql": "alter policy \"posts_by_author_select\" on public.\"post\" using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "post.posts_by_author_select",
+    "sql": "alter policy \"posts_by_author_select\" on public.\"post\" using (not ((author = ( SELECT auth.uid() AS uid))));",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "post.posts_by_author_select",
+    "sql": "alter policy \"posts_by_author_select\" on public.\"post\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "post.posts_by_author_select",
+    "sql": "alter policy \"posts_by_author_select\" on public.\"post\" to anon;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "post.posts_by_author_select",
+    "sql": "create policy svetra_mutant on public.\"post\" for all to authenticated using ((author = ( SELECT auth.uid() AS uid))) with check ((author = ( SELECT auth.uid() AS uid)));",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "post.posts_by_author_update",
+    "sql": "drop policy \"posts_by_author_update\" on public.\"post\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can change Post a",
+      "bob can change Post b"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "post.posts_by_author_update",
+    "sql": "alter policy \"posts_by_author_update\" on public.\"post\" using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "post.posts_by_author_update",
+    "sql": "alter policy \"posts_by_author_update\" on public.\"post\" using (not ((author = ( SELECT auth.uid() AS uid))));",
+    "outcome": "killed",
+    "failed": [
+      "alice can change Post a",
+      "bob can change Post b"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-check-true",
+    "direction": "widen",
+    "target": "post.posts_by_author_update",
+    "sql": "alter policy \"posts_by_author_update\" on public.\"post\" with check (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "post.posts_by_author_update",
+    "sql": "alter policy \"posts_by_author_update\" on public.\"post\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "post.posts_by_author_update",
+    "sql": "alter policy \"posts_by_author_update\" on public.\"post\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can change Post a",
+      "bob can change Post b"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "post.posts_by_author_update",
+    "sql": "create policy svetra_mutant on public.\"post\" for all to authenticated using ((author = ( SELECT auth.uid() AS uid))) with check ((author = ( SELECT auth.uid() AS uid)));",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "post.public_read",
+    "sql": "drop policy \"public_read\" on public.\"post\";",
+    "outcome": "killed",
+    "failed": [
+      "anon can see Post a",
+      "anon can see Post b",
+      "alice can see Post b",
+      "bob can see Post a"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "post.public_read",
+    "sql": "alter policy \"public_read\" on public.\"post\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "post.public_read",
+    "sql": "create policy svetra_mutant on public.\"post\" for all to anon,authenticated using (true) with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "anon can't change Post a",
+      "anon can't change Post b",
+      "anon can't delete Post a",
+      "anon can't delete Post b",
+      "anon can't create Post c",
+      "anon can't create Post d",
+      "alice can't change Post b",
+      "alice can't delete Post b",
+      "alice can't create Post d",
+      "bob can't change Post a",
+      "bob can't delete Post a",
+      "bob can't create Post c"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "table-rls-off",
+    "direction": "widen",
+    "target": "audit_log",
+    "sql": "alter table public.\"audit_log\" disable row level security;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "table-leak-read",
+    "direction": "widen",
+    "target": "audit_log",
+    "sql": "create policy svetra_mutant on public.\"audit_log\" for select to authenticated using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "table-leak-read-anon",
+    "direction": "widen",
+    "target": "audit_log",
+    "sql": "create policy svetra_mutant on public.\"audit_log\" for select to anon using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "table-leak-write",
+    "direction": "widen",
+    "target": "audit_log",
+    "sql": "create policy svetra_mutant on public.\"audit_log\" for all to authenticated using (true) with check (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "table-revoke-read",
+    "direction": "narrow",
+    "target": "audit_log",
+    "sql": "revoke select on public.\"audit_log\" from authenticated, anon;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "table-rls-off",
+    "direction": "widen",
+    "target": "post",
+    "sql": "alter table public.\"post\" disable row level security;",
+    "outcome": "killed",
+    "failed": [
+      "anon can't change Post a",
+      "anon can't change Post b",
+      "anon can't delete Post a",
+      "anon can't delete Post b",
+      "anon can't create Post c",
+      "anon can't create Post d",
+      "alice can't change Post b",
+      "alice can't delete Post b",
+      "alice can't create Post d",
+      "bob can't change Post a",
+      "bob can't delete Post a",
+      "bob can't create Post c"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "table-leak-read",
+    "direction": "widen",
+    "target": "post",
+    "sql": "create policy svetra_mutant on public.\"post\" for select to authenticated using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "table-leak-read-anon",
+    "direction": "widen",
+    "target": "post",
+    "sql": "create policy svetra_mutant on public.\"post\" for select to anon using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "table-leak-write",
+    "direction": "widen",
+    "target": "post",
+    "sql": "create policy svetra_mutant on public.\"post\" for all to authenticated using (true) with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't change Post b",
+      "alice can't delete Post b",
+      "alice can't create Post d",
+      "bob can't change Post a",
+      "bob can't delete Post a",
+      "bob can't create Post c"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "table-revoke-read",
+    "direction": "narrow",
+    "target": "post",
+    "sql": "revoke select on public.\"post\" from authenticated, anon;",
+    "outcome": "killed",
+    "failed": [
+      "anon can see Post a",
+      "anon can see Post b",
+      "alice can see Post a",
+      "alice can see Post b",
+      "alice can change Post a",
+      "alice can delete Post a",
+      "bob can see Post a",
+      "bob can see Post b",
+      "bob can change Post b",
+      "bob can delete Post b"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "hole-extra-grant",
+    "direction": "widen",
+    "target": "write_audit",
+    "sql": "grant select, insert, update, delete on all tables in schema public to \"svetra_hole_write_audit\";",
+    "outcome": "killed",
+    "failed": [
+      "write_audit can't touch Post"
+    ],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "hole-body-callable",
+    "direction": "widen",
+    "target": "write_audit",
+    "sql": "grant usage on schema svetra_holes to authenticated, anon; grant execute on function svetra_holes.write_audit(uuid) to authenticated, anon;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "posts",
+    "operator": "hole-wrapper-anon",
+    "direction": "widen",
+    "target": "write_audit",
+    "sql": "grant execute on function write_audit() to anon;",
+    "outcome": "killed",
+    "failed": [
+      "anon can't call write_audit on the a rows",
+      "anon can't call write_audit on the b rows"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "booking.admins_manage_all_delete",
+    "sql": "drop policy \"admins_manage_all_delete\" on public.\"booking\";",
+    "outcome": "killed",
+    "failed": [
+      "admin can delete Booking a",
+      "admin can delete Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "booking.admins_manage_all_delete",
+    "sql": "alter policy \"admins_manage_all_delete\" on public.\"booking\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't delete Booking a",
+      "bob can't delete Booking b",
+      "staff at Location a can't delete Booking a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "booking.admins_manage_all_delete",
+    "sql": "alter policy \"admins_manage_all_delete\" on public.\"booking\" using (not (( SELECT svetra.has_role('admin'::text) AS has_role)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't delete Booking a",
+      "bob can't delete Booking b",
+      "admin can delete Booking a",
+      "admin can delete Booking b",
+      "staff at Location a can't delete Booking a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "booking.admins_manage_all_delete",
+    "sql": "alter policy \"admins_manage_all_delete\" on public.\"booking\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "booking.admins_manage_all_delete",
+    "sql": "alter policy \"admins_manage_all_delete\" on public.\"booking\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "admin can delete Booking a",
+      "admin can delete Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "booking.admins_manage_all_delete",
+    "sql": "create policy svetra_mutant on public.\"booking\" for all to authenticated using (( SELECT svetra.has_role('admin'::text) AS has_role)) with check (( SELECT svetra.has_role('admin'::text) AS has_role));",
+    "outcome": "killed",
+    "failed": [
+      "admin can't create Booking c",
+      "admin can't create Booking d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "booking.admins_manage_all_select",
+    "sql": "drop policy \"admins_manage_all_select\" on public.\"booking\";",
+    "outcome": "killed",
+    "failed": [
+      "admin can see Booking a",
+      "admin can see Booking b",
+      "admin can change Booking a",
+      "admin can change Booking b",
+      "admin can delete Booking a",
+      "admin can delete Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "booking.admins_manage_all_select",
+    "sql": "alter policy \"admins_manage_all_select\" on public.\"booking\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Booking b",
+      "bob can't see Booking a",
+      "staff at Location a can't see Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "booking.admins_manage_all_select",
+    "sql": "alter policy \"admins_manage_all_select\" on public.\"booking\" using (not (( SELECT svetra.has_role('admin'::text) AS has_role)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Booking b",
+      "bob can't see Booking a",
+      "admin can see Booking a",
+      "admin can see Booking b",
+      "admin can change Booking a",
+      "admin can change Booking b",
+      "admin can delete Booking a",
+      "admin can delete Booking b",
+      "staff at Location a can't see Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "booking.admins_manage_all_select",
+    "sql": "alter policy \"admins_manage_all_select\" on public.\"booking\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "booking.admins_manage_all_select",
+    "sql": "alter policy \"admins_manage_all_select\" on public.\"booking\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "admin can see Booking a",
+      "admin can see Booking b",
+      "admin can change Booking a",
+      "admin can change Booking b",
+      "admin can delete Booking a",
+      "admin can delete Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "booking.admins_manage_all_select",
+    "sql": "create policy svetra_mutant on public.\"booking\" for all to authenticated using (( SELECT svetra.has_role('admin'::text) AS has_role)) with check (( SELECT svetra.has_role('admin'::text) AS has_role));",
+    "outcome": "killed",
+    "failed": [
+      "admin can't create Booking c",
+      "admin can't create Booking d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "booking.admins_manage_all_update",
+    "sql": "drop policy \"admins_manage_all_update\" on public.\"booking\";",
+    "outcome": "killed",
+    "failed": [
+      "admin can change Booking a",
+      "admin can change Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "booking.admins_manage_all_update",
+    "sql": "alter policy \"admins_manage_all_update\" on public.\"booking\" using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "booking.admins_manage_all_update",
+    "sql": "alter policy \"admins_manage_all_update\" on public.\"booking\" using (not (( SELECT svetra.has_role('admin'::text) AS has_role)));",
+    "outcome": "killed",
+    "failed": [
+      "admin can change Booking a",
+      "admin can change Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-check-true",
+    "direction": "widen",
+    "target": "booking.admins_manage_all_update",
+    "sql": "alter policy \"admins_manage_all_update\" on public.\"booking\" with check (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "booking.admins_manage_all_update",
+    "sql": "alter policy \"admins_manage_all_update\" on public.\"booking\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "booking.admins_manage_all_update",
+    "sql": "alter policy \"admins_manage_all_update\" on public.\"booking\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "admin can change Booking a",
+      "admin can change Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "booking.admins_manage_all_update",
+    "sql": "create policy svetra_mutant on public.\"booking\" for all to authenticated using (( SELECT svetra.has_role('admin'::text) AS has_role)) with check (( SELECT svetra.has_role('admin'::text) AS has_role));",
+    "outcome": "killed",
+    "failed": [
+      "admin can't create Booking c",
+      "admin can't create Booking d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "booking.customers_see_own_insert",
+    "sql": "drop policy \"customers_see_own_insert\" on public.\"booking\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can create Booking c",
+      "bob can create Booking d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-check-true",
+    "direction": "widen",
+    "target": "booking.customers_see_own_insert",
+    "sql": "alter policy \"customers_see_own_insert\" on public.\"booking\" with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't create Booking d",
+      "bob can't create Booking c",
+      "admin can't create Booking c",
+      "admin can't create Booking d",
+      "staff at Location a can't create Booking c",
+      "staff at Location a can't create Booking d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "booking.customers_see_own_insert",
+    "sql": "alter policy \"customers_see_own_insert\" on public.\"booking\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "booking.customers_see_own_insert",
+    "sql": "alter policy \"customers_see_own_insert\" on public.\"booking\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can create Booking c",
+      "bob can create Booking d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "booking.customers_see_own_insert",
+    "sql": "create policy svetra_mutant on public.\"booking\" for all to authenticated using ((customer = ( SELECT auth.uid() AS uid))) with check ((customer = ( SELECT auth.uid() AS uid)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't change Booking a",
+      "alice can't delete Booking a",
+      "bob can't change Booking b",
+      "bob can't delete Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "booking.customers_see_own_select",
+    "sql": "drop policy \"customers_see_own_select\" on public.\"booking\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Booking a",
+      "bob can see Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "booking.customers_see_own_select",
+    "sql": "alter policy \"customers_see_own_select\" on public.\"booking\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Booking b",
+      "bob can't see Booking a",
+      "staff at Location a can't see Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "booking.customers_see_own_select",
+    "sql": "alter policy \"customers_see_own_select\" on public.\"booking\" using (not ((customer = ( SELECT auth.uid() AS uid))));",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Booking a",
+      "alice can't see Booking b",
+      "bob can't see Booking a",
+      "bob can see Booking b",
+      "staff at Location a can't see Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "booking.customers_see_own_select",
+    "sql": "alter policy \"customers_see_own_select\" on public.\"booking\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "booking.customers_see_own_select",
+    "sql": "alter policy \"customers_see_own_select\" on public.\"booking\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Booking a",
+      "bob can see Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "booking.customers_see_own_select",
+    "sql": "create policy svetra_mutant on public.\"booking\" for all to authenticated using ((customer = ( SELECT auth.uid() AS uid))) with check ((customer = ( SELECT auth.uid() AS uid)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't change Booking a",
+      "alice can't delete Booking a",
+      "bob can't change Booking b",
+      "bob can't delete Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "booking.staff_manage_local_select",
+    "sql": "drop policy \"staff_manage_local_select\" on public.\"booking\";",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can see Booking a",
+      "staff at Location a can change Booking a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "booking.staff_manage_local_select",
+    "sql": "alter policy \"staff_manage_local_select\" on public.\"booking\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Booking b",
+      "bob can't see Booking a",
+      "staff at Location a can't see Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "booking.staff_manage_local_select",
+    "sql": "alter policy \"staff_manage_local_select\" on public.\"booking\" using (not (svetra.has_role('staff'::text, location)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Booking b",
+      "bob can't see Booking a",
+      "staff at Location a can see Booking a",
+      "staff at Location a can't see Booking b",
+      "staff at Location a can change Booking a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "booking.staff_manage_local_select",
+    "sql": "alter policy \"staff_manage_local_select\" on public.\"booking\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "booking.staff_manage_local_select",
+    "sql": "alter policy \"staff_manage_local_select\" on public.\"booking\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can see Booking a",
+      "staff at Location a can change Booking a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "booking.staff_manage_local_select",
+    "sql": "create policy svetra_mutant on public.\"booking\" for all to authenticated using (svetra.has_role('staff'::text, location)) with check (svetra.has_role('staff'::text, location));",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can't delete Booking a",
+      "staff at Location a can't create Booking c"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "booking.staff_manage_local_update",
+    "sql": "drop policy \"staff_manage_local_update\" on public.\"booking\";",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can change Booking a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "booking.staff_manage_local_update",
+    "sql": "alter policy \"staff_manage_local_update\" on public.\"booking\" using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "booking.staff_manage_local_update",
+    "sql": "alter policy \"staff_manage_local_update\" on public.\"booking\" using (not (svetra.has_role('staff'::text, location)));",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can change Booking a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-check-true",
+    "direction": "widen",
+    "target": "booking.staff_manage_local_update",
+    "sql": "alter policy \"staff_manage_local_update\" on public.\"booking\" with check (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "booking.staff_manage_local_update",
+    "sql": "alter policy \"staff_manage_local_update\" on public.\"booking\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "booking.staff_manage_local_update",
+    "sql": "alter policy \"staff_manage_local_update\" on public.\"booking\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can change Booking a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "booking.staff_manage_local_update",
+    "sql": "create policy svetra_mutant on public.\"booking\" for all to authenticated using (svetra.has_role('staff'::text, location)) with check (svetra.has_role('staff'::text, location));",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can't delete Booking a",
+      "staff at Location a can't create Booking c"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "location.admins_see_locations_insert",
+    "sql": "drop policy \"admins_see_locations_insert\" on public.\"location\";",
+    "outcome": "killed",
+    "failed": [
+      "admin can create Location c",
+      "admin can create Location d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-check-true",
+    "direction": "widen",
+    "target": "location.admins_see_locations_insert",
+    "sql": "alter policy \"admins_see_locations_insert\" on public.\"location\" with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't create Location c",
+      "alice can't create Location d",
+      "bob can't create Location c",
+      "bob can't create Location d",
+      "staff at Location a can't create Location c",
+      "staff at Location a can't create Location d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "location.admins_see_locations_insert",
+    "sql": "alter policy \"admins_see_locations_insert\" on public.\"location\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "location.admins_see_locations_insert",
+    "sql": "alter policy \"admins_see_locations_insert\" on public.\"location\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "admin can create Location c",
+      "admin can create Location d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "location.admins_see_locations_insert",
+    "sql": "create policy svetra_mutant on public.\"location\" for all to authenticated using (( SELECT svetra.has_role('admin'::text) AS has_role)) with check (( SELECT svetra.has_role('admin'::text) AS has_role));",
+    "outcome": "killed",
+    "failed": [
+      "admin can't delete Location a",
+      "admin can't delete Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "location.admins_see_locations_select",
+    "sql": "drop policy \"admins_see_locations_select\" on public.\"location\";",
+    "outcome": "killed",
+    "failed": [
+      "admin can see Location a",
+      "admin can see Location b",
+      "admin can change Location a",
+      "admin can change Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "location.admins_see_locations_select",
+    "sql": "alter policy \"admins_see_locations_select\" on public.\"location\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Location a",
+      "alice can't see Location b",
+      "bob can't see Location a",
+      "bob can't see Location b",
+      "staff at Location a can't see Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "location.admins_see_locations_select",
+    "sql": "alter policy \"admins_see_locations_select\" on public.\"location\" using (not (( SELECT svetra.has_role('admin'::text) AS has_role)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Location a",
+      "alice can't see Location b",
+      "bob can't see Location a",
+      "bob can't see Location b",
+      "admin can see Location a",
+      "admin can see Location b",
+      "admin can change Location a",
+      "admin can change Location b",
+      "staff at Location a can't see Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "location.admins_see_locations_select",
+    "sql": "alter policy \"admins_see_locations_select\" on public.\"location\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "location.admins_see_locations_select",
+    "sql": "alter policy \"admins_see_locations_select\" on public.\"location\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "admin can see Location a",
+      "admin can see Location b",
+      "admin can change Location a",
+      "admin can change Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "location.admins_see_locations_select",
+    "sql": "create policy svetra_mutant on public.\"location\" for all to authenticated using (( SELECT svetra.has_role('admin'::text) AS has_role)) with check (( SELECT svetra.has_role('admin'::text) AS has_role));",
+    "outcome": "killed",
+    "failed": [
+      "admin can't delete Location a",
+      "admin can't delete Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "location.admins_see_locations_update",
+    "sql": "drop policy \"admins_see_locations_update\" on public.\"location\";",
+    "outcome": "killed",
+    "failed": [
+      "admin can change Location a",
+      "admin can change Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "location.admins_see_locations_update",
+    "sql": "alter policy \"admins_see_locations_update\" on public.\"location\" using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "location.admins_see_locations_update",
+    "sql": "alter policy \"admins_see_locations_update\" on public.\"location\" using (not (( SELECT svetra.has_role('admin'::text) AS has_role)));",
+    "outcome": "killed",
+    "failed": [
+      "admin can change Location a",
+      "admin can change Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-check-true",
+    "direction": "widen",
+    "target": "location.admins_see_locations_update",
+    "sql": "alter policy \"admins_see_locations_update\" on public.\"location\" with check (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "location.admins_see_locations_update",
+    "sql": "alter policy \"admins_see_locations_update\" on public.\"location\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "location.admins_see_locations_update",
+    "sql": "alter policy \"admins_see_locations_update\" on public.\"location\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "admin can change Location a",
+      "admin can change Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "location.admins_see_locations_update",
+    "sql": "create policy svetra_mutant on public.\"location\" for all to authenticated using (( SELECT svetra.has_role('admin'::text) AS has_role)) with check (( SELECT svetra.has_role('admin'::text) AS has_role));",
+    "outcome": "killed",
+    "failed": [
+      "admin can't delete Location a",
+      "admin can't delete Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "location.staff_see_location",
+    "sql": "drop policy \"staff_see_location\" on public.\"location\";",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can see Location a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "location.staff_see_location",
+    "sql": "alter policy \"staff_see_location\" on public.\"location\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Location a",
+      "alice can't see Location b",
+      "bob can't see Location a",
+      "bob can't see Location b",
+      "staff at Location a can't see Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "location.staff_see_location",
+    "sql": "alter policy \"staff_see_location\" on public.\"location\" using (not (svetra.has_role('staff'::text, id)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Location a",
+      "alice can't see Location b",
+      "bob can't see Location a",
+      "bob can't see Location b",
+      "staff at Location a can see Location a",
+      "staff at Location a can't see Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "location.staff_see_location",
+    "sql": "alter policy \"staff_see_location\" on public.\"location\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "location.staff_see_location",
+    "sql": "alter policy \"staff_see_location\" on public.\"location\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can see Location a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "location.staff_see_location",
+    "sql": "create policy svetra_mutant on public.\"location\" for all to authenticated using (svetra.has_role('staff'::text, id)) with check (svetra.has_role('staff'::text, id));",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can't change Location a",
+      "staff at Location a can't delete Location a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "table-rls-off",
+    "direction": "widen",
+    "target": "booking",
+    "sql": "alter table public.\"booking\" disable row level security;",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Booking a",
+      "anon can't see Booking b",
+      "anon can't change Booking a",
+      "anon can't change Booking b",
+      "anon can't delete Booking a",
+      "anon can't delete Booking b",
+      "anon can't create Booking c",
+      "anon can't create Booking d",
+      "alice can't see Booking b",
+      "alice can't change Booking a",
+      "alice can't change Booking b",
+      "alice can't delete Booking a",
+      "alice can't delete Booking b",
+      "alice can't create Booking d",
+      "bob can't see Booking a",
+      "bob can't change Booking a",
+      "bob can't change Booking b",
+      "bob can't delete Booking a",
+      "bob can't delete Booking b",
+      "bob can't create Booking c",
+      "admin can't create Booking c",
+      "admin can't create Booking d",
+      "staff at Location a can't see Booking b",
+      "staff at Location a can't change Booking b",
+      "staff at Location a can't delete Booking a",
+      "staff at Location a can't delete Booking b",
+      "staff at Location a can't create Booking c",
+      "staff at Location a can't create Booking d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "table-leak-read",
+    "direction": "widen",
+    "target": "booking",
+    "sql": "create policy svetra_mutant on public.\"booking\" for select to authenticated using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Booking b",
+      "bob can't see Booking a",
+      "staff at Location a can't see Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "table-leak-read-anon",
+    "direction": "widen",
+    "target": "booking",
+    "sql": "create policy svetra_mutant on public.\"booking\" for select to anon using (true);",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Booking a",
+      "anon can't see Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "table-leak-write",
+    "direction": "widen",
+    "target": "booking",
+    "sql": "create policy svetra_mutant on public.\"booking\" for all to authenticated using (true) with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Booking b",
+      "alice can't change Booking a",
+      "alice can't change Booking b",
+      "alice can't delete Booking a",
+      "alice can't delete Booking b",
+      "alice can't create Booking d",
+      "bob can't see Booking a",
+      "bob can't change Booking a",
+      "bob can't change Booking b",
+      "bob can't delete Booking a",
+      "bob can't delete Booking b",
+      "bob can't create Booking c",
+      "admin can't create Booking c",
+      "admin can't create Booking d",
+      "staff at Location a can't see Booking b",
+      "staff at Location a can't change Booking b",
+      "staff at Location a can't delete Booking a",
+      "staff at Location a can't delete Booking b",
+      "staff at Location a can't create Booking c",
+      "staff at Location a can't create Booking d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "table-revoke-read",
+    "direction": "narrow",
+    "target": "booking",
+    "sql": "revoke select on public.\"booking\" from authenticated, anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Booking a",
+      "bob can see Booking b",
+      "admin can see Booking a",
+      "admin can see Booking b",
+      "admin can change Booking a",
+      "admin can change Booking b",
+      "admin can delete Booking a",
+      "admin can delete Booking b",
+      "staff at Location a can see Booking a",
+      "staff at Location a can change Booking a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "table-rls-off",
+    "direction": "widen",
+    "target": "location",
+    "sql": "alter table public.\"location\" disable row level security;",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Location a",
+      "anon can't see Location b",
+      "anon can't change Location a",
+      "anon can't change Location b",
+      "anon can't delete Location a",
+      "anon can't delete Location b",
+      "anon can't create Location c",
+      "anon can't create Location d",
+      "alice can't see Location a",
+      "alice can't see Location b",
+      "alice can't change Location a",
+      "alice can't change Location b",
+      "alice can't delete Location a",
+      "alice can't delete Location b",
+      "alice can't create Location c",
+      "alice can't create Location d",
+      "bob can't see Location a",
+      "bob can't see Location b",
+      "bob can't change Location a",
+      "bob can't change Location b",
+      "bob can't delete Location a",
+      "bob can't delete Location b",
+      "bob can't create Location c",
+      "bob can't create Location d",
+      "admin can't delete Location a",
+      "admin can't delete Location b",
+      "staff at Location a can't see Location b",
+      "staff at Location a can't change Location a",
+      "staff at Location a can't change Location b",
+      "staff at Location a can't delete Location a",
+      "staff at Location a can't delete Location b",
+      "staff at Location a can't create Location c",
+      "staff at Location a can't create Location d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "table-leak-read",
+    "direction": "widen",
+    "target": "location",
+    "sql": "create policy svetra_mutant on public.\"location\" for select to authenticated using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Location a",
+      "alice can't see Location b",
+      "bob can't see Location a",
+      "bob can't see Location b",
+      "staff at Location a can't see Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "table-leak-read-anon",
+    "direction": "widen",
+    "target": "location",
+    "sql": "create policy svetra_mutant on public.\"location\" for select to anon using (true);",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Location a",
+      "anon can't see Location b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "table-leak-write",
+    "direction": "widen",
+    "target": "location",
+    "sql": "create policy svetra_mutant on public.\"location\" for all to authenticated using (true) with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Location a",
+      "alice can't see Location b",
+      "alice can't change Location a",
+      "alice can't change Location b",
+      "alice can't delete Location a",
+      "alice can't delete Location b",
+      "alice can't create Location c",
+      "alice can't create Location d",
+      "bob can't see Location a",
+      "bob can't see Location b",
+      "bob can't change Location a",
+      "bob can't change Location b",
+      "bob can't delete Location a",
+      "bob can't delete Location b",
+      "bob can't create Location c",
+      "bob can't create Location d",
+      "admin can't delete Location a",
+      "admin can't delete Location b",
+      "staff at Location a can't see Location b",
+      "staff at Location a can't change Location a",
+      "staff at Location a can't change Location b",
+      "staff at Location a can't delete Location a",
+      "staff at Location a can't delete Location b",
+      "staff at Location a can't create Location c",
+      "staff at Location a can't create Location d"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "table-revoke-read",
+    "direction": "narrow",
+    "target": "location",
+    "sql": "revoke select on public.\"location\" from authenticated, anon;",
+    "outcome": "killed",
+    "failed": [
+      "admin can see Location a",
+      "admin can see Location b",
+      "admin can change Location a",
+      "admin can change Location b",
+      "staff at Location a can see Location a"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "role-check-true",
+    "direction": "widen",
+    "target": "svetra.has_role",
+    "sql": "CREATE OR REPLACE FUNCTION svetra.has_role(p_role text, p_scope uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$ select true $function$;",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Location a",
+      "alice can't see Location b",
+      "alice can't change Location a",
+      "alice can't change Location b",
+      "alice can't create Location c",
+      "alice can't create Location d",
+      "bob can't see Location a",
+      "bob can't see Location b",
+      "bob can't change Location a",
+      "bob can't change Location b",
+      "bob can't create Location c",
+      "bob can't create Location d",
+      "staff at Location a can't see Location b",
+      "staff at Location a can't change Location a",
+      "staff at Location a can't change Location b",
+      "staff at Location a can't create Location c",
+      "staff at Location a can't create Location d",
+      "alice can't see Booking b",
+      "alice can't change Booking a",
+      "alice can't change Booking b",
+      "alice can't delete Booking a",
+      "alice can't delete Booking b",
+      "bob can't see Booking a",
+      "bob can't change Booking a",
+      "bob can't change Booking b",
+      "bob can't delete Booking a",
+      "bob can't delete Booking b",
+      "staff at Location a can't see Booking b",
+      "staff at Location a can't change Booking b",
+      "staff at Location a can't delete Booking a",
+      "staff at Location a can't delete Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "role-ignore-person",
+    "direction": "widen",
+    "target": "svetra.has_role",
+    "sql": "CREATE OR REPLACE FUNCTION svetra.has_role(p_role text, p_scope uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$ select exists (\n    select 1 from \"svetra\".\"role_grants\" g\n    where g.\"role\" = p_role and g.\"scope_id\" is not distinct from p_scope\n  ) $function$;",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Location a",
+      "alice can't see Location b",
+      "alice can't change Location a",
+      "alice can't change Location b",
+      "alice can't create Location c",
+      "alice can't create Location d",
+      "bob can't see Location a",
+      "bob can't see Location b",
+      "bob can't change Location a",
+      "bob can't change Location b",
+      "bob can't create Location c",
+      "bob can't create Location d",
+      "staff at Location a can't see Location b",
+      "staff at Location a can't change Location a",
+      "staff at Location a can't change Location b",
+      "staff at Location a can't create Location c",
+      "staff at Location a can't create Location d",
+      "alice can't see Booking b",
+      "alice can't change Booking a",
+      "alice can't change Booking b",
+      "alice can't delete Booking a",
+      "alice can't delete Booking b",
+      "bob can't see Booking a",
+      "bob can't change Booking a",
+      "bob can't change Booking b",
+      "bob can't delete Booking a",
+      "bob can't delete Booking b",
+      "staff at Location a can't see Booking b",
+      "staff at Location a can't change Booking b",
+      "staff at Location a can't delete Booking a",
+      "staff at Location a can't delete Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "role-ignore-role",
+    "direction": "widen",
+    "target": "svetra.has_role",
+    "sql": "CREATE OR REPLACE FUNCTION svetra.has_role(p_role text, p_scope uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$ select exists (\n    select 1 from \"svetra\".\"role_grants\" g\n    where g.\"user_id\" = (select auth.uid()) and g.\"scope_id\" is not distinct from p_scope\n  ) $function$;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "role-ignore-scope",
+    "direction": "widen",
+    "target": "svetra.has_role",
+    "sql": "CREATE OR REPLACE FUNCTION svetra.has_role(p_role text, p_scope uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$ select exists (\n    select 1 from \"svetra\".\"role_grants\" g\n    where g.\"user_id\" = (select auth.uid()) and g.\"role\" = p_role\n  ) $function$;",
+    "outcome": "killed",
+    "failed": [
+      "staff at Location a can't see Location b",
+      "staff at Location a can't see Booking b",
+      "staff at Location a can't change Booking b"
+    ],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "role-grants-writable",
+    "direction": "widen",
+    "target": "svetra.role_grants",
+    "sql": "grant insert, update, delete on svetra.role_grants to authenticated;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "bookings",
+    "operator": "role-grants-open",
+    "direction": "widen",
+    "target": "svetra.role_grants",
+    "sql": "grant insert, update, delete on svetra.role_grants to authenticated; alter table svetra.role_grants disable row level security;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "visit.admins_manage_delete",
+    "sql": "drop policy \"admins_manage_delete\" on public.\"visit\";",
+    "outcome": "killed",
+    "failed": [
+      "admin can delete Visit a",
+      "admin can delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "visit.admins_manage_delete",
+    "sql": "alter policy \"admins_manage_delete\" on public.\"visit\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't delete Visit a",
+      "bob can't delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "visit.admins_manage_delete",
+    "sql": "alter policy \"admins_manage_delete\" on public.\"visit\" using (not (( SELECT svetra.has_role('admin'::text) AS has_role)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't delete Visit a",
+      "bob can't delete Visit b",
+      "admin can delete Visit a",
+      "admin can delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "visit.admins_manage_delete",
+    "sql": "alter policy \"admins_manage_delete\" on public.\"visit\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "visit.admins_manage_delete",
+    "sql": "alter policy \"admins_manage_delete\" on public.\"visit\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "admin can delete Visit a",
+      "admin can delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "visit.admins_manage_delete",
+    "sql": "create policy svetra_mutant on public.\"visit\" for all to authenticated using (( SELECT svetra.has_role('admin'::text) AS has_role)) with check (( SELECT svetra.has_role('admin'::text) AS has_role));",
+    "outcome": "killed",
+    "failed": [
+      "admin can't create Visit c",
+      "admin can't create Visit d"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "visit.admins_manage_select",
+    "sql": "drop policy \"admins_manage_select\" on public.\"visit\";",
+    "outcome": "killed",
+    "failed": [
+      "admin can see Visit a",
+      "admin can see Visit b",
+      "admin can change Visit a",
+      "admin can change Visit b",
+      "admin can delete Visit a",
+      "admin can delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "visit.admins_manage_select",
+    "sql": "alter policy \"admins_manage_select\" on public.\"visit\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Visit b",
+      "bob can't see Visit a",
+      "admin without a second factor can't see Visit a",
+      "admin without a second factor can't see Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "visit.admins_manage_select",
+    "sql": "alter policy \"admins_manage_select\" on public.\"visit\" using (not (( SELECT svetra.has_role('admin'::text) AS has_role)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Visit b",
+      "bob can't see Visit a",
+      "admin can see Visit a",
+      "admin can see Visit b",
+      "admin can change Visit a",
+      "admin can change Visit b",
+      "admin can delete Visit a",
+      "admin can delete Visit b",
+      "admin without a second factor can't see Visit a",
+      "admin without a second factor can't see Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "visit.admins_manage_select",
+    "sql": "alter policy \"admins_manage_select\" on public.\"visit\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "visit.admins_manage_select",
+    "sql": "alter policy \"admins_manage_select\" on public.\"visit\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "admin can see Visit a",
+      "admin can see Visit b",
+      "admin can change Visit a",
+      "admin can change Visit b",
+      "admin can delete Visit a",
+      "admin can delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "visit.admins_manage_select",
+    "sql": "create policy svetra_mutant on public.\"visit\" for all to authenticated using (( SELECT svetra.has_role('admin'::text) AS has_role)) with check (( SELECT svetra.has_role('admin'::text) AS has_role));",
+    "outcome": "killed",
+    "failed": [
+      "admin can't create Visit c",
+      "admin can't create Visit d"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "visit.admins_manage_update",
+    "sql": "drop policy \"admins_manage_update\" on public.\"visit\";",
+    "outcome": "killed",
+    "failed": [
+      "admin can change Visit a",
+      "admin can change Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "visit.admins_manage_update",
+    "sql": "alter policy \"admins_manage_update\" on public.\"visit\" using (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "visit.admins_manage_update",
+    "sql": "alter policy \"admins_manage_update\" on public.\"visit\" using (not (( SELECT svetra.has_role('admin'::text) AS has_role)));",
+    "outcome": "killed",
+    "failed": [
+      "admin can change Visit a",
+      "admin can change Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-check-true",
+    "direction": "widen",
+    "target": "visit.admins_manage_update",
+    "sql": "alter policy \"admins_manage_update\" on public.\"visit\" with check (true);",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "visit.admins_manage_update",
+    "sql": "alter policy \"admins_manage_update\" on public.\"visit\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "visit.admins_manage_update",
+    "sql": "alter policy \"admins_manage_update\" on public.\"visit\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "admin can change Visit a",
+      "admin can change Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "visit.admins_manage_update",
+    "sql": "create policy svetra_mutant on public.\"visit\" for all to authenticated using (( SELECT svetra.has_role('admin'::text) AS has_role)) with check (( SELECT svetra.has_role('admin'::text) AS has_role));",
+    "outcome": "killed",
+    "failed": [
+      "admin can't create Visit c",
+      "admin can't create Visit d"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "visit.patients_see_own_insert",
+    "sql": "drop policy \"patients_see_own_insert\" on public.\"visit\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can create Visit c",
+      "bob can create Visit d"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-check-true",
+    "direction": "widen",
+    "target": "visit.patients_see_own_insert",
+    "sql": "alter policy \"patients_see_own_insert\" on public.\"visit\" with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't create Visit d",
+      "bob can't create Visit c",
+      "admin can't create Visit c",
+      "admin can't create Visit d",
+      "admin without a second factor can't create Visit c",
+      "admin without a second factor can't create Visit d"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "visit.patients_see_own_insert",
+    "sql": "alter policy \"patients_see_own_insert\" on public.\"visit\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "visit.patients_see_own_insert",
+    "sql": "alter policy \"patients_see_own_insert\" on public.\"visit\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can create Visit c",
+      "bob can create Visit d"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "visit.patients_see_own_insert",
+    "sql": "create policy svetra_mutant on public.\"visit\" for all to authenticated using ((patient = ( SELECT auth.uid() AS uid))) with check ((patient = ( SELECT auth.uid() AS uid)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't change Visit a",
+      "alice can't delete Visit a",
+      "bob can't change Visit b",
+      "bob can't delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-drop",
+    "direction": "narrow",
+    "target": "visit.patients_see_own_select",
+    "sql": "drop policy \"patients_see_own_select\" on public.\"visit\";",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Visit a",
+      "bob can see Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-using-true",
+    "direction": "widen",
+    "target": "visit.patients_see_own_select",
+    "sql": "alter policy \"patients_see_own_select\" on public.\"visit\" using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Visit b",
+      "bob can't see Visit a",
+      "admin without a second factor can't see Visit a",
+      "admin without a second factor can't see Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-using-negate",
+    "direction": "change",
+    "target": "visit.patients_see_own_select",
+    "sql": "alter policy \"patients_see_own_select\" on public.\"visit\" using (not ((patient = ( SELECT auth.uid() AS uid))));",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Visit a",
+      "alice can't see Visit b",
+      "bob can't see Visit a",
+      "bob can see Visit b",
+      "admin without a second factor can't see Visit a",
+      "admin without a second factor can't see Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-to-public",
+    "direction": "widen",
+    "target": "visit.patients_see_own_select",
+    "sql": "alter policy \"patients_see_own_select\" on public.\"visit\" to public;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-role-swap",
+    "direction": "change",
+    "target": "visit.patients_see_own_select",
+    "sql": "alter policy \"patients_see_own_select\" on public.\"visit\" to anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Visit a",
+      "bob can see Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "policy-all-actions",
+    "direction": "widen",
+    "target": "visit.patients_see_own_select",
+    "sql": "create policy svetra_mutant on public.\"visit\" for all to authenticated using ((patient = ( SELECT auth.uid() AS uid))) with check ((patient = ( SELECT auth.uid() AS uid)));",
+    "outcome": "killed",
+    "failed": [
+      "alice can't change Visit a",
+      "alice can't delete Visit a",
+      "bob can't change Visit b",
+      "bob can't delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "table-rls-off",
+    "direction": "widen",
+    "target": "visit",
+    "sql": "alter table public.\"visit\" disable row level security;",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Visit a",
+      "anon can't see Visit b",
+      "anon can't change Visit a",
+      "anon can't change Visit b",
+      "anon can't delete Visit a",
+      "anon can't delete Visit b",
+      "anon can't create Visit c",
+      "anon can't create Visit d",
+      "alice can't see Visit b",
+      "alice can't change Visit a",
+      "alice can't change Visit b",
+      "alice can't delete Visit a",
+      "alice can't delete Visit b",
+      "alice can't create Visit d",
+      "bob can't see Visit a",
+      "bob can't change Visit a",
+      "bob can't change Visit b",
+      "bob can't delete Visit a",
+      "bob can't delete Visit b",
+      "bob can't create Visit c",
+      "admin can't create Visit c",
+      "admin can't create Visit d",
+      "admin without a second factor can't see Visit a",
+      "admin without a second factor can't see Visit b",
+      "admin without a second factor can't change Visit a",
+      "admin without a second factor can't change Visit b",
+      "admin without a second factor can't delete Visit a",
+      "admin without a second factor can't delete Visit b",
+      "admin without a second factor can't create Visit c",
+      "admin without a second factor can't create Visit d"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "table-leak-read",
+    "direction": "widen",
+    "target": "visit",
+    "sql": "create policy svetra_mutant on public.\"visit\" for select to authenticated using (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Visit b",
+      "bob can't see Visit a",
+      "admin without a second factor can't see Visit a",
+      "admin without a second factor can't see Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "table-leak-read-anon",
+    "direction": "widen",
+    "target": "visit",
+    "sql": "create policy svetra_mutant on public.\"visit\" for select to anon using (true);",
+    "outcome": "killed",
+    "failed": [
+      "anon can't see Visit a",
+      "anon can't see Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "table-leak-write",
+    "direction": "widen",
+    "target": "visit",
+    "sql": "create policy svetra_mutant on public.\"visit\" for all to authenticated using (true) with check (true);",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Visit b",
+      "alice can't change Visit a",
+      "alice can't change Visit b",
+      "alice can't delete Visit a",
+      "alice can't delete Visit b",
+      "alice can't create Visit d",
+      "bob can't see Visit a",
+      "bob can't change Visit a",
+      "bob can't change Visit b",
+      "bob can't delete Visit a",
+      "bob can't delete Visit b",
+      "bob can't create Visit c",
+      "admin can't create Visit c",
+      "admin can't create Visit d",
+      "admin without a second factor can't see Visit a",
+      "admin without a second factor can't see Visit b",
+      "admin without a second factor can't change Visit a",
+      "admin without a second factor can't change Visit b",
+      "admin without a second factor can't delete Visit a",
+      "admin without a second factor can't delete Visit b",
+      "admin without a second factor can't create Visit c",
+      "admin without a second factor can't create Visit d"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "table-revoke-read",
+    "direction": "narrow",
+    "target": "visit",
+    "sql": "revoke select on public.\"visit\" from authenticated, anon;",
+    "outcome": "killed",
+    "failed": [
+      "alice can see Visit a",
+      "bob can see Visit b",
+      "admin can see Visit a",
+      "admin can see Visit b",
+      "admin can change Visit a",
+      "admin can change Visit b",
+      "admin can delete Visit a",
+      "admin can delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "role-check-true",
+    "direction": "widen",
+    "target": "svetra.has_role",
+    "sql": "CREATE OR REPLACE FUNCTION svetra.has_role(p_role text, p_scope uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$ select true $function$;",
+    "outcome": "killed",
+    "failed": [
+      "alice can't see Visit b",
+      "alice can't change Visit a",
+      "alice can't change Visit b",
+      "alice can't delete Visit a",
+      "alice can't delete Visit b",
+      "bob can't see Visit a",
+      "bob can't change Visit a",
+      "bob can't change Visit b",
+      "bob can't delete Visit a",
+      "bob can't delete Visit b",
+      "admin without a second factor can't see Visit a",
+      "admin without a second factor can't see Visit b",
+      "admin without a second factor can't change Visit a",
+      "admin without a second factor can't change Visit b",
+      "admin without a second factor can't delete Visit a",
+      "admin without a second factor can't delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "role-ignore-person",
+    "direction": "widen",
+    "target": "svetra.has_role",
+    "sql": "CREATE OR REPLACE FUNCTION svetra.has_role(p_role text, p_scope uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$ select exists (\n    select 1 from \"svetra\".\"role_grants\" g\n    where g.\"role\" = p_role and g.\"scope_id\" is not distinct from p_scope\n      and (g.\"role\" not in ('admin') or coalesce((select auth.jwt() ->> 'aal'), '') = 'aal2')\n  ) $function$;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "role-ignore-role",
+    "direction": "widen",
+    "target": "svetra.has_role",
+    "sql": "CREATE OR REPLACE FUNCTION svetra.has_role(p_role text, p_scope uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$ select exists (\n    select 1 from \"svetra\".\"role_grants\" g\n    where g.\"user_id\" = (select auth.uid()) and g.\"scope_id\" is not distinct from p_scope\n      and (g.\"role\" not in ('admin') or coalesce((select auth.jwt() ->> 'aal'), '') = 'aal2')\n  ) $function$;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "role-ignore-scope",
+    "direction": "widen",
+    "target": "svetra.has_role",
+    "sql": "CREATE OR REPLACE FUNCTION svetra.has_role(p_role text, p_scope uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$ select exists (\n    select 1 from \"svetra\".\"role_grants\" g\n    where g.\"user_id\" = (select auth.uid()) and g.\"role\" = p_role\n      and (g.\"role\" not in ('admin') or coalesce((select auth.jwt() ->> 'aal'), '') = 'aal2')\n  ) $function$;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "role-ignore-second-factor",
+    "direction": "widen",
+    "target": "svetra.has_role",
+    "sql": "CREATE OR REPLACE FUNCTION svetra.has_role(p_role text, p_scope uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$ select exists (\n    select 1 from \"svetra\".\"role_grants\" g\n    where g.\"user_id\" = (select auth.uid()) and g.\"role\" = p_role and g.\"scope_id\" is not distinct from p_scope\n  ) $function$;",
+    "outcome": "killed",
+    "failed": [
+      "admin without a second factor can't see Visit a",
+      "admin without a second factor can't see Visit b",
+      "admin without a second factor can't change Visit a",
+      "admin without a second factor can't change Visit b",
+      "admin without a second factor can't delete Visit a",
+      "admin without a second factor can't delete Visit b"
+    ],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "role-grants-writable",
+    "direction": "widen",
+    "target": "svetra.role_grants",
+    "sql": "grant insert, update, delete on svetra.role_grants to authenticated;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  },
+  {
+    "app": "clinic",
+    "operator": "role-grants-open",
+    "direction": "widen",
+    "target": "svetra.role_grants",
+    "sql": "grant insert, update, delete on svetra.role_grants to authenticated; alter table svetra.role_grants disable row level security;",
+    "outcome": "survived",
+    "failed": [],
+    "error": null
+  }
+]
