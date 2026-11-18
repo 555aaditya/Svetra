@@ -37,6 +37,7 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 | `npm/` | The npm wrapper: downloads, verifies and caches the release binary on first run |
 | `tests/pg/`, `scripts/pg-check.sh` | Compiles the fixtures, applies the SQL to PostgreSQL 16 with a Supabase stand-in, and asserts behaviour: who sees which rows, and what's rejected. Then runs the generated access tests with pgTAP, and each deliberate breakage in `tests/pg/breakages/` (a `.sql` change plus the exact `.expected` failures), on its own copy of the database |
 | `scripts/supabase-check.sh` | The generated access tests and every breakage again, on a real local Supabase started by the pinned Supabase CLI, run as Supabase's own `postgres` role. Catches differences between Supabase and the stand-in |
+| `scripts/mutate.py` | The mutation study of the generated access tests: breaks a deployed database one way at a time and counts the mutants the tests catch. Runs on the PostgreSQL stand-in, or with `--supabase` on a real local Supabase |
 
 ## Commands
 
@@ -49,6 +50,7 @@ cargo +1.88 check --all-targets      # the minimum supported Rust version
 cargo run -- validate tests/fixtures/finledger.yaml [--json]
 scripts/pg-check.sh                  # needs Docker: real-Postgres behaviour checks
 scripts/supabase-check.sh            # needs Docker and Node: the access tests on a real local Supabase
+scripts/mutate.py [--supabase]       # needs Docker (and Node with --supabase): the mutation study
 ```
 
 CI runs all of these. A PR is ready when they pass locally.
