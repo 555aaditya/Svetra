@@ -255,7 +255,8 @@ def study_repo(full_name, files, svetra_bin, markers=None, licence=None):
         if r.returncode == 0:
             applied += 1
         else:
-            errors.append((r.stderr.strip().splitlines() or ["?"])[-1][:200])
+            lines = [l for l in r.stderr.splitlines() if "ERROR:" in l]
+            errors.append((lines or r.stderr.strip().splitlines() or ["?"])[0][:200])
     result = {
         "key": key,
         "group": "ai" if markers else "other",
@@ -266,6 +267,10 @@ def study_repo(full_name, files, svetra_bin, markers=None, licence=None):
         "status": "none" if applied == 0 else ("clean" if applied == len(files) else "partial"),
     }
     found = check_database(db, svetra_bin) if applied else None
+    os.makedirs(os.path.join(DATA, "findings"), exist_ok=True)
+    if not found:
+        with open(os.path.join(DATA, "findings", key + ".json"), "w") as out:
+            json.dump({"findings": [], "errors": errors[:5]}, out, indent=1)
     if found:
         result["counts"] = found["counts"]
         kinds = {}
