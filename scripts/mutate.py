@@ -32,8 +32,8 @@ FIXTURES = ["finledger", "posts", "bookings", "clinic"]
 CONTAINER = "svetra-mutate"
 
 
-def sh(*args, stdin=None, check=True):
-    r = subprocess.run(args, input=stdin, capture_output=True, text=True)
+def sh(*args, stdin=None, check=True, cwd=None):
+    r = subprocess.run(args, input=stdin, capture_output=True, text=True, cwd=cwd)
     if check and r.returncode != 0:
         sys.exit(f"failed: {' '.join(args)}\n{r.stdout}{r.stderr}")
     return r
