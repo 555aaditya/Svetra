@@ -63,7 +63,7 @@ def find(args):
     """Search, then fetch each repo's metadata and apply the exclusions."""
     names = {}
     for q in QUERIES:
-        for page in range(1, PAGES_PER_QUERY + 1):
+        for page in range(1, args.pages + 1):
             res = gh_api("search/code", {"q": q, "per_page": 100, "page": page})
             time.sleep(7)  # code search allows about 10 requests a minute
             items = (res or {}).get("items", [])
@@ -390,7 +390,8 @@ def report(args):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("find")
+    f = sub.add_parser("find")
+    f.add_argument("--pages", type=int, default=PAGES_PER_QUERY, help="result pages per search query (100 files each)")
     d = sub.add_parser("draw")
     d.add_argument("--n", type=int, required=True)
     d.add_argument("--seed", type=int, required=True)
