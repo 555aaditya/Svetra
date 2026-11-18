@@ -137,6 +137,183 @@ def draw(args):
     print(f"drew {min(args.n, len(cands))} of {len(cands)} candidates with seed {args.seed}")
 
 
+CONTAINER = "svetra-leakstudy"
+MAX_FILE_BYTES = 2_000_000
+MAX_CLONE_KB = 200_000
+
+
+def docker_psql(db, extra=(), env=None, stdin=None, timeout=90):
+    """psql inside the study container as the superuser; never touches the host's databases."""
+    cmd = ["docker", "exec", "-i"]
+    for k, v in (env or {}).items():
+        cmd += ["-e", f"{k}={v}"]
+    cmd += [CONTAINER, "psql", "-U", "postgres", "-d", db, "-X", "-q"] + list(extra)
+    return sh(cmd, input=stdin, timeout=timeout)
+
+
+def start_database(image="postgres:16"):
+    """One throwaway PostgreSQL with the Supabase stand-in loaded into a template database.
+    No network, no extra privileges, and limits on memory and processes: the migrations are
+    strangers' SQL and run as a superuser."""
+    sh(["docker", "rm", "-f", CONTAINER])
+    r = sh(["docker", "run", "-d", "--name", CONTAINER, "--network", "none",
+            "--cap-drop", "ALL", "--cap-add", "CHOWN", "--cap-add", "DAC_OVERRIDE",
+            "--cap-add", "FOWNER", "--cap-add", "SETGID", "--cap-add", "SETUID",
+            "--security-opt", "no-new-privileges", "--memory", "1g", "--pids-limit", "512",
+            "-e", "POSTGRES_PASSWORD=pw", image])
+    if r.returncode:
+        sys.exit("could not start PostgreSQL: " + r.stderr)
+    for _ in range(90):
+        if "init process complete" in sh(["docker", "logs", CONTAINER]).stderr + sh(["docker", "logs", CONTAINER]).stdout:
+            break
+        time.sleep(1)
+    for _ in range(60):
+        if sh(["docker", "exec", CONTAINER, "pg_isready", "-U", "postgres"]).returncode == 0:
+            break
+        time.sleep(1)
+    stub = open(os.path.join(HERE, "..", "..", "tests", "pg", "supabase_stub.sql")).read()
+    docker_psql("postgres", ["-c", "create database tpl"])
+    r = docker_psql("tpl", ["-v", "ON_ERROR_STOP=1"], stdin=stub)
+    if r.returncode:
+        sys.exit("could not load the Supabase stand-in: " + r.stderr)
+    docker_psql("postgres", ["-c", "alter database tpl is_template true"])
+
+
+def stop_database():
+    sh(["docker", "rm", "-f", CONTAINER])
+
+
+def clone(full_name, dest):
+    """A shallow clone with symlinks, hooks and prompts off. Nothing in it is ever executed."""
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    r = sh(["git", "-c", "core.symlinks=false", "-c", "core.hooksPath=/dev/null",
+            "clone", "--depth", "1", "--no-tags", "--single-branch", "--quiet",
+            f"https://github.com/{full_name}.git", dest], env=env, timeout=180)
+    return r.returncode == 0
+
+
+PACKAGE_SIGNS = ("lovable-tagger", "bolt.new")
+
+
+def markers_in(repo):
+    """Which AI builders or agents left a trace: a file or folder, or a package.json mention."""
+    try:
+        pkg = open(os.path.join(repo, "package.json")).read()
+    except OSError:
+        pkg = ""
+    found = []
+    for name, signs in AI_MARKERS:
+        if any(os.path.exists(os.path.join(repo, x)) or (x in PACKAGE_SIGNS and x in pkg) for x in signs):
+            found.append(name)
+    return found
+
+
+def migration_files(repo):
+    folder = os.path.join(repo, "supabase", "migrations")
+    out = []
+    if os.path.isdir(folder):
+        for name in sorted(os.listdir(folder)):
+            path = os.path.join(folder, name)
+            if name.endswith(".sql") and os.path.isfile(path) and not os.path.islink(path) \
+                    and os.path.getsize(path) <= MAX_FILE_BYTES:
+                out.append(path)
+    return out
+
+
+def check_database(db, svetra_bin):
+    """`svetra check` on the database, through its read-only query, as the eval harness does."""
+    q = sh([svetra_bin, "check", "--print-query"]).stdout
+    r = docker_psql(db, ["-At"], stdin=q)
+    snap = os.path.join(DATA, "snapshot.tmp.json")
+    with open(snap, "w") as f:
+        f.write(r.stdout)
+    c = sh([svetra_bin, "check", "--snapshot", snap, "--json"])
+    os.remove(snap)
+    try:
+        return json.loads(c.stdout)
+    except ValueError:
+        return None
+
+
+def study_repo(full_name, files, svetra_bin, markers=None, licence=None):
+    """Apply the migrations in order to a fresh database from the template and check it. A file
+    that fails is rolled back whole (as `supabase db reset` runs each one) and counted."""
+    key = key_of(full_name)
+    db = f"r_{key}"
+    docker_psql("postgres", ["-c", f"create database {db} template tpl"])
+    applied, errors = 0, []
+    for path in files:
+        try:
+            r = docker_psql(db, ["-1", "-v", "ON_ERROR_STOP=1"], env={"PGOPTIONS": "-c statement_timeout=30000"},
+                            stdin=open(path, errors="replace").read(), timeout=90)
+        except subprocess.TimeoutExpired:
+            errors.append("timeout")
+            continue
+        if r.returncode == 0:
+            applied += 1
+        else:
+            errors.append((r.stderr.strip().splitlines() or ["?"])[-1][:200])
+    result = {
+        "key": key,
+        "group": "ai" if markers else "other",
+        "markers": markers or [],
+        "licence": licence,
+        "files": len(files),
+        "applied": applied,
+        "status": "none" if applied == 0 else ("clean" if applied == len(files) else "partial"),
+    }
+    found = check_database(db, svetra_bin) if applied else None
+    if found:
+        result["counts"] = found["counts"]
+        kinds = {}
+        for f in found["findings"]:
+            if f["severity"] == "critical":
+                kinds[f["kind"]] = kinds.get(f["kind"], 0) + 1
+        result["critical_kinds"] = kinds
+        # The details stay in data/findings, gitignored, for the hand audit.
+        os.makedirs(os.path.join(DATA, "findings"), exist_ok=True)
+        with open(os.path.join(DATA, "findings", key + ".json"), "w") as out:
+            json.dump({"findings": found["findings"], "errors": errors[:5]}, out, indent=1)
+    docker_psql("postgres", ["-c", f"drop database if exists {db}"])
+    return result
+
+
+def run(args):
+    sample = load(f"draw-{args.seed}.json")
+    svetra_bin = os.path.abspath(args.svetra)
+    start_database()
+    out_path = os.path.join(DATA, "results.jsonl")
+    done = set()
+    if os.path.exists(out_path):
+        done = {json.loads(l)["key"] for l in open(out_path)}
+    try:
+        for i, cand in enumerate(sample, 1):
+            key = key_of(cand["full_name"])
+            if key in done:
+                continue
+            if cand["size_kb"] > MAX_CLONE_KB:
+                row = {"key": key, "status": "skipped_large"}
+            else:
+                import shutil
+                import tempfile
+                tmp = tempfile.mkdtemp(prefix="leakstudy-")
+                try:
+                    repo = os.path.join(tmp, "repo")
+                    if not clone(cand["full_name"], repo):
+                        row = {"key": key, "status": "clone_failed"}
+                    else:
+                        files = migration_files(repo)
+                        row = study_repo(cand["full_name"], files, svetra_bin, markers_in(repo), cand["licence"]) \
+                            if files else {"key": key, "status": "no_migrations"}
+                finally:
+                    shutil.rmtree(tmp, ignore_errors=True)
+            with open(out_path, "a") as f:
+                f.write(json.dumps(row, sort_keys=True) + "\n")
+            print(f"{i}/{len(sample)} {row['key']} {row['status']} {row.get('counts', '')}", flush=True)
+    finally:
+        stop_database()
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -144,8 +321,11 @@ def main():
     d = sub.add_parser("draw")
     d.add_argument("--n", type=int, required=True)
     d.add_argument("--seed", type=int, required=True)
+    r = sub.add_parser("run")
+    r.add_argument("--seed", type=int, required=True)
+    r.add_argument("--svetra", default="target/debug/svetra")
     args = p.parse_args()
-    {"find": find, "draw": draw}[args.cmd](args)
+    {"find": find, "draw": draw, "run": run}[args.cmd](args)
 
 
 if __name__ == "__main__":
