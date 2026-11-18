@@ -186,9 +186,12 @@ def stop_database():
 def clone(full_name, dest):
     """A shallow clone with symlinks, hooks and prompts off. Nothing in it is ever executed."""
     env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
-    r = sh(["git", "-c", "core.symlinks=false", "-c", "core.hooksPath=/dev/null",
-            "clone", "--depth", "1", "--no-tags", "--single-branch", "--quiet",
-            f"https://github.com/{full_name}.git", dest], env=env, timeout=180)
+    try:
+        r = sh(["git", "-c", "core.symlinks=false", "-c", "core.hooksPath=/dev/null",
+                "clone", "--depth", "1", "--no-tags", "--single-branch", "--quiet",
+                f"https://github.com/{full_name}.git", dest], env=env, timeout=120)
+    except subprocess.TimeoutExpired:
+        return False
     return r.returncode == 0
 
 
@@ -303,8 +306,11 @@ def run(args):
                         row = {"key": key, "status": "clone_failed"}
                     else:
                         files = migration_files(repo)
-                        row = study_repo(cand["full_name"], files, svetra_bin, markers_in(repo), cand["licence"]) \
-                            if files else {"key": key, "status": "no_migrations"}
+                        try:
+                            row = study_repo(cand["full_name"], files, svetra_bin, markers_in(repo), cand["licence"]) \
+                                if files else {"key": key, "status": "no_migrations"}
+                        except Exception as e:  # one odd repo must not stop the run; the name stays out of the log
+                            row = {"key": key, "status": "harness_error", "error": type(e).__name__}
                 finally:
                     shutil.rmtree(tmp, ignore_errors=True)
             with open(out_path, "a") as f:
