@@ -176,6 +176,10 @@ def start_database(image="postgres:16"):
     r = docker_psql("tpl", ["-v", "ON_ERROR_STOP=1"], stdin=stub)
     if r.returncode:
         sys.exit("could not load the Supabase stand-in: " + r.stderr)
+    extra = open(os.path.join(HERE, "stub_extra.sql")).read()
+    r = docker_psql("tpl", ["-v", "ON_ERROR_STOP=1"], stdin=extra)
+    if r.returncode:
+        sys.exit("could not load the extra Supabase pieces: " + r.stderr)
     docker_psql("postgres", ["-c", "alter database tpl is_template true"])
 
 
