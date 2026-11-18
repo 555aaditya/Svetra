@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **`check` no longer calls an open insert a critical write.** A permissive `INSERT` policy for `anon` or `public` with a check of `true` lets people add rows, not change existing ones, and is often a sign-up or contact form. It is now a warning, `open_insert` ("Anyone on the internet can add rows to ..."). `open_write` (critical) is now only an open `UPDATE`, `DELETE` or `ALL`. An open insert for signed-in people is ordinary and no longer reported as `signed_in_write`. Found by hand-auditing 30 findings from a study of public Supabase repos: about half of the `open_write` criticals were insert-only.
+
 ## 0.8.0 (2026-11-18)
 
 Say what an update may turn a row into, so a state change isn't a hole: `check` on update, and `restrictive` policies.
