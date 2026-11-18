@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -248,6 +249,8 @@ def study_repo(full_name, files, svetra_bin, markers=None, licence=None):
     key = key_of(full_name)
     db = f"r_{key}"
     docker_psql("postgres", ["-c", f"create database {db} template tpl"])
+    # A template does not carry database-level settings, so set Supabase's search path again.
+    docker_psql("postgres", ["-c", f'alter database {db} set search_path = "$user", public, extensions'])
     applied, errors = 0, []
     for path in files:
         try:
@@ -393,6 +396,17 @@ def report(args):
         leaky = [r for r in sel if r["counts"]["critical"] > 0]
         share = f"{100 * len(leaky) / len(sel):.0f}%" if sel else "n/a"
         print(f"  {label}: {len(leaky)} of {len(sel)} have a critical finding ({share})")
+    why = {}
+    for name in os.listdir(os.path.join(DATA, "findings")) if os.path.isdir(os.path.join(DATA, "findings")) else []:
+        if name.startswith("selftest") or name[:-5] not in {r["key"] for r in rows}:
+            continue
+        for e in json.load(open(os.path.join(DATA, "findings", name)))["errors"]:
+            e = re.sub(r'"[^"]*"', '"X"', e)
+            e = re.sub(r"\d+", "N", e)[:90]
+            why[e] = why.get(e, 0) + 1
+    print("why migrations failed (first errors, names removed):")
+    for e, n in sorted(why.items(), key=lambda kv: -kv[1])[:8]:
+        print(f"  {n}: {e}")
     kinds = {}
     for r in checked:
         for k in r.get("critical_kinds", {}):
