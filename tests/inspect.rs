@@ -155,7 +155,10 @@ fn an_open_insert_is_a_warning_not_a_critical_write() {
         ]})
     };
     let f = findings(&policy(json!(["anon"]), "INSERT"));
-    assert_eq!((f[0].kind, f[0].severity), ("open_insert", Severity::Warning));
+    assert_eq!(
+        (f[0].kind, f[0].severity),
+        ("open_insert", Severity::Warning)
+    );
     assert!(f[0].message.contains("add rows"), "{}", f[0].message);
     // An open insert for signed-in people is ordinary: nothing to report.
     assert!(findings(&policy(json!(["authenticated"]), "INSERT")).is_empty());
