@@ -359,6 +359,34 @@ def selftest(args):
     print("selftest passed")
 
 
+def report(args):
+    """Aggregate data/results.jsonl: counts only, never a repo name."""
+    rows = [json.loads(l) for l in open(os.path.join(DATA, "results.jsonl"))]
+    rows = [r for r in rows if not r["key"].startswith("selftest")]
+    total = len(rows)
+    by_status = {}
+    for r in rows:
+        by_status[r["status"]] = by_status.get(r["status"], 0) + 1
+    checked = [r for r in rows if "counts" in r]
+    print(f"repos run: {total}")
+    for k in sorted(by_status):
+        print(f"  {k}: {by_status[k]}")
+    print(f"checked (at least one migration applied): {len(checked)}")
+    for label, sel in (("all", checked), ("ai", [r for r in checked if r["group"] == "ai"]),
+                       ("other", [r for r in checked if r["group"] == "other"]),
+                       ("clean only", [r for r in checked if r["status"] == "clean"])):
+        leaky = [r for r in sel if r["counts"]["critical"] > 0]
+        share = f"{100 * len(leaky) / len(sel):.0f}%" if sel else "n/a"
+        print(f"  {label}: {len(leaky)} of {len(sel)} have a critical finding ({share})")
+    kinds = {}
+    for r in checked:
+        for k in r.get("critical_kinds", {}):
+            kinds[k] = kinds.get(k, 0) + 1
+    print("repos with a critical finding, by kind:")
+    for k, n in sorted(kinds.items(), key=lambda kv: -kv[1]):
+        print(f"  {k}: {n}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -371,8 +399,9 @@ def main():
     r.add_argument("--svetra", default="target/debug/svetra")
     t = sub.add_parser("selftest")
     t.add_argument("--svetra", default="target/debug/svetra")
+    sub.add_parser("report")
     args = p.parse_args()
-    {"find": find, "draw": draw, "run": run, "selftest": selftest}[args.cmd](args)
+    {"find": find, "draw": draw, "run": run, "selftest": selftest, "report": report}[args.cmd](args)
 
 
 if __name__ == "__main__":
