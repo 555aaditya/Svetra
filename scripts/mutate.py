@@ -198,7 +198,20 @@ def mutants():
     return out
 
 
-def study(name, work, svetra):
+def create_database(db):
+    """Copy the deployed database. PostgreSQL refuses while another session is connected to it,
+    which on Supabase can be a background connection that is gone a moment later."""
+    for attempt in range(10):
+        r = psql(f"create database {db} template postgres;", db="template1", check=False)
+        if r.returncode == 0:
+            return
+        if "being accessed by other users" not in r.stderr:
+            break
+        time.sleep(1)
+    sys.exit(f"failed to create {db}:\n{r.stderr}")
+
+
+def study(name, work, svetra, project=None):
     app = work / name
     app.mkdir()
     shutil.copy(ROOT / f"tests/fixtures/{name}.yaml", app / "svetra.yaml")
@@ -206,8 +219,11 @@ def study(name, work, svetra):
     if holes.is_dir():
         shutil.copytree(holes, app / "supabase/holes")
     sh(svetra, "compile", str(app / "svetra.yaml"))
-    psql((ROOT / "tests/pg/supabase_stub.sql").read_text())
-    psql((app / "supabase/schemas/svetra.sql").read_text())
+    if project:
+        load_supabase(project, app / "supabase/schemas/svetra.sql")
+    else:
+        psql((ROOT / "tests/pg/supabase_stub.sql").read_text())
+        psql((app / "supabase/schemas/svetra.sql").read_text())
     tests = (app / "supabase/tests/svetra.test.sql").read_text()
     failed, error, total = run_tests(tests, "postgres")
     if failed or error:
@@ -215,7 +231,7 @@ def study(name, work, svetra):
     results = []
     for i, (op, direction, target, sql) in enumerate(mutants()):
         db = f"mutant_{i}"
-        psql(f"create database {db} template postgres;", db="template1")
+        create_database(db)
         applied = psql(sql, db=db, check=False)
         if applied.returncode != 0:
             outcome, failed, error = "stillborn", [], applied.stderr.strip()
@@ -266,19 +282,30 @@ def main():
     ap.add_argument("--only", default=",".join(FIXTURES))
     ap.add_argument("--svetra", default=str(ROOT / "target/debug/svetra"),
                     help="the svetra binary whose generated tests are studied")
+    ap.add_argument("--supabase", action="store_true",
+                    help="use a real local Supabase (needs Node) instead of the PostgreSQL stand-in")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     checks, results = {}, []
+    project = None
     try:
         with tempfile.TemporaryDirectory() as tmp:
+            if args.supabase:
+                project = Path(tmp) / "project"
+                start_supabase(project)
             for name in args.only.split(","):
                 print(f"{name}:", flush=True)
-                start()  # a fresh server per app: roles such as anon are server-wide
-                checks[name], rs = study(name, Path(tmp), args.svetra)
+                if not args.supabase:
+                    start()  # a fresh server per app: roles such as anon are server-wide
+                checks[name], rs = study(name, Path(tmp), args.svetra, project)
                 results += rs
     finally:
-        sh("docker", "rm", "-f", CONTAINER, check=False)
+        if args.supabase:
+            if project:
+                stop_supabase(project)
+        else:
+            sh("docker", "rm", "-f", CONTAINER, check=False)
     (out / "results.json").write_text(json.dumps(results, indent=2) + "\n")
     (out / "summary.md").write_text(summary(checks, results))
     print(f"wrote {out / 'results.json'} and {out / 'summary.md'}")
