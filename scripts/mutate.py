@@ -11,15 +11,20 @@ dropped, widened or moved to another role, row-level security turned off, an ext
 policy, the role check or a hole's guard weakened, extra grants. Each is labelled `widen` (more
 access than declared: a leak), `narrow` (less: a broken feature) or `change` (both).
 
-Needs Docker and a built `svetra` binary. Standard library only.
+Needs Docker and a built `svetra` binary. Standard library only. By default the server is plain
+PostgreSQL 16 with a stand-in for Supabase's auth schema and API roles. With `--supabase` it is a
+real local Supabase (database only, started by the pinned Supabase CLI, which needs Node), and the
+SQL runs as Supabase's own `postgres` role, as in scripts/supabase-check.sh.
 
-  scripts/mutate.py [--out DIR] [--only bookings,clinic] [--svetra BIN]
+  scripts/mutate.py [--out DIR] [--only bookings,clinic] [--svetra BIN] [--supabase]
 
 Writes DIR/results.json (every mutant) and DIR/summary.md (kill rates), default target/mutate.
 """
 import argparse
 import json
+import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -30,6 +35,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ["finledger", "posts", "bookings", "clinic"]
 CONTAINER = "svetra-mutate"
+SUPABASE_CONTAINER = "supabase_db_svetra_mutate"
+# Only the database: the tests talk to Postgres directly, so the rest would only slow the start.
+SUPABASE_EXCLUDE = ("gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,"
+                    "studio,edge-runtime,logflare,vector,supavisor")
 
 
 def sh(*args, stdin=None, check=True, cwd=None):
@@ -77,6 +86,35 @@ def start():
         time.sleep(1)
     sh("docker", "exec", CONTAINER, "sh", "-c",
        'apt-get update -qq && apt-get install -y -qq "postgresql-$PG_MAJOR-pgtap" >/dev/null')
+
+
+def supabase_cli():
+    return shlex.split(os.environ.get("SUPABASE_CLI", "npx -y supabase@3.1.0"))
+
+
+def start_supabase(project):
+    """Start a real local Supabase in `project` and point the study at its database container."""
+    global CONTAINER
+    CONTAINER = SUPABASE_CONTAINER
+    project.mkdir()
+    cli = supabase_cli()
+    sh(*cli, "init", "--with-vscode-settings=false", "--with-intellij-settings=false", cwd=project)
+    config = project / "supabase/config.toml"
+    config.write_text(re.sub(r"(?m)^project_id = .*$", 'project_id = "svetra_mutate"', config.read_text()))
+    (project / "supabase/migrations").mkdir(exist_ok=True)
+    sh(*cli, "start", "-x", SUPABASE_EXCLUDE, cwd=project)
+
+
+def stop_supabase(project):
+    sh(*supabase_cli(), "stop", "--no-backup", cwd=project, check=False)
+
+
+def load_supabase(project, schema):
+    """Deploy an app's compiled schema on Supabase, as `db reset` does for a project."""
+    for old in (project / "supabase/migrations").glob("*.sql"):
+        old.unlink()
+    shutil.copy(schema, project / "supabase/migrations/20260101000000_svetra.sql")
+    sh(*supabase_cli(), "db", "reset", cwd=project)
 
 
 def q(name):
