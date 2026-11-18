@@ -199,10 +199,19 @@ def mutants():
 
 
 def create_database(db):
-    """Copy the deployed database. PostgreSQL refuses while another session is connected to it,
-    which on Supabase can be a background connection that is gone a moment later."""
-    for attempt in range(10):
-        r = psql(f"create database {db} template postgres;", db="template1", check=False)
+    """Copy the deployed database. PostgreSQL refuses while another session is connected to it.
+    On Supabase, background workers (pg_net, pg_cron) always are, so the copy runs as the
+    container's superuser after ending them; they restart on their own. Only this plumbing uses
+    that role: the mutations and the tests run as `postgres`."""
+    for _ in range(10):
+        if CONTAINER == SUPABASE_CONTAINER:
+            r = sh("docker", "exec", "-i", CONTAINER, "psql", "-U", "supabase_admin", "-d", "template1",
+                   "-v", "ON_ERROR_STOP=1", "-q", "-At", check=False,
+                   stdin="select pg_terminate_backend(pid) from pg_stat_activity "
+                         "where datname = 'postgres' and pid <> pg_backend_pid();\n"
+                         f"create database {db} template postgres owner postgres;\n")
+        else:
+            r = psql(f"create database {db} template postgres;", db="template1", check=False)
         if r.returncode == 0:
             return
         if "being accessed by other users" not in r.stderr:
@@ -288,24 +297,24 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     checks, results = {}, []
-    project = None
-    try:
-        with tempfile.TemporaryDirectory() as tmp:
-            if args.supabase:
-                project = Path(tmp) / "project"
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp) / "project" if args.supabase else None
+        try:
+            if project:
                 start_supabase(project)
             for name in args.only.split(","):
                 print(f"{name}:", flush=True)
-                if not args.supabase:
+                if not project:
                     start()  # a fresh server per app: roles such as anon are server-wide
                 checks[name], rs = study(name, Path(tmp), args.svetra, project)
                 results += rs
-    finally:
-        if args.supabase:
+        finally:
+            # Inside the `with`: `supabase stop` runs in the temporary project directory.
             if project:
-                stop_supabase(project)
-        else:
-            sh("docker", "rm", "-f", CONTAINER, check=False)
+                if project.exists():
+                    stop_supabase(project)
+            else:
+                sh("docker", "rm", "-f", CONTAINER, check=False)
     (out / "results.json").write_text(json.dumps(results, indent=2) + "\n")
     (out / "summary.md").write_text(summary(checks, results))
     print(f"wrote {out / 'results.json'} and {out / 'summary.md'}")
