@@ -23,3 +23,28 @@ Needs Docker, the `gh` CLI logged in (for `find` and `draw` metadata), `psql`, a
 ## The numbers it reports
 
 Applied rate; leak rate (applied repos with at least one critical finding); findings by kind; AI-built against other; the hand audit sample for false positives. Migrations are not production, so a repo's migrations can leak when the live app doesn't. The write-up must say so.
+
+## The Supabase stand-in, and what it can't do
+
+Migrations assume Supabase. The database starts from `tests/pg/supabase_stub.sql` plus `stub_extra.sql` (the service role, the `extensions` and `storage` schemas, `auth.role()`, the realtime publication, Supabase's search path). It is not Supabase: extensions that the stock PostgreSQL image lacks (`pg_net`, `pg_cron`, `vector`) fail, and so does any migration that depends on a table made in the dashboard. A file that fails is rolled back whole, as `supabase db reset` runs each one, and counted. A repo is `clean` if every file applied, `partial` if some did, `none` if none did. Spot-check ten repos on a real local Supabase before trusting a number.
+
+## Pilot (10 repos, seed 1), what it taught about the harness
+
+This was to fix the harness, not a result: ten repos prove nothing about leak rates.
+
+- First run: no repo applied cleanly, because the stand-in lacked the service role, the `storage` schema and the search path. Adding them (`stub_extra.sql`) took it to 4 clean, 4 partial, 1 with nothing applied, 1 skipped as too large.
+- What still fails is mostly `relation does not exist`: migrations that build on tables made outside them. That is the main limit on "applied cleanly", and the full run should report it next to every rate.
+- A clone that times out, or a repo that breaks the harness, becomes a row and no longer stops the run.
+
+## Running it
+
+```sh
+cargo build
+python3 eval/leakstudy/study.py selftest            # no network
+python3 eval/leakstudy/study.py find --pages 3      # about 15 minutes; writes data/candidates.json
+python3 eval/leakstudy/study.py draw --n 10 --seed 1
+python3 eval/leakstudy/study.py run --seed 1        # resumable; one row per repo in data/results.jsonl
+python3 eval/leakstudy/study.py report
+```
+
+Details for the hand audit (which objects `check` flagged) stay in `data/findings/`, which is git-ignored.
