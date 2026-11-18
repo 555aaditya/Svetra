@@ -199,7 +199,10 @@ pub fn findings(snapshot: &Value) -> Vec<Finding> {
                 "INSERT" => always(&p["check"]),
                 _ => always(&p["using"]) && (p["check"].is_null() || always(&p["check"])),
             };
-        if anyone && open_write {
+        // An open INSERT lets people add rows, not change the ones that exist: often a sign-up
+        // or contact form, so it is a warning, and it is the only open write that is not critical.
+        let adds_only = cmd == "INSERT";
+        if anyone && open_write && !adds_only {
             out.push(Finding {
                 kind: "open_write",
                 severity: Severity::Critical,
@@ -207,7 +210,17 @@ pub fn findings(snapshot: &Value) -> Vec<Finding> {
                 fix: "Replace `true` with a condition on who owns the row, such as owner = auth.uid().".into(),
                 object: object.clone(),
             });
-        } else if signed_in && !anyone && open_write {
+        } else if anyone && open_write {
+            out.push(Finding {
+                kind: "open_insert",
+                severity: Severity::Warning,
+                message: format!(
+                    "Anyone on the internet can add rows to {object} (policy {name}). Fine for a sign-up or contact form; a problem otherwise."
+                ),
+                fix: "Limit it to signed-in people, or to the service role, if only your app should add rows.".into(),
+                object: object.clone(),
+            });
+        } else if signed_in && !anyone && open_write && !adds_only {
             out.push(Finding {
                 kind: "signed_in_write",
                 severity: Severity::Warning,
