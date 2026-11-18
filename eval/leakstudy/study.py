@@ -314,6 +314,51 @@ def run(args):
         stop_database()
 
 
+def selftest(args):
+    """The harness must find the planted leaks in a leaky app, nothing in a clean one, and report a
+    broken migration as partial. Local files only: no network, no GitHub."""
+    import shutil
+    import tempfile
+    svetra_bin = os.path.abspath(args.svetra)
+    root = tempfile.mkdtemp(prefix="leakstudy-selftest-")
+    fixture = os.path.join(HERE, "..", "..", "tests", "pg", "check", "leaky_app.sql")
+    clean = (
+        "create table public.notes (id uuid primary key, owner uuid not null, body text);\n"
+        "alter table public.notes enable row level security;\n"
+        "create policy own on public.notes for all to authenticated "
+        "using (owner = auth.uid()) with check (owner = auth.uid());\n"
+    )
+    apps = {
+        "leaky": [open(fixture).read()],
+        "clean": [clean],
+        "broken": [clean, "create table public.oops (", "select 1;\n"],
+    }
+    start_database()
+    try:
+        got = {}
+        for name, sqls in apps.items():
+            folder = os.path.join(root, name, "supabase", "migrations")
+            os.makedirs(folder)
+            for n, sql in enumerate(sqls):
+                with open(os.path.join(folder, f"{n:04d}_m.sql"), "w") as f:
+                    f.write(sql)
+            got[name] = study_repo("selftest/" + name, migration_files(os.path.join(root, name)), svetra_bin)
+            print(name, got[name]["status"], got[name].get("counts"))
+    finally:
+        stop_database()
+        shutil.rmtree(root, ignore_errors=True)
+    problems = []
+    if got["leaky"]["counts"]["critical"] != 3 or got["leaky"]["status"] != "clean":
+        problems.append("the leaky app should apply cleanly and give 3 critical findings")
+    if got["clean"]["counts"]["critical"] != 0 or got["clean"]["status"] != "clean":
+        problems.append("the clean app should apply cleanly and give no critical finding")
+    if got["broken"]["status"] != "partial" or got["broken"]["applied"] != 2:
+        problems.append("the broken migration should be partial, with the other two applied")
+    if problems:
+        sys.exit("selftest failed:\n  " + "\n  ".join(problems))
+    print("selftest passed")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -324,8 +369,10 @@ def main():
     r = sub.add_parser("run")
     r.add_argument("--seed", type=int, required=True)
     r.add_argument("--svetra", default="target/debug/svetra")
+    t = sub.add_parser("selftest")
+    t.add_argument("--svetra", default="target/debug/svetra")
     args = p.parse_args()
-    {"find": find, "draw": draw, "run": run}[args.cmd](args)
+    {"find": find, "draw": draw, "run": run, "selftest": selftest}[args.cmd](args)
 
 
 if __name__ == "__main__":
