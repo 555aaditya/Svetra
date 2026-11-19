@@ -118,6 +118,18 @@
         },
         {
             "schema": "public",
+            "table": "comments",
+            "name": "service_manages",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "public"
+            ],
+            "cmd": "ALL",
+            "using": "true",
+            "check": null
+        },
+        {
+            "schema": "public",
             "table": "notes",
             "name": "admins_read",
             "permissive": "PERMISSIVE",

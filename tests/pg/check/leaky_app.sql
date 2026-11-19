@@ -7,6 +7,7 @@ create policy public_read on public.posts for select using (true);              
 create table public.comments (id uuid primary key, post uuid, body text);
 alter table public.comments enable row level security;
 create policy anyone_edits on public.comments for all to anon using (true) with check (true); -- open_write
+create policy service_manages on public.comments for all using (true);                      -- open_write, meant for the service role
 create table public.notes (id uuid primary key, owner uuid, body text);
 alter table public.notes enable row level security;
 create policy notes_signed_in on public.notes for update to authenticated using (true);    -- signed_in_write
