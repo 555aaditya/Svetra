@@ -51,6 +51,31 @@ Each finding has a stable `kind`, a severity, the object, a message in plain Eng
 
 A table, view or function the API roles have no privileges on is never reported: it can't be reached.
 
+### A policy written for the service role
+
+In a hand audit of the policies `check` flagged in 300 public repos, more than half of the open writes were policies named for the backend ("Service role manages sessions", "System can update rate limits", "Service role has full access") with a condition of `true` and **no `to` clause**. A policy with no `to` applies to every role, so it is open to `anon`, not just to the backend. It is also never needed: the service role has `bypassrls`, so it skips row-level security whether or not a policy lets it in.
+
+This adds no new kind and changes no severity. `open_write`, `open_read` and `signed_in_write` fire exactly as before, from the roles and the condition. What changes is the **explanation and the fix**, when the policy's name suggests it was meant for the backend:
+
+- **When:** the finding comes from a permissive policy whose name, lower-cased, contains `service role`, `service_role`, `service`, `system` or `backend`, and whose roles do not include `service_role`.
+- **Message:** the usual sentence, then "The policy's name says it is for the service role, but it has no `to service_role`, so it applies to everyone."
+- **Fix:** "Delete the policy: the service role skips row-level security and doesn't need one. Or add `to service_role` to it." This replaces "Replace `true` with a condition on who owns the row".
+- **Why only the words, not the severity:** the finding is structural and stands without the name. The name only says what the author meant, which lets the fix be the right one. A policy with another name is reported as before, with the generic fix. A name match is never used to suppress a finding.
+- **A policy that does list `service_role` among its roles** is not given this wording, and is reported only if it also lists `anon`, `public` or `authenticated`, as before.
+
+Example:
+
+```
+critical  public.sessions
+          Anyone on the internet can change every row of public.sessions (policy Service role manages
+          sessions). The policy's name says it is for the service role, but it has no `to service_role`,
+          so it applies to everyone.
+          fix: delete the policy: the service role skips row-level security and doesn't need one,
+               or add `to service_role` to it.
+```
+
+**Tests when this is built:** a policy `service_manages` on `public.comments` for all, no `to`, `using (true)`, in `tests/pg/check/leaky_app.sql` and the snapshot fixture; the golden JSON shows the service-role wording; a unit test that a policy with the same condition and an unrelated name keeps the generic fix, and one that has `to service_role` is not reported at all.
+
 ## Output
 
 ```
