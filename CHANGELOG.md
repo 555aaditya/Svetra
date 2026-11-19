@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.8.1 (2026-11-20)
+
+Fewer false alarms from `svetra check`, found by auditing it on 300 public Supabase repos.
 
 - **`check` explains a policy written for the backend.** When an open policy's name says service role, system or backend and it has no `to service_role`, the finding now says so ("it applies to everyone") and the fix is to delete it, since the service role skips row-level security, or add `to service_role`. Kind and severity are unchanged. It was the most common real open write in the leak-study audit.
 - **`check` no longer calls an open insert a critical write.** A permissive `INSERT` policy for `anon` or `public` with a check of `true` lets people add rows, not change existing ones, and is often a sign-up or contact form. It is now a warning, `open_insert` ("Anyone on the internet can add rows to ..."). `open_write` (critical) is now only an open `UPDATE`, `DELETE` or `ALL`. An open insert for signed-in people is ordinary and no longer reported as `signed_in_write`. Found by hand-auditing 30 findings from a study of public Supabase repos: about half of the `open_write` criticals were insert-only.
