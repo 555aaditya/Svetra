@@ -366,8 +366,8 @@ def selftest(args):
         stop_database()
         shutil.rmtree(root, ignore_errors=True)
     problems = []
-    if got["leaky"]["counts"]["critical"] != 3 or got["leaky"]["status"] != "clean":
-        problems.append("the leaky app should apply cleanly and give 3 critical findings")
+    if got["leaky"]["counts"]["critical"] != 4 or got["leaky"]["status"] != "clean":
+        problems.append("the leaky app should apply cleanly and give 4 critical findings")
     if got["clean"]["counts"]["critical"] != 0 or got["clean"]["status"] != "clean":
         problems.append("the clean app should apply cleanly and give no critical finding")
     if got["broken"]["status"] != "partial" or got["broken"]["applied"] != 2:
