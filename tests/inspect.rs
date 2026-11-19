@@ -163,3 +163,49 @@ fn an_open_insert_is_a_warning_not_a_critical_write() {
     // An open insert for signed-in people is ordinary: nothing to report.
     assert!(findings(&policy(json!(["authenticated"]), "INSERT")).is_empty());
 }
+
+#[test]
+fn a_policy_named_for_the_backend_gets_the_service_role_wording() {
+    let policy = |name: &str, roles: Value| {
+        json!({ "tables": [], "views": [], "functions": [], "policies": [
+            { "schema": "public", "table": "sessions", "name": name, "permissive": "PERMISSIVE",
+              "roles": roles, "cmd": "ALL", "using": "true", "check": "true" }
+        ]})
+    };
+    // Same kind and severity either way; only the explanation and the fix change.
+    let f = findings(&policy("Service role manages sessions", json!(["public"])));
+    assert_eq!(
+        (f[0].kind, f[0].severity),
+        ("open_write", Severity::Critical)
+    );
+    assert!(
+        f[0].message.contains("no `to service_role`"),
+        "{}",
+        f[0].message
+    );
+    assert!(f[0].fix.starts_with("Delete the policy"), "{}", f[0].fix);
+    let g = findings(&policy("anyone_edits", json!(["public"])));
+    assert_eq!(
+        (g[0].kind, g[0].severity),
+        ("open_write", Severity::Critical)
+    );
+    assert!(!g[0].message.contains("service role"), "{}", g[0].message);
+    assert!(g[0].fix.starts_with("Replace `true`"), "{}", g[0].fix);
+    // Signed-in people: the same wording on the warning.
+    let h = findings(&policy("System can manage", json!(["authenticated"])));
+    assert_eq!(h[0].kind, "signed_in_write");
+    assert!(h[0].fix.starts_with("Delete the policy"));
+    // Listing service_role among the roles is not given the wording, and not reported alone.
+    assert!(
+        findings(&policy(
+            "Service role manages sessions",
+            json!(["service_role"])
+        ))
+        .is_empty()
+    );
+    let k = findings(&policy(
+        "Service role manages sessions",
+        json!(["service_role", "anon"]),
+    ));
+    assert!(!k[0].message.contains("no `to service_role`"));
+}
