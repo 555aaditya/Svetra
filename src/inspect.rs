@@ -191,6 +191,23 @@ pub fn findings(snapshot: &Value) -> Vec<Finding> {
         let anyone = rs.iter().any(|r| r == "anon" || r == "public");
         let signed_in = rs.iter().any(|r| r == "authenticated");
         let cmd = s(p, "cmd");
+        // A policy named for the backend, with no `to service_role`, applies to everyone. The
+        // service role skips row-level security anyway, so only the wording and the fix change.
+        let lower = name.to_lowercase();
+        let for_backend = ["service", "system", "backend"]
+            .iter()
+            .any(|w| lower.contains(w))
+            && !rs.iter().any(|r| r == "service_role");
+        let (backend_note, backend_fix) = if for_backend {
+            (
+                " The policy's name says it is for the service role, but it has no `to service_role`, so it applies to everyone.",
+                Some(
+                    "Delete the policy: the service role skips row-level security and doesn't need one, or add `to service_role` to it.",
+                ),
+            )
+        } else {
+            ("", None)
+        };
         let reads = matches!(cmd, "SELECT" | "ALL");
         let writes = matches!(cmd, "INSERT" | "UPDATE" | "DELETE" | "ALL");
         // The condition that decides: `using` for reads, updates and deletes; `check` for inserts.
@@ -206,8 +223,8 @@ pub fn findings(snapshot: &Value) -> Vec<Finding> {
             out.push(Finding {
                 kind: "open_write",
                 severity: Severity::Critical,
-                message: format!("Anyone on the internet can change every row of {object} (policy {name})."),
-                fix: "Replace `true` with a condition on who owns the row, such as owner = auth.uid().".into(),
+                message: format!("Anyone on the internet can change every row of {object} (policy {name}).{backend_note}"),
+                fix: backend_fix.unwrap_or("Replace `true` with a condition on who owns the row, such as owner = auth.uid().").into(),
                 object: object.clone(),
             });
         } else if anyone && open_write {
@@ -225,9 +242,9 @@ pub fn findings(snapshot: &Value) -> Vec<Finding> {
                 kind: "signed_in_write",
                 severity: Severity::Warning,
                 message: format!(
-                    "Every signed-in person can change every row of {object} (policy {name})."
+                    "Every signed-in person can change every row of {object} (policy {name}).{backend_note}"
                 ),
-                fix: "Limit it to the row's owner or a role, such as owner = auth.uid().".into(),
+                fix: backend_fix.unwrap_or("Limit it to the row's owner or a role, such as owner = auth.uid().").into(),
                 object: object.clone(),
             });
         }
@@ -235,8 +252,8 @@ pub fn findings(snapshot: &Value) -> Vec<Finding> {
             out.push(Finding {
                 kind: "open_read",
                 severity: Severity::Warning,
-                message: format!("Anyone on the internet can read every row of {object} (policy {name}). Fine for public data; a leak otherwise."),
-                fix: "If the rows aren't public, replace `true` with a condition on who may see them.".into(),
+                message: format!("Anyone on the internet can read every row of {object} (policy {name}). Fine for public data; a leak otherwise.{backend_note}"),
+                fix: backend_fix.unwrap_or("If the rows aren't public, replace `true` with a condition on who may see them.").into(),
                 object: object.clone(),
             });
         }
