@@ -383,3 +383,58 @@ pub fn redact(url: &str) -> String {
         None => url.into(),
     }
 }
+
+/// The `svetra check --migrations` report (docs/check.md): the usual findings, one line about how
+/// much of the migrations could be read, and the ones that couldn't.
+pub fn human_migrations(
+    findings: &[Finding],
+    schemas: &[String],
+    o: &crate::migrations::Outcome,
+) -> String {
+    let plural = |n: usize| format!("{n} migration{}", if n == 1 { "" } else { "s" });
+    let mut out = if o.applied == 0 {
+        if o.files == 1 {
+            "svetra check: the migration could not be applied, so nothing was checked.\n"
+                .to_string()
+        } else {
+            format!(
+                "svetra check: none of the {} migrations could be applied, so nothing was checked.\n",
+                o.files
+            )
+        }
+    } else {
+        human(
+            findings,
+            schemas,
+            &format!("{}, {} applied", plural(o.files), o.applied),
+        )
+    };
+    if !o.failed.is_empty() {
+        let width = o.failed.iter().map(|(f, _)| f.len()).max().unwrap_or(0);
+        out += &format!(
+            "\n{} could not be applied{}:\n",
+            plural(o.failed.len()),
+            if o.applied == 0 {
+                ""
+            } else {
+                ", so the findings above may be incomplete"
+            }
+        );
+        for (file, error) in &o.failed {
+            out += &format!("  {file:<width$}  {error}\n");
+        }
+    }
+    out += "\nThis reads your migrations, not your live database. A table fixed in the dashboard, or made\noutside the migrations, isn't seen.\n";
+    out
+}
+
+/// `--json` for `--migrations`: the usual document plus what the migrations did.
+pub fn json_migrations(findings: &[Finding], o: &crate::migrations::Outcome) -> Value {
+    let mut v = json(findings);
+    v["migrations"] = json!({
+        "files": o.files,
+        "applied": o.applied,
+        "failed": o.failed.iter().map(|(f, e)| json!({ "file": f, "error": e })).collect::<Vec<_>>(),
+    });
+    v
+}
