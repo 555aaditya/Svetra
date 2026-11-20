@@ -6,4 +6,4 @@ not ok 59 - admin without a second factor can't delete Visit a
 not ok 60 - admin without a second factor can't delete Visit b
 not ok 63 - admin without a second factor can't set the patient of Visit a to themselves
 not ok 64 - admin without a second factor can't set the patient of Visit b to themselves
-# Looks like you failed 8 tests of 64
+# Looks like you failed 8 tests of 74
