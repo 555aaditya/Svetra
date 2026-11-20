@@ -105,6 +105,7 @@ export const roadmap = [
   { when: "Nov 16", what: "svetra check: find the tables anyone can read, open policies, and views that skip row-level security in an app you already have, in v0.7.0", done: true },
   { when: "Nov 18", what: "A policy says what an update turns a row into (check), and restrictive policies narrow others; an agent that needed four hand-written functions now needs none, in v0.8.0", done: true },
   { when: "Nov 20", what: "svetra check separates a contact form that anyone may add to from a table anyone may change, and explains policies written for the backend, after an audit on 300 public repos, in v0.8.1", done: true },
+  { when: "Nov 21", what: "The generated tests try an owner who also holds a role, and an owner and a reference changed together: a gap the mutation study had misjudged, found with a Z3 model of the policies, now caught on a real Supabase, in v0.8.2", done: true },
   { when: "Next", what: "A recorded design conversation · svetra view: an interactive map of who can see what", done: false },
   { when: "Early 2027", what: "Measured: tokens and safety with and without Svetra · how many broken rules the access tests catch", done: false },
   { when: "Later", what: "Existing apps: svetra infer and svetra check · safe changes with svetra plan", done: false },
