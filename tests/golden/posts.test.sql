@@ -3,12 +3,15 @@
 begin;
 create extension if not exists pgtap;
 -- Run one statement as one person, then undo it. Returns allowed, denied or the error.
+-- p_before, if given, is run first as the database owner (to give a person an extra role).
 create schema svetra_test;
-create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
+create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1', p_before text default null) returns text
 language plpgsql as $$
 declare n bigint;
 begin
   begin
+    -- p_before runs as the database owner, then is undone with the statement.
+    if p_before is not null then execute p_before; end if;
     perform set_config('role', p_role, true);
     perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
     perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
