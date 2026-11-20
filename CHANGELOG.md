@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **The generated access tests also try an owner who holds a role, and owner and reference changed together.** A Z3 model of the bookings policies found four mutants the study had wrongly judged harmless: with two update policies on one table, loosening one lets the other's people through, because PostgreSQL ORs the update policies' `with check` conditions independently. The tests missed them for two reasons: no person was both an owner and a role holder, and no update changed a `user` field and a `ref` field at once. Now `alice who is also <role>` (the role is granted by the database owner just before each of her checks and undone with it, so it never changes any other check) and one update per person and row that takes a row over and moves it. Only apps with a `user` field and roles get the new person. Bookings goes from 124 to 178 checks. The other examples with roles grow similarly, and an app without roles only changes the helper's signature.
+
 ## 0.8.1 (2026-11-20)
 
 Fewer false alarms from `svetra check`, found by auditing it on 300 public Supabase repos.
