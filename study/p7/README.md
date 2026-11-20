@@ -13,6 +13,10 @@ The Supabase rounds use the 0.4.0 and 0.4.1 sources with only the 0.4.2 revocati
 
 `classify.py` sorts each surviving mutant into equivalent, masked, out of scope or real, with the reason; `classification.md` is its output for both rounds.
 
+`z3/` holds a Z3 model of the bookings policies that checked the classification, and a script that confirms its findings on PostgreSQL 16 (`z3/README.md`). `operators-and-real-faults.md` compares the 23 operators with faults found in the leak study (`eval/leakstudy`).
+
+**A correction.** The first classification judged four bookings survivors masked or equivalent. The Z3 model disagreed, and each was confirmed real on PostgreSQL 16: bookings has two update policies, and loosening one lets the other's people through. `classify.py` and `classification.md` here are the corrected ones: round 1 has 13 real gaps and round 2 has 4, not 9 and 0.
+
 ## Reproduce
 
 From a checkout of each tag (`v0.4.0` for round one, `v0.4.1` for round two), after `cargo build`:
