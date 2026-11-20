@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.8.2 (2026-11-21)
+
+The generated access tests now catch a class of gap the mutation study had missed, and the study data is corrected.
 
 - **The generated access tests also try an owner who holds a role, and owner and reference changed together.** A Z3 model of the bookings policies found four mutants the study had wrongly judged harmless: with two update policies on one table, loosening one lets the other's people through, because PostgreSQL ORs the update policies' `with check` conditions independently. The tests missed them for two reasons: no person was both an owner and a role holder, and no update changed a `user` field and a `ref` field at once. Now `alice who is also <role>` (the role is granted by the database owner just before each of her checks and undone with it, so it never changes any other check) and one update per person and row that takes a row over and moves it. Only apps with a `user` field and roles get the new person. Bookings goes from 124 to 178 checks. The other examples with roles grow similarly, and an app without roles only changes the helper's signature.
+- **The P7 study data is corrected and extended** (`study/p7`). A Z3 model of the bookings policies disagreed with the study's classification of four survivors, and each was confirmed on PostgreSQL 16 to be a real gap: with two update policies on one table, loosening one lets the other's people through. Round 1 has 13 real gaps, not 9; round 2 has 4, not 0. Round 3 (this release's generator), on the stand-in and on a real Supabase with identical results, catches 147 of 147 mutants that change access. The Z3 model, its PostgreSQL check and a comparison of the 23 operators with faults found in public repos are in `study/p7`.
 
 ## 0.8.1 (2026-11-20)
 
