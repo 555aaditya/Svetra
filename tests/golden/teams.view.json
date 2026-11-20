@@ -190,8 +190,8 @@
         "People with the member role for a task's team can see that task."
       ],
       "tests": [
-        57,
-        58
+        73,
+        74
       ]
     },
     {
@@ -216,8 +216,8 @@
         "Signed-in people can create a task when they have the member role for its team and its author is them."
       ],
       "tests": [
-        63,
-        64
+        79,
+        80
       ]
     },
     {
@@ -242,8 +242,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        59,
-        60
+        75,
+        76
       ]
     },
     {
@@ -268,8 +268,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        61,
-        62
+        77,
+        78
       ]
     },
     {
@@ -403,8 +403,8 @@
         "People with the member role for a task's team can see that task."
       ],
       "tests": [
-        65,
-        66
+        81,
+        82
       ]
     },
     {
@@ -429,8 +429,8 @@
         "Signed-in people can create a task when they have the member role for its team and its author is them."
       ],
       "tests": [
-        71,
-        72
+        87,
+        88
       ]
     },
     {
@@ -455,8 +455,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        67,
-        68
+        83,
+        84
       ]
     },
     {
@@ -481,8 +481,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        69,
-        70
+        85,
+        86
       ]
     },
     {
@@ -616,8 +616,8 @@
         "People with the member role for a task's team can see that task."
       ],
       "tests": [
-        77,
-        78
+        95,
+        96
       ]
     },
     {
@@ -642,8 +642,8 @@
         "Signed-in people can create a task when they have the member role for its team and its author is them."
       ],
       "tests": [
-        83,
-        84
+        101,
+        102
       ]
     },
     {
@@ -668,8 +668,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        79,
-        80
+        97,
+        98
       ]
     },
     {
@@ -694,8 +694,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        81,
-        82
+        99,
+        100
       ]
     },
     {
@@ -829,8 +829,8 @@
         "People with the member role for a task's team can see that task."
       ],
       "tests": [
-        89,
-        90
+        109,
+        110
       ]
     },
     {
@@ -855,8 +855,8 @@
         "Signed-in people can create a task when they have the member role for its team and its author is them."
       ],
       "tests": [
-        95,
-        96
+        115,
+        116
       ]
     },
     {
@@ -881,8 +881,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        91,
-        92
+        111,
+        112
       ]
     },
     {
@@ -907,8 +907,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        93,
-        94
+        113,
+        114
       ]
     },
     {
@@ -1042,8 +1042,8 @@
         "People with the member role for a task's team can see that task."
       ],
       "tests": [
-        101,
-        102
+        123,
+        124
       ]
     },
     {
@@ -1068,8 +1068,8 @@
         "Signed-in people can create a task when they have the member role for its team and its author is them."
       ],
       "tests": [
-        107,
-        108
+        129,
+        130
       ]
     },
     {
@@ -1094,8 +1094,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        103,
-        104
+        125,
+        126
       ]
     },
     {
@@ -1120,8 +1120,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        105,
-        106
+        127,
+        128
       ]
     },
     {
@@ -1255,8 +1255,8 @@
         "People with the member role for a task's team can see that task."
       ],
       "tests": [
-        113,
-        114
+        137,
+        138
       ]
     },
     {
@@ -1281,8 +1281,8 @@
         "Signed-in people can create a task when they have the member role for its team and its author is them."
       ],
       "tests": [
-        119,
-        120
+        143,
+        144
       ]
     },
     {
@@ -1307,8 +1307,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        115,
-        116
+        139,
+        140
       ]
     },
     {
@@ -1333,8 +1333,8 @@
         "Signed-in people can change and delete a task when its author is them and they have the member role for its team."
       ],
       "tests": [
-        117,
-        118
+        141,
+        142
       ]
     }
   ],
@@ -1353,48 +1353,48 @@
           "person": "anon",
           "access": "none",
           "tests": [
-            134,
-            135
+            188,
+            189
           ]
         },
         {
           "person": "alice",
           "access": "all",
           "tests": [
-            136,
-            137
+            190,
+            191
           ]
         },
         {
           "person": "bob",
           "access": "all",
           "tests": [
-            138,
-            139
+            192,
+            193
           ]
         },
         {
           "person": "carol",
           "access": "all",
           "tests": [
-            140,
-            141
+            194,
+            195
           ]
         },
         {
           "person": "admin",
           "access": "all",
           "tests": [
-            142,
-            143
+            196,
+            197
           ]
         },
         {
           "person": "member at Team a",
           "access": "all",
           "tests": [
-            144,
-            145
+            198,
+            199
           ]
         }
       ]
@@ -1413,48 +1413,48 @@
           "person": "anon",
           "access": "none",
           "tests": [
-            155,
-            156
+            209,
+            210
           ]
         },
         {
           "person": "alice",
           "access": "none",
           "tests": [
-            157,
-            158
+            211,
+            212
           ]
         },
         {
           "person": "bob",
           "access": "none",
           "tests": [
-            159,
-            160
+            213,
+            214
           ]
         },
         {
           "person": "carol",
           "access": "none",
           "tests": [
-            161,
-            162
+            215,
+            216
           ]
         },
         {
           "person": "admin",
           "access": "none",
           "tests": [
-            163,
-            164
+            217,
+            218
           ]
         },
         {
           "person": "member at Team a",
           "access": "some",
           "tests": [
-            165,
-            166
+            219,
+            220
           ]
         }
       ]
