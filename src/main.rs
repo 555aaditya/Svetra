@@ -17,6 +17,7 @@ Usage:
                                     wider access until they're accepted, then writes the
                                     migration for any declared renames
   svetra check (--db URL | --local | --snapshot FILE) [--schema public,...] [--json]
+  svetra check --migrations [DIR] [--scratch URL] [--strict] [--schema public,...] [--json]
                                     Find the leaks in an existing database: tables anyone can
                                     read, open policies, views and functions that skip
                                     row-level security. --print-query prints the read-only
@@ -308,21 +309,32 @@ fn page(args: &[String]) -> ExitCode {
 /// `svetra check` (docs/check.md): find the leaks in an existing database.
 fn inspect(args: &[String]) -> ExitCode {
     let (mut db, mut snapshot, mut json, mut print) = (None, None, false, false);
+    let (mut migrations, mut scratch, mut strict): (Option<String>, Option<String>, bool) =
+        (None, None, false);
     let mut schemas = vec!["public".to_string()];
-    let mut it = args.iter();
+    let mut it = args.iter().peekable();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--json" => json = true,
+            "--strict" => strict = true,
+            "--migrations" => {
+                let dir = match it.peek() {
+                    Some(v) if !v.starts_with("--") => it.next().cloned().unwrap_or_default(),
+                    _ => "supabase/migrations".to_string(),
+                };
+                migrations = Some(dir);
+            }
             "--print-query" => print = true,
             "--local" => {
                 db = Some("postgresql://postgres:postgres@127.0.0.1:54322/postgres".to_string())
             }
-            "--db" | "--snapshot" | "--schema" => {
+            "--db" | "--snapshot" | "--schema" | "--scratch" => {
                 let Some(v) = it.next() else {
                     return usage(&format!("{a} needs a value"));
                 };
                 match a.as_str() {
                     "--db" => db = Some(v.clone()),
+                    "--scratch" => scratch = Some(v.clone()),
                     "--snapshot" => snapshot = Some(v.clone()),
                     _ => {
                         schemas = v
@@ -336,7 +348,18 @@ fn inspect(args: &[String]) -> ExitCode {
             other => return usage(&format!("unknown argument '{other}' for check")),
         }
     }
+    if migrations.is_none() && (scratch.is_some() || strict) {
+        return usage("--scratch and --strict go with --migrations");
+    }
+    if migrations.is_some() && (db.is_some() || snapshot.is_some() || print) {
+        return usage(
+            "--migrations can't be combined with --db, --local, --snapshot or --print-query",
+        );
+    }
     let query = svetra::inspect::query(&schemas);
+    if let Some(dir) = migrations {
+        return check_migrations(&dir, scratch.as_deref(), strict, &schemas, &query, json);
+    }
     if print {
         println!("{query};");
         return ExitCode::SUCCESS;
@@ -405,6 +428,63 @@ fn inspect(args: &[String]) -> ExitCode {
         .any(|f| f.severity == svetra::inspect::Severity::Critical)
     {
         ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+/// `svetra check --migrations` (docs/check.md, "Checking migrations").
+fn check_migrations(
+    dir: &str,
+    scratch: Option<&str>,
+    strict: bool,
+    schemas: &[String],
+    query: &str,
+    json: bool,
+) -> ExitCode {
+    let path = std::path::Path::new(dir);
+    let outcome = match scratch {
+        Some(url) => svetra::migrations::run_scratch(path, url, schemas, query),
+        None => svetra::migrations::run_docker(path, query),
+    };
+    let o = match outcome {
+        Ok(o) => o,
+        Err(svetra::migrations::Fail(message)) => {
+            eprintln!("svetra: {message}");
+            return ExitCode::from(2);
+        }
+    };
+    let found = if o.applied == 0 {
+        Vec::new()
+    } else {
+        match serde_json::from_str::<serde_json::Value>(o.snapshot.trim()) {
+            Ok(snap) => svetra::inspect::findings(&snap),
+            Err(e) => {
+                eprintln!(
+                    "svetra: the throwaway database returned something that isn't the check's JSON ({e})."
+                );
+                return ExitCode::from(2);
+            }
+        }
+    };
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&svetra::inspect::json_migrations(&found, &o))
+                .unwrap_or_default()
+        );
+    } else {
+        print!("{}", svetra::inspect::human_migrations(&found, schemas, &o));
+    }
+    // A critical finding is the answer people act on; failing to read everything is exit 2 only
+    // when asked (--strict), or when nothing could be read at all.
+    if found
+        .iter()
+        .any(|f| f.severity == svetra::inspect::Severity::Critical)
+    {
+        ExitCode::from(1)
+    } else if o.applied == 0 || (strict && !o.failed.is_empty()) {
+        ExitCode::from(2)
     } else {
         ExitCode::SUCCESS
     }
