@@ -172,12 +172,12 @@ def start_database(image="postgres:16"):
         if sh(["docker", "exec", CONTAINER, "pg_isready", "-U", "postgres"]).returncode == 0:
             break
         time.sleep(1)
-    stub = open(os.path.join(HERE, "..", "..", "tests", "pg", "supabase_stub.sql")).read()
+    stub = open(os.path.join(HERE, "..", "..", "src", "standin", "base.sql")).read()
     docker_psql("postgres", ["-c", "create database tpl"])
     r = docker_psql("tpl", ["-v", "ON_ERROR_STOP=1"], stdin=stub)
     if r.returncode:
         sys.exit("could not load the Supabase stand-in: " + r.stderr)
-    extra = open(os.path.join(HERE, "stub_extra.sql")).read()
+    extra = open(os.path.join(HERE, "..", "..", "src", "standin", "extra.sql")).read()
     r = docker_psql("tpl", ["-v", "ON_ERROR_STOP=1"], stdin=extra)
     if r.returncode:
         sys.exit("could not load the extra Supabase pieces: " + r.stderr)

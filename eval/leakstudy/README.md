@@ -26,7 +26,7 @@ Applied rate; leak rate (applied repos with at least one critical finding); find
 
 ## The Supabase stand-in, and what it can't do
 
-Migrations assume Supabase. The database starts from `tests/pg/supabase_stub.sql` plus `stub_extra.sql` (the service role, the `extensions` and `storage` schemas, `auth.role()`, the realtime publication, Supabase's search path). It is not Supabase: extensions that the stock PostgreSQL image lacks (`pg_net`, `pg_cron`, `vector`) fail, and so does any migration that depends on a table made in the dashboard. A file that fails is rolled back whole, as `supabase db reset` runs each one, and counted. A repo is `clean` if every file applied, `partial` if some did, `none` if none did. Spot-check ten repos on a real local Supabase before trusting a number.
+Migrations assume Supabase. The database starts from `src/standin/base.sql` plus `src/standin/extra.sql` (the service role, the `extensions` and `storage` schemas, `auth.role()`, the realtime publication, Supabase's search path). It is not Supabase: extensions that the stock PostgreSQL image lacks (`pg_net`, `pg_cron`, `vector`) fail, and so does any migration that depends on a table made in the dashboard. A file that fails is rolled back whole, as `supabase db reset` runs each one, and counted. A repo is `clean` if every file applied, `partial` if some did, `none` if none did. Spot-check ten repos on a real local Supabase before trusting a number.
 
 ## Results (run 2026-11-18, 300 random public repos, `svetra` 0.8.0 plus #79)
 
@@ -50,7 +50,7 @@ What this is not: a rate of leaking apps. These are migrations, not live databas
 
 This was to fix the harness, not a result: ten repos prove nothing about leak rates.
 
-- First run: no repo applied cleanly, because the stand-in lacked the service role, the `storage` schema and the search path. Adding them (`stub_extra.sql`) took it to 4 clean, 4 partial, 1 with nothing applied, 1 skipped as too large.
+- First run: no repo applied cleanly, because the stand-in lacked the service role, the `storage` schema and the search path. Adding them (`src/standin/extra.sql`) took it to 4 clean, 4 partial, 1 with nothing applied, 1 skipped as too large.
 - What still fails is mostly `relation does not exist`: migrations that build on tables made outside them. That is the main limit on "applied cleanly", and the full run should report it next to every rate.
 - A clone that times out, or a repo that breaks the harness, becomes a row and no longer stops the run.
 

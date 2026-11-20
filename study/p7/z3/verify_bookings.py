@@ -32,7 +32,7 @@ while ok < 3:   # the image restarts the server once after its first start; wait
     ok = ok + 1 if sh("docker", "exec", NAME, "psql", "-U", "postgres", "-Atc", "select 1").returncode == 0 else 0
     time.sleep(1)
 psql("create database spike", "postgres")
-psql(open(os.path.join(a.repo, "tests/pg/supabase_stub.sql")).read()); psql(schema)
+psql(open(os.path.join(a.repo, "src/standin/base.sql")).read()); psql(schema)
 A, B, C = ("10000000-0000-0000-0000-00000000000a", "10000000-0000-0000-0000-00000000000b", "20000000-0000-0000-0000-000000000001")
 U1, U2 = "00000000-0000-0000-0000-00000000000b", "00000000-0000-0000-0000-00000000000c"   # staff at A; customer and staff at B
 psql(f"""insert into auth.users(id) values ('{U1}'),('{U2}'),('00000000-0000-0000-0000-00000000000a');

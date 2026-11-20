@@ -1,6 +1,6 @@
--- More of Supabase than tests/pg/supabase_stub.sql has, because real migrations assume it: the
+-- More of Supabase than src/standin/base.sql has, because real migrations assume it: the
 -- service role, the extensions and storage schemas, auth.role(), the realtime publication.
--- Applied after the base stand-in, into the template database. Not the real thing: extensions
+-- Applied after the base stand-in, after the base. Not the real thing: extensions
 -- that don't ship with the stock PostgreSQL image (pg_net, pg_cron, vector) still fail, and the
 -- harness counts those migrations as failed.
 create role service_role nologin bypassrls;
@@ -15,7 +15,7 @@ grant usage on schema extensions to anon, authenticated, service_role;
 create extension if not exists "uuid-ossp" schema extensions;
 create extension if not exists pgcrypto schema extensions;
 -- Supabase's default search path, so unqualified uuid_generate_v4() and friends resolve.
-alter database tpl set search_path = "$user", public, extensions;
+do $$ begin execute format('alter database %I set search_path = "$user", public, extensions', current_database()); end $$;
 
 grant usage on schema public, auth to service_role;
 grant all on all tables in schema public to service_role;

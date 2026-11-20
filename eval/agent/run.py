@@ -81,7 +81,7 @@ def ensure_postgres():
         time.sleep(1)
     # The template is rebuilt whenever the stub changes, so old containers don't go stale.
     import hashlib
-    stub = open(os.path.join(REPO, "tests", "pg", "supabase_stub.sql")).read()
+    stub = open(os.path.join(REPO, "src", "standin", "base.sql")).read()
     tag = hashlib.md5(stub.encode()).hexdigest()[:10]
     have = psql("postgres", f"select shobj_description(oid, 'pg_database') from pg_database where datname = '{TEMPLATE}'").stdout.strip()
     if have != tag:
