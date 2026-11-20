@@ -6,6 +6,7 @@ pub mod expr;
 pub mod inspect;
 pub mod load;
 pub mod mcp;
+pub mod migrations;
 pub mod model;
 pub mod project;
 pub mod report;
