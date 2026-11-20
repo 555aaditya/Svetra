@@ -38,6 +38,15 @@ def classify(r):
     # lets anyone reach a post, and setting its author to themselves passes WITH CHECK.
     if op in ("policy-check-true", "policy-using-true") and app == "posts":
         return "real", "a person can take a post over or give it away by changing its author"
+    # bookings has two update policies on one table (staff and admins). PostgreSQL combines their
+    # USING conditions with OR and their WITH CHECK conditions with OR, independently, so loosening
+    # one policy's condition lets the other policy's person through. Verified on PostgreSQL 16
+    # (data/z3/README.md): each of these four is allowed in a scenario the original refuses.
+    if app == "bookings" and op == "policy-using-true" and t in ("booking.admins_manage_all_update", "booking.staff_manage_local_update"):
+        return "real", "a customer who is also staff at another location can move their own booking there: the staff rule's WITH CHECK passes and the select rule shows the row"
+    if app == "bookings" and op == "policy-check-true" and t in ("booking.admins_manage_all_update", "booking.staff_manage_local_update"):
+        return "real", "staff at one location can take a booking: move it elsewhere and make themselves its customer, because the loosened WITH CHECK replaces the staff rule's"
+    # Only where a table has a single update policy do the next two rules hold.
     if op == "policy-using-true" and t.endswith("_update"):
         return "masked", "WITH CHECK is the same rule and still rejects the updated row"
     if op == "policy-check-true" and "admin" in t:
