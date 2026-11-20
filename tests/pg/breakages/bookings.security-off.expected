@@ -1,52 +1,70 @@
-not ok 57 - anon can't see Booking a
-not ok 58 - anon can't see Booking b
-not ok 59 - anon can't change Booking a
-not ok 60 - anon can't change Booking b
-not ok 61 - anon can't delete Booking a
-not ok 62 - anon can't delete Booking b
-not ok 63 - anon can't create Booking c
-not ok 64 - anon can't create Booking d
-not ok 66 - alice can't see Booking b
-not ok 67 - alice can't change Booking a
-not ok 68 - alice can't change Booking b
-not ok 69 - alice can't delete Booking a
-not ok 70 - alice can't delete Booking b
-not ok 72 - alice can't create Booking d
-not ok 73 - alice can't set the customer of Booking a to bob
-not ok 74 - alice can't point the location of Booking a at Location b
-not ok 75 - alice can't set the customer of Booking b to themselves
-not ok 76 - alice can't point the location of Booking b at Location a
-not ok 77 - bob can't see Booking a
-not ok 79 - bob can't change Booking a
-not ok 80 - bob can't change Booking b
-not ok 81 - bob can't delete Booking a
-not ok 82 - bob can't delete Booking b
-not ok 83 - bob can't create Booking c
-not ok 85 - bob can't set the customer of Booking a to themselves
-not ok 86 - bob can't point the location of Booking a at Location b
-not ok 87 - bob can't set the customer of Booking b to alice
-not ok 88 - bob can't point the location of Booking b at Location a
-not ok 89 - carol can't see Booking a
-not ok 90 - carol can't see Booking b
-not ok 91 - carol can't change Booking a
-not ok 92 - carol can't change Booking b
-not ok 93 - carol can't delete Booking a
-not ok 94 - carol can't delete Booking b
-not ok 95 - carol can't create Booking c
-not ok 96 - carol can't create Booking d
-not ok 97 - carol can't set the customer of Booking a to themselves
-not ok 98 - carol can't point the location of Booking a at Location b
-not ok 99 - carol can't set the customer of Booking b to themselves
-not ok 100 - carol can't point the location of Booking b at Location a
-not ok 107 - admin can't create Booking c
-not ok 108 - admin can't create Booking d
-not ok 114 - staff at Location a can't see Booking b
-not ok 116 - staff at Location a can't change Booking b
-not ok 117 - staff at Location a can't delete Booking a
-not ok 118 - staff at Location a can't delete Booking b
-not ok 119 - staff at Location a can't create Booking c
-not ok 120 - staff at Location a can't create Booking d
-not ok 122 - staff at Location a can't point the location of Booking a at Location b
-not ok 123 - staff at Location a can't set the customer of Booking b to themselves
-not ok 124 - staff at Location a can't point the location of Booking b at Location a
-# Looks like you failed 51 tests of 124
+not ok 73 - anon can't see Booking a
+not ok 74 - anon can't see Booking b
+not ok 75 - anon can't change Booking a
+not ok 76 - anon can't change Booking b
+not ok 77 - anon can't delete Booking a
+not ok 78 - anon can't delete Booking b
+not ok 79 - anon can't create Booking c
+not ok 80 - anon can't create Booking d
+not ok 82 - alice can't see Booking b
+not ok 83 - alice can't change Booking a
+not ok 84 - alice can't change Booking b
+not ok 85 - alice can't delete Booking a
+not ok 86 - alice can't delete Booking b
+not ok 88 - alice can't create Booking d
+not ok 89 - alice can't set the customer of Booking a to bob
+not ok 90 - alice can't point the location of Booking a at Location b
+not ok 91 - alice can't set the customer of Booking b to themselves
+not ok 92 - alice can't point the location of Booking b at Location a
+not ok 93 - alice can't change the customer and the location of Booking a together (point it at Location b)
+not ok 94 - alice can't change the customer and the location of Booking b together (point it at Location a)
+not ok 95 - bob can't see Booking a
+not ok 97 - bob can't change Booking a
+not ok 98 - bob can't change Booking b
+not ok 99 - bob can't delete Booking a
+not ok 100 - bob can't delete Booking b
+not ok 101 - bob can't create Booking c
+not ok 103 - bob can't set the customer of Booking a to themselves
+not ok 104 - bob can't point the location of Booking a at Location b
+not ok 105 - bob can't set the customer of Booking b to alice
+not ok 106 - bob can't point the location of Booking b at Location a
+not ok 107 - bob can't change the customer and the location of Booking a together (point it at Location b)
+not ok 108 - bob can't change the customer and the location of Booking b together (point it at Location a)
+not ok 109 - carol can't see Booking a
+not ok 110 - carol can't see Booking b
+not ok 111 - carol can't change Booking a
+not ok 112 - carol can't change Booking b
+not ok 113 - carol can't delete Booking a
+not ok 114 - carol can't delete Booking b
+not ok 115 - carol can't create Booking c
+not ok 116 - carol can't create Booking d
+not ok 117 - carol can't set the customer of Booking a to themselves
+not ok 118 - carol can't point the location of Booking a at Location b
+not ok 119 - carol can't set the customer of Booking b to themselves
+not ok 120 - carol can't point the location of Booking b at Location a
+not ok 121 - carol can't change the customer and the location of Booking a together (point it at Location b)
+not ok 122 - carol can't change the customer and the location of Booking b together (point it at Location a)
+not ok 129 - admin can't create Booking c
+not ok 130 - admin can't create Booking d
+not ok 138 - staff at Location a can't see Booking b
+not ok 140 - staff at Location a can't change Booking b
+not ok 141 - staff at Location a can't delete Booking a
+not ok 142 - staff at Location a can't delete Booking b
+not ok 143 - staff at Location a can't create Booking c
+not ok 144 - staff at Location a can't create Booking d
+not ok 146 - staff at Location a can't point the location of Booking a at Location b
+not ok 147 - staff at Location a can't set the customer of Booking b to themselves
+not ok 148 - staff at Location a can't point the location of Booking b at Location a
+not ok 149 - staff at Location a can't change the customer and the location of Booking a together (point it at Location b)
+not ok 150 - staff at Location a can't change the customer and the location of Booking b together (point it at Location a)
+not ok 158 - alice who is also admin can't create Booking d
+not ok 167 - alice who is also staff at Location b can't change Booking a
+not ok 169 - alice who is also staff at Location b can't delete Booking a
+not ok 170 - alice who is also staff at Location b can't delete Booking b
+not ok 172 - alice who is also staff at Location b can't create Booking d
+not ok 173 - alice who is also staff at Location b can't set the customer of Booking a to bob
+not ok 174 - alice who is also staff at Location b can't point the location of Booking a at Location b
+not ok 176 - alice who is also staff at Location b can't point the location of Booking b at Location a
+not ok 177 - alice who is also staff at Location b can't change the customer and the location of Booking a together (point it at Location b)
+not ok 178 - alice who is also staff at Location b can't change the customer and the location of Booking b together (point it at Location a)
+# Looks like you failed 69 tests of 178
