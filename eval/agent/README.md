@@ -8,7 +8,7 @@ For each (prompt, condition, run):
 
 1. Makes a fresh folder and runs headless Claude Code (`claude -p`) on a one-paragraph product request.
 2. Takes the database schema the agent produced (`supabase/migrations/`, or Svetra's generated `supabase/schemas/` when the agent used Svetra).
-3. Applies it to a real PostgreSQL 16 with the Supabase stand-in (`tests/pg/supabase_stub.sql`), inserts the oracle's test rows, and runs every check in `oracle/<prompt>.json` as real database roles (`anon`, `authenticated`, with the person's id in the claims), never the superuser. Each check is allowed or denied, and is compared with what the prompt's wording requires.
+3. Applies it to a real PostgreSQL 16 with the Supabase stand-in (`src/standin/base.sql`), inserts the oracle's test rows, and runs every check in `oracle/<prompt>.json` as real database roles (`anon`, `authenticated`, with the person's id in the claims), never the superuser. Each check is allowed or denied, and is compared with what the prompt's wording requires.
 4. Runs `svetra check` on the result for leaks nobody asked about.
 
 A run that fails for an outside reason (a usage limit, a timeout) is marked **invalid** and left out, never scored as a zero.

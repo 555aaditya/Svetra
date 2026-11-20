@@ -1,5 +1,5 @@
 -- A small app with one of each leak `svetra check` looks for (docs/check.md), as an AI app
--- builder might write it. Applied after tests/pg/supabase_stub.sql.
+-- builder might write it. Applied after src/standin/base.sql.
 create table public.orders (id uuid primary key, customer uuid, total numeric);             -- rls_off
 create table public.posts (id uuid primary key, author uuid, body text);
 alter table public.posts enable row level security;

@@ -33,7 +33,7 @@ for name in ${FIXTURES:-finledger posts bookings clinic approvals teams}; do
   fi
   "$bin" compile "$work/$name/svetra.yaml" >/dev/null
   psql() { docker exec -i svetra-pg-check psql -U postgres -v ON_ERROR_STOP=1 -q "$@"; }
-  psql < tests/pg/supabase_stub.sql
+  psql < src/standin/base.sql
   psql < "$work/$name/supabase/schemas/svetra.sql"
   psql < "tests/pg/${name}_assert.sql"
   # The generated tests run after the hand-written checks, whose rows stay behind: existing
@@ -80,7 +80,7 @@ echo "ok: a declared rename keeps every value ($after rows)"
 # Snapshot it through the printed query, and the findings must match the golden file exactly.
 psql -d template1 -c "create database leaky"
 # Roles belong to the whole server and already exist, so the stand-in runs without them here.
-grep -v "^create role" tests/pg/supabase_stub.sql | docker exec -i svetra-pg-check psql -U postgres -d leaky -v ON_ERROR_STOP=1 -q
+grep -v "^create role" src/standin/base.sql | docker exec -i svetra-pg-check psql -U postgres -d leaky -v ON_ERROR_STOP=1 -q
 docker exec -i svetra-pg-check psql -U postgres -d leaky -v ON_ERROR_STOP=1 -q < tests/pg/check/leaky_app.sql
 "$bin" check --print-query | docker exec -i svetra-pg-check psql -U postgres -d leaky -X -A -t -q -v ON_ERROR_STOP=1 > "$work/leaky.json"
 if "$bin" check --snapshot "$work/leaky.json" --json > "$work/leaky.check.json"; then echo "check missed the critical leaks"; exit 1; fi

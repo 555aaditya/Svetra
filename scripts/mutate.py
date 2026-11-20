@@ -231,7 +231,7 @@ def study(name, work, svetra, project=None):
     if project:
         load_supabase(project, app / "supabase/schemas/svetra.sql")
     else:
-        psql((ROOT / "tests/pg/supabase_stub.sql").read_text())
+        psql((ROOT / "src/standin/base.sql").read_text())
         psql((app / "supabase/schemas/svetra.sql").read_text())
     tests = (app / "supabase/tests/svetra.test.sql").read_text()
     failed, error, total = run_tests(tests, "postgres")
