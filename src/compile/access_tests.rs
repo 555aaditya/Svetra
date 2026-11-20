@@ -1146,7 +1146,11 @@ pub fn analyse(doc: &Document) -> Analysis {
     {
         for r in &holders {
             let (name, scope_sql, scope) = match &r.scope {
-                None => (format!("alice who is also {}", r.name), "null".to_string(), None),
+                None => (
+                    format!("alice who is also {}", r.name),
+                    "null".to_string(),
+                    None,
+                ),
                 Some(s) => {
                     let (si, se) = world.entity(&s.name);
                     let (sql, Val::Text(sid)) = world.value(si, primary(se), 1) else {
@@ -1575,7 +1579,11 @@ pub fn analyse(doc: &Document) -> Analysis {
                     let Some((to_u, lit_u, _)) = owner_swap(&world, e, fu, k, me) else {
                         continue;
                     };
-                    for fr in e.fields.iter().filter(|f| matches!(f.ty, FieldType::Ref(_))) {
+                    for fr in e
+                        .fields
+                        .iter()
+                        .filter(|f| matches!(f.ty, FieldType::Ref(_)))
+                    {
                         let Some((to_r, lit_r, words_r)) = owner_swap(&world, e, fr, k, me) else {
                             continue;
                         };
