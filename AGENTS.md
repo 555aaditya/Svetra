@@ -17,6 +17,7 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 
 | Path | Owns |
 |---|---|
+| `src/migrations.rs`, `src/standin/` | `svetra check --migrations`: builds migrations in a throwaway database (Docker, or `--scratch`). `standin/` is the Supabase stand-in (base and extra SQL), compiled in and shared with `scripts/` and `eval/` |
 | `src/yaml.rs` | The YAML tree with line and column positions. The only module that touches `saphyr` |
 | `src/model.rs` | The typed model of the format. Plain data, no logic |
 | `src/diag.rs` | `Code`: every diagnostic's id, severity, category and remediation action, in one table |
