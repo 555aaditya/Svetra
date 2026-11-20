@@ -3,12 +3,15 @@
 begin;
 create extension if not exists pgtap;
 -- Run one statement as one person, then undo it. Returns allowed, denied or the error.
+-- p_before, if given, is run first as the database owner (to give a person an extra role).
 create schema svetra_test;
-create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
+create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1', p_before text default null) returns text
 language plpgsql as $$
 declare n bigint;
 begin
   begin
+    -- p_before runs as the database owner, then is undone with the statement.
+    if p_before is not null then execute p_before; end if;
     perform set_config('role', p_role, true);
     perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
     perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
@@ -52,7 +55,7 @@ create function svetra_test.executes(p_role text, p_schema text, p_name text) re
   where n.nspname = p_schema and p.proname = p_name
 $$;
 
-select plan(64);
+select plan(74);
 
 -- Test data, inserted as the database owner
 select lives_ok($svetra$insert into auth.users (id, email) values ('5e7a0000-0000-4000-8000-000000000001', 'alice@svetra.test'), ('5e7a0000-0000-4000-8000-000000000002', 'bob@svetra.test'), ('5e7a0000-0000-4000-8000-000000000003', 'carol@svetra.test'), ('5e7a0000-0000-4000-8000-000000000004', 'admin@svetra.test'), ('5e7a0000-0000-4000-8000-000000000005', 'admin.without.a.second.factor@svetra.test')$svetra$, 'test data: people');
@@ -121,6 +124,16 @@ select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$insert into "public"."visit" ("id", "patient", "notes") values ('5e7a0000-0000-4000-8001-00010000000d', '5e7a0000-0000-4000-8000-000000000002', 'svetra d')$svetra$), 'denied', 'admin without a second factor can''t create Visit d');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$update "public"."visit" set "patient" = '5e7a0000-0000-4000-8000-000000000005' where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$), 'denied', 'admin without a second factor can''t set the patient of Visit a to themselves');
 select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000005', $svetra$update "public"."visit" set "patient" = '5e7a0000-0000-4000-8000-000000000005' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$), 'denied', 'admin without a second factor can''t set the patient of Visit b to themselves');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select 1 from "public"."visit" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$, 'aal2', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'allowed', 'alice who is also admin can see Visit a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select 1 from "public"."visit" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'allowed', 'alice who is also admin can see Visit b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."visit" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$, 'aal2', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'allowed', 'alice who is also admin can change Visit a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."visit" set "id" = "id" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'allowed', 'alice who is also admin can change Visit b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$delete from "public"."visit" where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$, 'aal2', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'allowed', 'alice who is also admin can delete Visit a');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$delete from "public"."visit" where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'allowed', 'alice who is also admin can delete Visit b');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$insert into "public"."visit" ("id", "patient", "notes") values ('5e7a0000-0000-4000-8001-00010000000c', '5e7a0000-0000-4000-8000-000000000001', 'svetra c')$svetra$, 'aal2', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'allowed', 'alice who is also admin can create Visit c');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$insert into "public"."visit" ("id", "patient", "notes") values ('5e7a0000-0000-4000-8001-00010000000d', '5e7a0000-0000-4000-8000-000000000002', 'svetra d')$svetra$, 'aal2', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'denied', 'alice who is also admin can''t create Visit d');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."visit" set "patient" = '5e7a0000-0000-4000-8000-000000000002' where "id" = '5e7a0000-0000-4000-8001-00010000000a'$svetra$, 'aal2', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'allowed', 'alice who is also admin can set the patient of Visit a to bob');
+select is(svetra_test.try('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$update "public"."visit" set "patient" = '5e7a0000-0000-4000-8000-000000000001' where "id" = '5e7a0000-0000-4000-8001-00010000000b'$svetra$, 'aal2', $svetra$insert into "svetra"."role_grants" ("user_id", "role", "scope_id") values ('5e7a0000-0000-4000-8000-000000000001', 'admin', null)$svetra$), 'allowed', 'alice who is also admin can set the patient of Visit b to themselves');
 
 select * from finish();
 rollback;
