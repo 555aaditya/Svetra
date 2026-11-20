@@ -31,6 +31,10 @@ struct Person {
     grants: Vec<(String, Option<String>)>,
     /// The session was verified with a second factor (`aal2`).
     aal2: bool,
+    /// Set for an owner who also holds a role: the statement, run as the database owner just
+    /// before each check and undone with it, that gives alice that role. The role is not in the
+    /// test data, so every other check still sees alice without it.
+    before: Option<String>,
 }
 
 struct World<'a> {
@@ -930,12 +934,15 @@ fn insert_order(world: &World, tables: usize) -> Vec<usize> {
 }
 
 const HELPER: &str = r#"-- Run one statement as one person, then undo it. Returns allowed, denied or the error.
+-- p_before, if given, is run first as the database owner (to give a person an extra role).
 create schema svetra_test;
-create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
+create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1', p_before text default null) returns text
 language plpgsql as $$
 declare n bigint;
 begin
   begin
+    -- p_before runs as the database owner, then is undone with the statement.
+    if p_before is not null then execute p_before; end if;
     perform set_config('role', p_role, true);
     perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
     perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
@@ -993,18 +1000,21 @@ pub fn analyse(doc: &Document) -> Analysis {
             id: None,
             grants: vec![],
             aal2: false,
+            before: None,
         },
         Person {
             name: "alice".into(),
             id: Some(person_id(1)),
             grants: vec![],
             aal2: false,
+            before: None,
         },
         Person {
             name: "bob".into(),
             id: Some(person_id(2)),
             grants: vec![],
             aal2: false,
+            before: None,
         },
         // Owns nothing and holds no role, in a session with a second factor (anyone can add
         // one): a rule open to every signed-in person, or a role check that ignores who holds
@@ -1014,6 +1024,7 @@ pub fn analyse(doc: &Document) -> Analysis {
             id: Some(person_id(3)),
             grants: vec![],
             aal2: true,
+            before: None,
         },
     ];
     // Each hole's inputs act as one more entity, so its `when` evaluates like a policy. Only the
@@ -1074,7 +1085,46 @@ pub fn analyse(doc: &Document) -> Analysis {
             id: Some(id),
             grants: vec![(r.name.clone(), scope)],
             aal2,
+            before: None,
         });
+    }
+    // Alice, who owns rows, also holding each role in turn (a scoped one at the other scope row
+    // than her own rows point at). A person who is an owner and a role holder at once is where
+    // two update policies can be combined: PostgreSQL ORs their `check`s independently.
+    let mut owners_with_roles: Vec<Person> = Vec::new();
+    if doc
+        .entities
+        .iter()
+        .any(|e| e.fields.iter().any(|f| f.ty == FieldType::User))
+    {
+        for r in &holders {
+            let (name, scope_sql, scope) = match &r.scope {
+                None => (format!("alice who is also {}", r.name), "null".to_string(), None),
+                Some(s) => {
+                    let (si, se) = world.entity(&s.name);
+                    let (sql, Val::Text(sid)) = world.value(si, primary(se), 1) else {
+                        unreachable!("scope entities have uuid keys")
+                    };
+                    (
+                        format!("alice who is also {} at {} b", r.name, s.name),
+                        sql,
+                        Some(sid),
+                    )
+                }
+            };
+            let grant = format!(
+                "insert into \"svetra\".\"role_grants\" (\"user_id\", \"role\", \"scope_id\") values ('{}', {}, {scope_sql})",
+                world.alice,
+                lit(&r.name)
+            );
+            owners_with_roles.push(Person {
+                name,
+                id: Some(world.alice.clone()),
+                grants: vec![(r.name.clone(), scope)],
+                aal2: r.mfa,
+                before: Some(grant),
+            });
+        }
     }
 
     let mut setup = Vec::new();
@@ -1196,13 +1246,15 @@ pub fn analyse(doc: &Document) -> Analysis {
                     .iter()
                     .any(|c| c.expr.contains(f.name.as_str()))
         };
-        for p in &people {
+        for p in people.iter().chain(&owners_with_roles) {
             let mut check =
                 |what: String,
                  sql: String,
                  ok: Option<bool>,
                  tag: Option<(&'static str, usize, Action)>| {
-                    if let Some((action, k, a)) = tag {
+                    if let Some((action, k, a)) = tag
+                        && p.before.is_none()
+                    {
                         found.push(Check {
                             person: p.name.clone(),
                             entity: e.name.clone(),
@@ -1223,7 +1275,14 @@ pub fn analyse(doc: &Document) -> Analysis {
                         "anon"
                     };
                     let user = p.id.as_ref().map_or("null".into(), |id| format!("'{id}'"));
-                    let aal = if p.aal2 { ", 'aal2'" } else { "" };
+                    let aal = match (&p.before, p.aal2) {
+                        (Some(b), a2) => format!(
+                            ", '{}', $svetra${b}$svetra$",
+                            if a2 { "aal2" } else { "aal1" }
+                        ),
+                        (None, true) => ", 'aal2'".to_string(),
+                        (None, false) => String::new(),
+                    };
                     checks.push(match ok {
                     Some(ok) => format!(
                         "select is(svetra_test.try('{role}', {user}, $svetra${sql}$svetra${aal}), '{}', {});",
