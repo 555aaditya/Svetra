@@ -192,8 +192,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        57,
-        58
+        73,
+        74
       ]
     },
     {
@@ -218,8 +218,8 @@
         "Signed-in people can see and create a booking when its customer is them."
       ],
       "tests": [
-        63,
-        64
+        79,
+        80
       ]
     },
     {
@@ -245,8 +245,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        59,
-        60
+        75,
+        76
       ]
     },
     {
@@ -271,8 +271,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        61,
-        62
+        77,
+        78
       ]
     },
     {
@@ -408,8 +408,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        65,
-        66
+        81,
+        82
       ]
     },
     {
@@ -436,8 +436,8 @@
         "Signed-in people can see and create a booking when its customer is them."
       ],
       "tests": [
-        71,
-        72
+        87,
+        88
       ]
     },
     {
@@ -463,8 +463,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        67,
-        68
+        83,
+        84
       ]
     },
     {
@@ -489,8 +489,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        69,
-        70
+        85,
+        86
       ]
     },
     {
@@ -626,8 +626,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        77,
-        78
+        95,
+        96
       ]
     },
     {
@@ -654,8 +654,8 @@
         "Signed-in people can see and create a booking when its customer is them."
       ],
       "tests": [
-        83,
-        84
+        101,
+        102
       ]
     },
     {
@@ -681,8 +681,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        79,
-        80
+        97,
+        98
       ]
     },
     {
@@ -707,8 +707,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        81,
-        82
+        99,
+        100
       ]
     },
     {
@@ -844,8 +844,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        89,
-        90
+        109,
+        110
       ]
     },
     {
@@ -870,8 +870,8 @@
         "Signed-in people can see and create a booking when its customer is them."
       ],
       "tests": [
-        95,
-        96
+        115,
+        116
       ]
     },
     {
@@ -897,8 +897,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        91,
-        92
+        111,
+        112
       ]
     },
     {
@@ -923,8 +923,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        93,
-        94
+        113,
+        114
       ]
     },
     {
@@ -1064,8 +1064,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        101,
-        102
+        123,
+        124
       ]
     },
     {
@@ -1090,8 +1090,8 @@
         "Signed-in people can see and create a booking when its customer is them."
       ],
       "tests": [
-        107,
-        108
+        129,
+        130
       ]
     },
     {
@@ -1119,8 +1119,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        103,
-        104
+        125,
+        126
       ]
     },
     {
@@ -1147,8 +1147,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        105,
-        106
+        127,
+        128
       ]
     },
     {
@@ -1284,8 +1284,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        113,
-        114
+        137,
+        138
       ]
     },
     {
@@ -1310,8 +1310,8 @@
         "Signed-in people can see and create a booking when its customer is them."
       ],
       "tests": [
-        119,
-        120
+        143,
+        144
       ]
     },
     {
@@ -1339,8 +1339,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        115,
-        116
+        139,
+        140
       ]
     },
     {
@@ -1365,8 +1365,8 @@
         "People with the admin role can see, change and delete bookings."
       ],
       "tests": [
-        117,
-        118
+        141,
+        142
       ]
     }
   ],
