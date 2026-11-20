@@ -192,6 +192,7 @@ impl Swap<'_> {
     }
 }
 
+#[derive(Clone)]
 enum SwapTo {
     /// A `user` field set to this person's id.
     User(String),
@@ -910,6 +911,52 @@ pub fn hazards(doc: &Document) -> Vec<Diagnostic> {
 }
 
 /// Entities in an order where every ref target comes first; file order breaks ties and cycles.
+/// What changing one owner or reference field of row `k` would do, as a person `me` would do it:
+/// a `user` field is set to `me` (or, if it already is, to the other test owner), a `ref` field is
+/// pointed at the other row of its target. `None` when the new value could be refused for another
+/// reason (a unique or constrained field), so the expected outcome would not be the rules'.
+fn owner_swap(
+    world: &World,
+    e: &Entity,
+    f: &Field,
+    k: usize,
+    me: &str,
+) -> Option<(SwapTo, String, String)> {
+    let ei = world.by_name[e.name.as_str()];
+    let (to, value, words) = match &f.ty {
+        FieldType::User => {
+            let current = world.value(ei, f, k).1;
+            let (id, who) = if current != Val::Text(me.to_string()) {
+                (me.to_string(), "themselves")
+            } else if current == Val::Text(world.alice.clone()) {
+                (world.bob.clone(), "bob")
+            } else {
+                (world.alice.clone(), "alice")
+            };
+            (SwapTo::User(id.clone()), lit(&id), format!("to {who}"))
+        }
+        FieldType::Ref(t) => {
+            let (ti, te) = world.entity(&t.name);
+            let j = world.ref_row(e, &f.name, k) ^ 1;
+            let words = format!("at {} {}", t.name, ROWS[j]);
+            (SwapTo::Row(j), world.value(ti, primary(te), j).0, words)
+        }
+        _ => return None,
+    };
+    let lone_unique = f.unique
+        || e.unique
+            .iter()
+            .any(|u| u.fields.len() == 1 && u.fields[0].name == f.name);
+    let constrained = e
+        .constraints
+        .iter()
+        .any(|c| c.expr.contains(f.name.as_str()));
+    if constrained || (lone_unique && !matches!(&to, SwapTo::User(id) if id == me)) {
+        return None;
+    }
+    Some((to, value, words))
+}
+
 fn insert_order(world: &World, tables: usize) -> Vec<usize> {
     let mut done: Vec<usize> = Vec::new();
     while done.len() < tables {
@@ -1516,6 +1563,46 @@ pub fn analyse(doc: &Document) -> Analysis {
                     let what = format!("{verb} the {} of {} {r} {words}", f.name, e.name);
                     note_hazard(&mut hazards, doc, &world, p, ei, k, &swap, &what, expected);
                     check(what, sql, expected, None);
+                }
+            }
+            // Taking a row over and moving it in one update: a `user` field and a `ref` field
+            // changed together. Each on its own may be refused while the pair is not, because
+            // the new row can then be seen through the owner rule while the update rule is
+            // satisfied by a different policy (PostgreSQL ORs the `check`s of the update
+            // policies independently), so only the pair shows a loosened `check`.
+            for (k, r) in ROWS.iter().enumerate().take(2) {
+                for fu in e.fields.iter().filter(|f| f.ty == FieldType::User) {
+                    let Some((to_u, lit_u, _)) = owner_swap(&world, e, fu, k, me) else {
+                        continue;
+                    };
+                    for fr in e.fields.iter().filter(|f| matches!(f.ty, FieldType::Ref(_))) {
+                        let Some((to_r, lit_r, words_r)) = owner_swap(&world, e, fr, k, me) else {
+                            continue;
+                        };
+                        let first = Swap {
+                            field: &fu.name,
+                            to: to_u.clone(),
+                            and: None,
+                        };
+                        let both_changed = Swap {
+                            field: &fr.name,
+                            to: to_r,
+                            and: Some(&first),
+                        };
+                        let expected = update_expected(doc, &world, p, ei, k, Some(&both_changed));
+                        let sql = format!(
+                            "update {} set {} = {lit_u}, {} = {lit_r} where {}",
+                            table(&e.name),
+                            q(&fu.name),
+                            q(&fr.name),
+                            key(&world, ei, k)
+                        );
+                        let what = format!(
+                            "change the {} and the {} of {} {r} together (point it {words_r})",
+                            fu.name, fr.name, e.name
+                        );
+                        check(what, sql, expected, None);
+                    }
                 }
             }
         }
