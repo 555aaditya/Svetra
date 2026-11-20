@@ -41,9 +41,10 @@ fn access_tests_match_golden_files() {
 #[test]
 fn expected_results_follow_the_rules() {
     let t = generate(include_str!("fixtures/bookings.yaml"));
-    // 7 test-data inserts; 6 people x 2 entities x 8 checks; alice granting herself a role; and
-    // 5 signed-in people x 2 bookings x 2 fields (customer, location) changed by an update.
-    assert!(t.contains("select plan(124);"));
+    // 7 test-data inserts; 8 people (alice also holding each role) x 2 entities x 8 checks; alice
+    // granting herself a role; 7 signed-in people x 2 bookings x 2 fields (customer, location)
+    // changed by an update; and the same 7 x 2 bookings with both changed in one update.
+    assert!(t.contains("select plan(178);"));
     for name in [
         "alice can see Booking a",
         "alice can't see Booking b",
