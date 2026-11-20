@@ -159,7 +159,7 @@ Roles work too: declare `admin`, or `staff` scoped to one location, and use `has
 
 It validates first and writes nothing if there are errors. The output is byte-identical for the same input. Every PR applies the generated SQL to a real PostgreSQL 16 and checks that each constraint and policy behaves as declared: who can see which rows, and what gets rejected. The full output is specified in [`docs/compiler.md`](docs/compiler.md).
 
-**Check an app you already have:** `svetra check --db <connection string>` (or `--local`) finds the leaks in any Supabase database, no `svetra.yaml` needed: tables anyone can read, open policies, views and functions that skip row-level security. Each finding comes in plain English with the fix ([spec](docs/check.md)).
+**Check an app you already have:** `svetra check --db <connection string>` (or `--local`) finds the leaks in any Supabase database, no `svetra.yaml` needed: tables anyone can read, open policies, views and functions that skip row-level security. Each finding comes in plain English with the fix ([spec](docs/check.md)). No database to point at? `svetra check --migrations` builds your `supabase/migrations` in a throwaway Docker database and checks that, and says which migrations it couldn't read.
 
 **See who can see what:** `svetra view` writes one page, `.svetra/view.html`, and opens it: a table of every person (signed out, signed in, each role) by every thing and action, answered All, Some or No. Select a cell to see which rows the tests tried, the rule behind it, and the test numbers that check it. The answers come from the same evaluator as the access tests, so the page can't disagree with them.
 
