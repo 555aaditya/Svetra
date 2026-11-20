@@ -11,13 +11,15 @@ svetra check --db URL        [--schema public,...] [--json]
 svetra check --local         [--schema public,...] [--json]
 svetra check --snapshot FILE [--schema public,...] [--json]
 svetra check --print-query   [--schema public,...]
+svetra check --migrations [DIR] [--scratch URL] [--strict] [--schema public,...] [--json]
 ```
 
 - **`--db URL`** reads the catalogs through `psql URL`. Svetra runs one read-only query; it never writes. Use a connection string with read access to the catalogs, such as the one in the Supabase dashboard.
 - **`--local`** is `--db postgresql://postgres:postgres@127.0.0.1:54322/postgres`, the database `supabase start` runs.
 - **Without `psql`:** `--print-query` prints the query. Run it in the Supabase SQL editor, save the single JSON value it returns to a file, and pass that file with `--snapshot`.
 - **`--schema`** lists the schemas the API exposes. Default: `public`. Only objects in these schemas are checked, because only they are reachable through the generated API.
-- **Exit codes:** `0` no critical finding, `1` at least one critical finding, `2` a usage error or an unreachable database.
+- **`--migrations [DIR]`** checks what your migrations build, without a live database (see below). `DIR` defaults to `supabase/migrations`.
+- **Exit codes:** `0` no critical finding, `1` at least one critical finding, `2` a usage error or an unreachable database. With `--migrations`, also `2` when Docker is unavailable (and no `--scratch` is given), when `DIR` is missing or holds no `.sql` file, and, only with `--strict`, when any migration failed to apply.
 
 ## What it reads
 
@@ -92,6 +94,47 @@ svetra check: 2 critical, 1 warning in public (postgresql://…@db.example.supab
 
 Connection strings are never printed with their password.
 
+## Checking migrations, without a live database
+
+Most Supabase projects keep their schema as SQL files in `supabase/migrations`. `svetra check --migrations` builds that schema in a throwaway database, then runs the same checks on it. It is for a repository, a pull request or CI, where there's no database to point at, and for anyone who wants an answer before deploying.
+
+```sh
+svetra check --migrations                      # supabase/migrations, in a throwaway Docker database
+svetra check --migrations path/to/migrations
+svetra check --migrations --scratch URL        # use a database you provide instead of Docker
+```
+
+**How it works**
+
+1. **A throwaway database.** By default Svetra starts one PostgreSQL 16 container with a stand-in for Supabase (below) and removes it afterwards, even on Ctrl-C. The container has no network, no extra privileges, 1 GB of memory and a limit on processes, because migrations are SQL that runs with a superuser's rights. Nothing is ever run against your real database, and nothing is written to your project.
+2. **`--scratch URL`** uses a database you provide instead, for machines without Docker. Svetra refuses unless it is empty (no tables, views or functions in the checked schemas and nothing but the stand-in's own roles), and prints that it will run your migrations in it. Point it at a throwaway database, never at a database with data.
+3. **Applying.** Every `*.sql` file in `DIR` is applied in file-name order (Supabase names them `<timestamp>_<name>.sql`, so that is the order it runs them). Each file runs in one transaction with `ON_ERROR_STOP`, as `supabase db reset` does. **A file that fails is rolled back whole, and the next files still run.** Supabase would stop at the first failure; Svetra keeps going, because a partial answer beats none and the report says plainly what it could not read.
+4. **Checking.** The snapshot is read from the throwaway database through the same query as `--db`, and the findings are the ones above, unchanged.
+
+**What it prints.** The usual report, preceded by one line about how much it could read, and followed by the failures:
+
+```
+svetra check: 2 critical, 1 warning in public (14 migrations, 12 applied)
+
+  critical  public.orders
+            ...
+
+2 migrations could not be applied, so the findings above may be incomplete:
+  20260310120000_add_vectors.sql   extension "vector" is not available
+  20260312090000_reports.sql       relation "public.legacy_orders" does not exist
+
+This reads your migrations, not your live database. A table fixed in the dashboard, or made
+outside the migrations, isn't seen.
+```
+
+A failure shows the file name and the first line of the database's error, never the SQL. `--json` adds `"migrations": { "files": 14, "applied": 12, "failed": [{ "file", "error" }] }` and leaves everything else as it is. If nothing applied, the report says so and no finding is reported as clean.
+
+**The Supabase stand-in** is the roles (`anon`, `authenticated`, `service_role`, `authenticator`, `supabase_*`), the `auth`, `storage`, `extensions`, `realtime` and `graphql_public` schemas, `auth.uid()`, `auth.jwt()`, `auth.role()` and `auth.email()`, the `uuid-ossp` and `pgcrypto` extensions, and the default privileges Supabase gives `anon` and `authenticated` in `public`. It lives in one SQL file in the repository, shared with the access tests' harness and the leak study. It is not Supabase: extensions that aren't in the stock image (`pg_net`, `pg_cron`, `vector`) fail with "not available", and those migrations are reported as failed.
+
+**What it can and can't tell you.** In a study of 263 public Supabase repositories, 189 had at least one migration that did not apply, most often because a table was created outside the migrations (`relation does not exist`). So expect a partial answer on some projects, and read the failures list. Findings describe what the migrations create, which is not necessarily what is deployed. A hand audit of the study's findings and a replication on a real Supabase found the stand-in changed no finding in the repositories where every migration applied.
+
+**Done when:** a set of migrations made by splitting the leaky app (`tests/pg/check/leaky_app.sql`) into three files gives the same findings as that app's golden file; a set with a failing file reports the others and lists the failure; `--strict` exits 2 on it; and a run on a machine without Docker gives the plain message `Docker isn't running. Start Docker, or use --scratch with a throwaway database.`
+
 ## Relation to Supabase's Security Advisor
 
 Supabase's dashboard lints overlap with several findings (row-level security off, security definer views, `auth.users` exposed, `user_metadata` in policies, mutable search paths). `svetra check` adds plain-English output a non-coder can act on, a command that runs anywhere (CI, an agent, offline from a snapshot) with stable kinds and exit codes, and the path to fixing it for good: a design in `svetra.yaml` whose rules are generated and tested.
@@ -100,5 +143,7 @@ Supabase's dashboard lints overlap with several findings (row-level security off
 
 - `svetra infer`, which drafts a `svetra.yaml` from the snapshot (M7, next).
 - Storage buckets and their policies.
-- Reading migrations instead of a live database.
+- Seeding (`seed.sql`), the declarative `supabase/schemas` folder, Edge Functions, and a Supabase config's extension list: only the migrations are read.
+- Applying migrations to a real Supabase to check them there; the stand-in is the only throwaway database in 0.1 of this mode.
+- An MCP tool for `--migrations`.
 - Judging conditions other than `true` and `user_metadata`: a policy like `owner = auth.uid()` is trusted as written.
