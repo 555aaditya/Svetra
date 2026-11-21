@@ -468,6 +468,8 @@ pub struct Report {
     pub migrations: Option<crate::migrations::Outcome>,
     /// Where it read from, passwords redacted.
     pub source: String,
+    /// Whether the snapshot held any table (`svetra doctor` needs to know).
+    pub has_tables: bool,
 }
 
 impl Report {
@@ -555,11 +557,14 @@ pub fn run(source: &Source, schemas: &[String]) -> Result<Report, CheckError> {
         }
     };
     // Migrations where none applied have no snapshot, and so no findings.
-    let found = if migrations.as_ref().is_some_and(|o| o.applied == 0) {
-        Vec::new()
+    let (found, has_tables) = if migrations.as_ref().is_some_and(|o| o.applied == 0) {
+        (Vec::new(), false)
     } else {
         match serde_json::from_str::<Value>(text.trim()) {
-            Ok(snap) => findings(&snap),
+            Ok(snap) => (
+                findings(&snap),
+                snap["tables"].as_array().is_some_and(|t| !t.is_empty()),
+            ),
             Err(e) if migrations.is_some() => {
                 return Err(CheckError::Fail(format!(
                     "the throwaway database returned something that isn't the check's JSON ({e})."
@@ -576,6 +581,7 @@ pub fn run(source: &Source, schemas: &[String]) -> Result<Report, CheckError> {
         findings: found,
         migrations,
         source: label,
+        has_tables,
     })
 }
 
