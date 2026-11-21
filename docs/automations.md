@@ -287,3 +287,30 @@ Existing codes the new kinds use:
 
 Per [`AGENTS.md`](../AGENTS.md), each new code needs a row in `src/diag.rs`, a row in `format.md`'s Diagnostics table, a test that triggers it, and a message that says what is wrong and how to fix it. The loader's allowed-key constants and `schema/svetra.schema.json` change together (`tests/schema.rs`).
 
+## What the access tests prove
+
+The generated pgTAP tests already prove, for a `function` hole, its table privileges, its guard for every person, and who can run it. Each new kind gets the same style of proof, with test names that read as sentences.
+
+| Kind | Check | Proves |
+|---|---|---|
+| all | The hole's role can do exactly what `reads`, `writes` and `grants` declare on every entity, and nothing on the others | The fence is the declared one (the existing check, run for every kind) |
+| `schedule` | `anon`, `authenticated` and `service_role` can't execute `svetra_holes.<name>` | No API role can run a scheduled hole, or forge its caller |
+| `schedule` | No function named `<name>` exists in `public` | There is no `rpc` entry |
+| `schedule` | `cron.job` has exactly one job named `svetra_<name>`, with the declared schedule, calling `svetra_holes.<name>` | The clock runs the declared hole on the declared schedule |
+| `schedule` | No `svetra_%` job exists that the design doesn't declare | A removed hole's job is gone |
+| `trigger` | `pg_trigger` has one trigger per declared event on the declared table: `after`, `for each row`, enabled | It fires when, and only when, declared |
+| `trigger` | `pg_get_triggerdef` contains the compiled `when` | The condition is the one in the design |
+| `trigger` | The body function is `security definer`, owned by `svetra_hole_<name>`, with an empty `search_path` | It runs as the declared role |
+| `trigger` | `anon`, `authenticated` and `service_role` can't execute the body or the trigger function | It can't be started by calling it |
+| `trigger` | As its own role, an insert into an entity not in `writes` is denied | A triggered hole can't write beyond its fence |
+| `webhook` | `anon` and `authenticated` can't execute `public.<name>`; `service_role` can | Only the Edge Function's key reaches it |
+| `webhook` | `anon` and `authenticated` can't execute `svetra_holes.<name>` | As for every hole |
+| `webhook` | The guard: inputs that point at the `a` rows and at the `b` rows are refused (`42501`) or let through as `when` says | As for `function` holes |
+
+**Not covered, and said so in `explain` and in the test output:**
+- What a body does when it runs. Bodies are hand-written, as for `function` holes.
+- The Edge Function's signature check. A **generated Deno test** that signs a sample body and checks accept, reject and wrong-header cases is a follow-up PR, because it needs a Deno runner in CI. Until then the build PR checks it by hand on a real local Supabase and says so.
+- That pg_cron fires at the right minute. That is pg_cron's job. The test proves the job is registered correctly.
+
+Each kind also gets deliberate breakages in `tests/pg/breakages/`, like the existing ones, each failing exactly the expected checks: execute on a body function granted to `authenticated`, a job's schedule edited, a trigger's `when` dropped, a hole's role given a privilege it didn't declare.
+
