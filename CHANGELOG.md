@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **A GitHub Action for `svetra plan`, and the flags it needs (milestone M6).** `uses: 555aaditya/Svetra@<tag>` on a pull request that changes `svetra.yaml` posts one comment, edited in place on every push, with each change classified and who gains or loses access in plain words; the check fails while a destructive change or wider access has no yes in `accept`, and the plan also goes to the job summary, so a fork's read-only token still shows it. New on `plan`: `--from-git REF` (also on `diff`) reads the old design from a git ref such as the PR's base, `--no-write` never writes the rename migration (CI must not write into the checkout), and `--markdown` prints the comment. Run it with `pull_request`, never `pull_request_target`. The Action needs a release that has these flags, so pin a version from the next release on. Spec: `docs/action.md`; `docs/change.md`.
+
 ## 0.8.3 (2026-11-22)
 
 A pre-launch checklist (`svetra doctor`), `infer` that follows real apps (profile tables, `on delete`, role checks) and can check its draft against a copy of the database, `audit: true` on entities and holes, and two fixes to the generated tests found by studying an app written by others.
