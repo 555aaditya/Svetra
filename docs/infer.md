@@ -277,7 +277,7 @@ svetra infer --check-draft FILE (--db URL | --local) [--schema public,...]
 ```
 
 - **`FILE`** is a draft, as `infer` wrote it or as you have edited it since. It must load and validate with no errors, or the command stops (exit 2) and says why.
-- **The copy.** With `--migrations`, the migrations are built in a throwaway database exactly as `check --migrations` does (Docker, no network, file-name order, a failing migration is listed and the rest still run). With `--db` or `--local`, `infer` runs `pg_dump --schema-only` on the listed schemas (read-only; needs `pg_dump`, which ships with `psql`) and loads the dump into the same kind of throwaway database. **Nothing is ever written to your database, and the tests never run on it**, so there is no `--scratch` form: pgTAP and the test rows would have to be installed in it. The copy has the schema, policies and grants, and no data. Statements of the dump that the throwaway database refuses (an extension it lacks, a grant to a role it lacks) are counted and the first is shown; the copy is then not exact, and the report says so.
+- **The copy.** With `--migrations`, the migrations are built in a throwaway database exactly as `check --migrations` does (Docker, no network, file-name order, a failing migration is listed and the rest still run). With `--db` or `--local`, `infer` runs `pg_dump --schema-only` on the listed schemas (read-only; needs `pg_dump`, at least as new as the server) and loads the dump into the same kind of throwaway database. **Nothing is ever written to your database, and the tests never run on it**, so there is no `--scratch` form: pgTAP and the test rows would have to be installed in it. The copy has the schema, policies and grants, and no data. Statements of the dump that the throwaway database refuses (an extension it lacks, a grant to a role it lacks; the dump's own `create schema public` is ignored) are counted and the first is shown; the copy is then not exact, and the report says so.
 - **The throwaway database is Supabase's own image,** `public.ecr.aws/supabase/postgres` at a pinned tag (the one the Supabase CLI starts, also published as `supabase/postgres` on Docker Hub), not the PostgreSQL 16 image and stand-in that `check --migrations` uses. It ships pgTAP, Supabase's roles and `auth` schema, so nothing is installed at run time (the container has no network). The only addition is `auth.jwt()` when the image lacks it. If the image isn't on the machine, `infer` stops and prints the `docker pull` command; it never pulls by itself.
 
 What is checked. The generated tests seed the draft's own test world (people, and two rows per entity) into the copy as the database owner, then try each person on each row, as a real user, and every check must come out as the draft says.
@@ -289,14 +289,19 @@ What is checked. The generated tests seed the draft's own test world (people, an
 The report is grouped by entity, in plain words, and never prints SQL:
 
 ```
-Differential check of svetra.yaml against a copy built from supabase/migrations.
-  Products   agrees    24 checks
-  Orders     skipped   the draft is narrower than the database: a policy was left untranslated
-  Profiles   skipped   the database refused the draft's test rows: ...
+Differential check of svetra.yaml against a copy of the original database (built from supabase/migrations).
+  OrderItems  skipped    row-level security is off in the database, so there is no access rule to compare
+  Orders      DISAGREES  2 of 40 checks
+  Products    agrees     32 checks
 
-Products disagrees on 2 checks:
-  anon can see Products a  (the draft says allowed, the database says denied)
+Orders: the draft and the database disagree on
+  bob can't see Orders a (the draft says denied, the database says allowed)
+  carol can't see Orders b (the draft says denied, the database says allowed)
+
+2 checks disagree. Each one is a place where the database does something the draft doesn't say, or the draft says something the database doesn't do.
 ```
+
+A check is worded as the draft expects it; the parenthesis says what each side gives (`allowed`, `denied`, `blocked`, or the database's error).
 
 Exit codes: `0` every checked entity agrees, `1` at least one check disagrees, `2` it couldn't run (Docker or the image missing, no `pg_dump`, a draft that doesn't validate, the database unreachable). It doesn't write a file.
 
