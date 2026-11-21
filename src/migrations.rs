@@ -117,6 +117,10 @@ impl Drop for Container {
 
 impl Container {
     fn psql(&self, extra: &[&str], input: &str) -> std::io::Result<Output> {
+        self.psql_as("postgres", extra, input)
+    }
+
+    fn psql_as(&self, user: &str, extra: &[&str], input: &str) -> std::io::Result<Output> {
         let mut args = strings(&[
             "exec",
             "-i",
@@ -125,7 +129,7 @@ impl Container {
             &self.0,
             "psql",
             "-U",
-            "postgres",
+            user,
             "-d",
             "postgres",
             "-X",
@@ -145,19 +149,16 @@ pub fn docker_available() -> bool {
         .is_ok_and(|s| s.success())
 }
 
-/// Build the migrations in a throwaway Docker database and read the snapshot.
-pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
-    let paths = files(dir).map_err(Fail)?;
+/// Start a throwaway container of `image`, no network and no extra privileges, and wait until
+/// its server stays up. It is removed when the returned value drops, or stops itself after
+/// `LIFETIME_SECONDS`.
+fn start(image: &str, memory: &str) -> Result<Container, Fail> {
     if !docker_available() {
         return Err(Fail(
             "Docker isn't running. Start Docker, or use --scratch with a throwaway database."
                 .into(),
         ));
     }
-    eprintln!(
-        "svetra: building {} migrations in a throwaway PostgreSQL (Docker)…",
-        paths.len()
-    );
     let name = format!("svetra-check-{}", std::process::id());
     let started = Command::new("docker")
         .args([
@@ -183,12 +184,12 @@ pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
             "--security-opt",
             "no-new-privileges",
             "--memory",
-            "1g",
+            memory,
             "--pids-limit",
             "512",
             "-e",
             "POSTGRES_PASSWORD=svetra",
-            IMAGE,
+            image,
             "timeout",
             &LIFETIME_SECONDS.to_string(),
             "docker-entrypoint.sh",
@@ -218,20 +219,15 @@ pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
     if steady < 3 {
         return Err(Fail("the throwaway database didn't start in time".into()));
     }
-    for (what, sql) in [("base", BASE), ("extra", EXTRA)] {
-        let out = container
-            .psql(&["-v", "ON_ERROR_STOP=1"], sql)
-            .map_err(|e| Fail(format!("couldn't load the Supabase stand-in: {e}")))?;
-        if !out.status.success() {
-            return Err(Fail(format!(
-                "couldn't load the Supabase stand-in ({what}): {}",
-                first_error(&String::from_utf8_lossy(&out.stderr))
-            )));
-        }
-    }
+    Ok(container)
+}
+
+/// Apply each migration in `paths` in order, each in one transaction: how many applied, and
+/// (file name, first line of the database's error) for each that didn't.
+fn apply(container: &Container, paths: &[PathBuf]) -> Result<(usize, Vec<(String, String)>), Fail> {
     let mut failed = Vec::new();
     let mut applied = 0;
-    for p in &paths {
+    for p in paths {
         let file = name_of(p);
         if std::fs::metadata(p).map_or(true, |m| m.len() > MAX_FILE_BYTES) {
             failed.push((file, "the file is larger than 2 MB".to_string()));
@@ -245,6 +241,35 @@ pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
             Err(e) => return Err(Fail(format!("lost the throwaway database: {e}"))),
         }
     }
+    Ok((applied, failed))
+}
+
+/// Build the migrations in a throwaway Docker database and read the snapshot.
+pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
+    let paths = files(dir).map_err(Fail)?;
+    if !docker_available() {
+        return Err(Fail(
+            "Docker isn't running. Start Docker, or use --scratch with a throwaway database."
+                .into(),
+        ));
+    }
+    eprintln!(
+        "svetra: building {} migrations in a throwaway PostgreSQL (Docker)…",
+        paths.len()
+    );
+    let container = start(IMAGE, "1g")?;
+    for (what, sql) in [("base", BASE), ("extra", EXTRA)] {
+        let out = container
+            .psql(&["-v", "ON_ERROR_STOP=1"], sql)
+            .map_err(|e| Fail(format!("couldn't load the Supabase stand-in: {e}")))?;
+        if !out.status.success() {
+            return Err(Fail(format!(
+                "couldn't load the Supabase stand-in ({what}): {}",
+                first_error(&String::from_utf8_lossy(&out.stderr))
+            )));
+        }
+    }
+    let (applied, failed) = apply(&container, &paths)?;
     let snapshot = if applied == 0 {
         String::new()
     } else {
@@ -265,6 +290,117 @@ pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
         failed,
         snapshot,
     })
+}
+
+/// Supabase's own database image, as the Supabase CLI starts it: pgTAP, Supabase's roles and its
+/// `auth` schema are in it, and the container has no network to install anything.
+pub const SUPABASE_IMAGE: &str = "public.ecr.aws/supabase/postgres:17.11.0.018";
+/// What the image's `auth` schema can lack: `auth.jwt()`, which policies and the access tests read.
+const JWT_TOP_UP: &str = "do $$ begin if to_regprocedure('auth.jwt()') is null then \
+    create function auth.jwt() returns jsonb language sql stable \
+    as $f$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $f$; \
+    grant execute on function auth.jwt() to anon, authenticated; end if; end $$;";
+
+/// A throwaway copy of a database in Supabase's image, ready to run the generated access tests.
+/// It is removed when this drops.
+pub struct Copy {
+    container: Container,
+    /// What didn't go in: migrations that failed (file, first error line) or dump statements
+    /// the copy refused, as plain lines.
+    pub notes: Vec<String>,
+}
+
+fn supabase_container() -> Result<Container, Fail> {
+    if !docker_available() {
+        return Err(Fail(
+            "Docker isn't running. Start Docker and run it again.".into(),
+        ));
+    }
+    let have = Command::new("docker")
+        .args(["image", "inspect", SUPABASE_IMAGE])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success());
+    if !have {
+        return Err(Fail(format!(
+            "The access tests need pgTAP, which Supabase's database image ships. Pull it once, then run again: docker pull {SUPABASE_IMAGE}"
+        )));
+    }
+    let container = start(SUPABASE_IMAGE, "2g")?;
+    // The image's `auth` schema belongs to its own admin role, not to `postgres`.
+    let out = container
+        .psql_as("supabase_admin", &["-v", "ON_ERROR_STOP=1"], JWT_TOP_UP)
+        .map_err(|e| Fail(format!("lost the throwaway database: {e}")))?;
+    if !out.status.success() {
+        return Err(Fail(format!(
+            "couldn't prepare the throwaway database: {}",
+            first_error(&String::from_utf8_lossy(&out.stderr))
+        )));
+    }
+    Ok(container)
+}
+
+impl Copy {
+    /// A copy built from the migrations in `dir`, applied in file-name order.
+    pub fn from_migrations(dir: &Path) -> Result<Copy, Fail> {
+        let paths = files(dir).map_err(Fail)?;
+        eprintln!(
+            "svetra: building {} migrations in a throwaway Supabase database (Docker)…",
+            paths.len()
+        );
+        let container = supabase_container()?;
+        let (applied, failed) = apply(&container, &paths)?;
+        if applied == 0 {
+            return Err(Fail(
+                "no migration could be applied, so there is nothing to compare the draft with"
+                    .into(),
+            ));
+        }
+        let notes = failed
+            .into_iter()
+            .map(|(file, why)| format!("migration {file} failed and was skipped: {why}"))
+            .collect();
+        Ok(Copy { container, notes })
+    }
+
+    /// A copy built from a schema-only dump of a database.
+    pub fn from_dump(sql: &str) -> Result<Copy, Fail> {
+        eprintln!(
+            "svetra: loading a schema-only copy into a throwaway Supabase database (Docker)…"
+        );
+        let container = supabase_container()?;
+        let out = container
+            .psql(&[], sql)
+            .map_err(|e| Fail(format!("lost the throwaway database: {e}")))?;
+        let errors: Vec<String> = String::from_utf8_lossy(&out.stderr)
+            .lines()
+            .filter_map(|l| l.split_once("ERROR:").map(|(_, r)| r.trim().to_string()))
+            // The dump creates `public`, which the image already has.
+            .filter(|e| e != "schema \"public\" already exists")
+            .collect();
+        let mut notes = Vec::new();
+        if let Some(first) = errors.first() {
+            notes.push(format!(
+                "the copy refused {} of the dump's statements, so it isn't exact. The first: {first}",
+                errors.len()
+            ));
+        }
+        Ok(Copy { container, notes })
+    }
+
+    /// Run a pgTAP file as the database owner and return psql's output.
+    pub fn run_tests(&self, sql: &str) -> Result<String, Fail> {
+        let out = self
+            .container
+            .psql(&["-A", "-t"], sql)
+            .map_err(|e| Fail(format!("lost the throwaway database: {e}")))?;
+        Ok(format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        ))
+    }
 }
 
 /// Build the migrations in a database the caller provides, which must be empty.

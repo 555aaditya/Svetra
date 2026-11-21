@@ -13,4 +13,5 @@ pub mod project;
 pub mod report;
 pub mod typeck;
 pub mod understand;
+pub mod verify;
 pub mod yaml;

@@ -18,6 +18,10 @@ jobs:
       - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
+      # The tests that need Supabase's database image skip without it, so pull it (retried; a
+      # failed pull only skips them).
+      - run: for i in 1 2 3; do docker pull public.ecr.aws/supabase/postgres:17.11.0.018 && break; sleep 10; done
+        continue-on-error: true
       - run: cargo test
 
   msrv:
