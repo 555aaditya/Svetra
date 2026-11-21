@@ -156,7 +156,7 @@ pub fn model(doc: &Document, src: &str) -> Value {
                     .filter(|(x, _)| x.allow.contains(&action))
                     .map(|(_, l)| l.clone())
                     .collect();
-                cells.push(json!({
+                let mut cell = json!({
                     "person": p.name,
                     "entity": e.name,
                     "action": verb,
@@ -165,7 +165,28 @@ pub fn model(doc: &Document, src: &str) -> Value {
                     "because": because,
                     "rules": only,
                     "tests": found.iter().map(|c| c.number).collect::<Vec<_>>(),
-                }));
+                });
+                // Which fields an update may change, when a rule limits them (docs/view.md).
+                if action == Action::Update {
+                    let limits: Vec<Value> = policies
+                        .iter()
+                        .zip(&lines)
+                        .filter(|(x, _)| found.iter().any(|c| c.column_rules.contains(&x.name)))
+                        .map(|(x, l)| {
+                            let fields: Vec<String> =
+                                x.only.iter().flatten().map(|f| f.name.clone()).collect();
+                            json!({
+                                "fields": fields,
+                                "sentence": parts::only_sentence(&fields),
+                                "rule": l,
+                            })
+                        })
+                        .collect();
+                    if !limits.is_empty() {
+                        cell["only"] = Value::Array(limits);
+                    }
+                }
+                cells.push(cell);
             }
         }
     }
