@@ -1,0 +1,66 @@
+# Approvals. Someone writes a document and sends it to a reviewer, who approves or rejects it.
+# Edit this file (or ask your coding agent to), then run `svetra validate`.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+svetra: "0.1"
+system: Approvals
+
+auth:
+  sign_in: [email]
+
+entities:
+  Doc:
+    fields:
+      id:       { type: uuid, primary: true }
+      author:   { type: user, required: true }
+      reviewer: { type: user, required: true }
+      title:    { type: text, required: true }
+      # A document moves draft -> submitted -> approved or rejected.
+      status:   { type: enum, values: [draft, submitted, approved, rejected], default: draft, required: true }
+    constraints:
+      # Nobody reviews their own document.
+      different_people: "author != reviewer"
+    indexes:
+      - [author]
+      - [reviewer]
+
+policies:
+  # Authors can always see their own documents.
+  authors_see:
+    on: Doc
+    allow: [select]
+    when: "author == auth.user"
+
+  # Reviewers see a document once it has been submitted, never while it's a draft.
+  reviewers_see:
+    on: Doc
+    allow: [select]
+    when: "reviewer == auth.user and status != 'draft'"
+
+  # Authors can start a new document, and it must begin as a draft.
+  authors_start:
+    on: Doc
+    allow: [insert]
+    when: "author == auth.user and status == 'draft'"
+
+  # Authors can edit a draft and send it in. `when` is the document as it is now;
+  # `check` is what it may become: still theirs, and a draft or submitted.
+  authors_edit:
+    on: Doc
+    allow: [update]
+    when: "author == auth.user and status == 'draft'"
+    check: "author == auth.user and status in ['draft', 'submitted']"
+
+  # A reviewer can approve or reject a submitted document, and change nothing else:
+  # `only: [status]` locks every other field, even ones added later.
+  reviewers_decide:
+    on: Doc
+    allow: [update]
+    when: "reviewer == auth.user and status == 'submitted'"
+    check: "reviewer == auth.user and status in ['approved', 'rejected']"
+    only: [status]
+
+  # Authors can throw away a draft, but never a document that has been sent in.
+  authors_delete_drafts:
+    on: Doc
+    allow: [delete]
+    when: "author == auth.user and status == 'draft'"
