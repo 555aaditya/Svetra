@@ -97,13 +97,23 @@ pub fn explain(doc: &Document, diags: &[Diagnostic]) -> String {
 
 /// "its status" or "its title and status": the fields of a policy's `only`, in words.
 fn fields_of(only: &[NameRef]) -> String {
-    let labels: Vec<String> = only.iter().map(|f| label(&f.name)).collect();
+    let names: Vec<String> = only.iter().map(|f| f.name.clone()).collect();
+    fields_named(&names)
+}
+
+fn fields_named(names: &[String]) -> String {
+    let labels: Vec<String> = names.iter().map(|f| label(f)).collect();
     format!("its {}", list(&labels, "and"))
 }
 
 /// The pieces of `explain`, for `svetra view`, which shows the same sentences.
 pub mod parts {
     use super::*;
+
+    /// "They can change only its status.": the sentence `explain` ends an update rule with.
+    pub fn only_sentence(fields: &[String]) -> String {
+        format!("They can change only {}.", fields_named(fields))
+    }
 
     fn entities(doc: &Document) -> HashMap<&str, &Entity> {
         doc.entities.iter().map(|e| (e.name.as_str(), e)).collect()
