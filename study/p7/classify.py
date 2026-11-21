@@ -80,6 +80,15 @@ def classify(r):
         return "equivalent", "every select policy on the table is already true for signed-in people"
     if app == "outside_slack" and op == "role-ignore-scope":
         return "equivalent", "the app has no scoped roles"
+    # outside_slack_v2 (study/p7/outside/v2): the same app with a user-keyed Profile. Checked with outside/verify_slack_v2.py.
+    if app == "outside_slack_v2" and op == "policy-all-actions" and t.startswith("message."):
+        return "equivalent", "the added rule is the owner's (user_id == auth.user), and owners of a message already have every action on it"
+    if app == "outside_slack_v2" and op == "table-leak-read":
+        return "equivalent", "every select policy on the table is already true for signed-in people"
+    if app == "outside_slack_v2" and op == "role-ignore-scope":
+        return "equivalent", "the app has no scoped roles"
+    if app == "outside_slack_v2" and t == "profile.profiles_update_own" and op in ("policy-using-true", "policy-check-true"):
+        return "real", "a person can change the key of a profile to one nobody holds: take over another person's profile, or hand their own to a free person; the generated tests only try keys that already exist"
     return "UNCLASSIFIED", ""
 
 def table(path, title):
