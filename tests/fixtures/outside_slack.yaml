@@ -9,6 +9,12 @@
 # in study/p7/outside/. It is not the app's own file and is not endorsed by its authors.
 #
 # Differences from the original, each also listed in study/p7/outside/README.md:
+#  - Profile has its own uuid id and a `user_id` column, where the original's primary key is the
+#    auth user id. A primary key of type user can't be tested: the generated insert check reuses
+#    the signed-in person's id, which already has a row. Unlike the original, nothing here limits
+#    a person to one profile.
+#  - Message.channel_id is a plain uuid, not a ref: the original's `on delete cascade` can't be
+#    written, and with a real foreign key the generated delete checks stop on it.
 #  - Row ids are uuid. The original uses bigint identity keys, and a Svetra ref needs a uuid key.
 #  - `Profile` is the original's `users` table (an entity's table is its snake_case name).
 #  - Roles are Svetra's own: a row in svetra.role_grants, checked live. The original keeps them in
@@ -32,7 +38,8 @@ roles:
 entities:
   Profile:
     fields:
-      id:       { type: user, primary: true }
+      id:       { type: uuid, primary: true }
+      user_id:  { type: user, required: true }
       username: { type: text }
       status:   { type: enum, values: [ONLINE, OFFLINE], default: OFFLINE }
   Channel:
@@ -47,12 +54,12 @@ entities:
       inserted_at: { type: timestamp, auto: now, required: true }
       message:     { type: text }
       user_id:     { type: user, required: true }
-      channel_id:  { type: ref, entity: Channel, required: true }
+      channel_id:  { type: uuid, required: true }
 
 policies:
   profiles_read:        { on: Profile, allow: [select], when: "true" }
-  profiles_insert_own:  { on: Profile, allow: [insert], when: "id == auth.user" }
-  profiles_update_own:  { on: Profile, allow: [update], when: "id == auth.user" }
+  profiles_insert_own:  { on: Profile, allow: [insert], when: "user_id == auth.user" }
+  profiles_update_own:  { on: Profile, allow: [update], when: "user_id == auth.user" }
 
   channels_read:         { on: Channel, allow: [select], when: "true" }
   channels_insert_own:   { on: Channel, allow: [insert], when: "created_by == auth.user" }
