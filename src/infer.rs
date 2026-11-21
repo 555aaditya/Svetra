@@ -828,10 +828,8 @@ pub fn translate_policy(
         }
         "ALL" => {
             let u = using.ok_or("no using")??;
-            if let Some(k) = check {
-                if k? != u {
-                    return Err("FOR ALL with a with check that differs from using".into());
-                }
+            if check.transpose()?.is_some_and(|k| k != u) {
+                return Err("FOR ALL with a with check that differs from using".into());
             }
             (vec!["select", "insert", "update", "delete"], u, None)
         }
@@ -909,6 +907,8 @@ struct Plan {
 struct Counts {
     fields: usize,
     untranslated: usize,
+    policies: usize,
+    policies_done: usize,
 }
 
 /// A constraint put in the draft, so a validation error can send it back to a comment.
@@ -923,6 +923,8 @@ struct Placed {
 struct Entity {
     text: String,
     placed: Vec<Placed>,
+    /// The `policies:` blocks this entity's policies became.
+    policies: Vec<String>,
 }
 
 /// Draft a `svetra.yaml` from a snapshot taken with `inspect::infer_query`.
@@ -968,6 +970,12 @@ fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Plac
     let mut counts = Counts {
         fields: 0,
         untranslated: 0,
+        policies: 0,
+        policies_done: 0,
+    };
+    let access = Access {
+        tables: rows(snap, "tables"),
+        policies: rows(snap, "policies"),
     };
     let mut left_out: Vec<String> = Vec::new();
     let mut plans: Vec<Plan> = Vec::new();
@@ -1038,8 +1046,10 @@ fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Plac
     }
     plans.sort_by(|a, b| a.table.cmp(&b.table));
     let mut used: Vec<String> = Vec::new();
+    let mut used_policies: Vec<String> = Vec::new();
     let mut placed = Vec::new();
     let mut body = String::new();
+    let mut policy_blocks: Vec<String> = Vec::new();
     for plan in &plans {
         let e = entity(
             plan,
@@ -1050,11 +1060,20 @@ fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Plac
             &enums,
             &findings,
             rejected,
+            &access,
             &mut used,
+            &mut used_policies,
             &mut counts,
         );
         body += &e.text;
         placed.extend(e.placed);
+        policy_blocks.extend(e.policies);
+    }
+    if !policy_blocks.is_empty() {
+        body += "\npolicies:\n";
+        for block in &policy_blocks {
+            body += block;
+        }
     }
     if !left_out.is_empty() {
         body += "\n# Tables left out of the entities:\n";
@@ -1071,9 +1090,15 @@ fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Plac
     );
     let mut head = String::from(
         "# Drafted by `svetra infer` from a database snapshot. Review before adopting.\n\
-# Every entity is `private: true`: no policies are inferred yet, so nothing is exposed through\n\
-# the API until you add policies and remove `private`. That differs from the live database.\n",
+# An entity is `private: true` only when none of its policies translated; the draft is never\n\
+# wider than the database (docs/infer.md, Policies).\n",
     );
+    if counts.policies > 0 {
+        head += &format!(
+            "# Policies: {} of {} translated.\n",
+            counts.policies_done, counts.policies
+        );
+    }
     head += &format!(
         "# {} entities from {} tables. Skipped: {}, {}.\n",
         plans.len(),
@@ -1129,6 +1154,177 @@ fn fk_actions(definition: &str) -> Option<String> {
     Some(one_line(&definition[at..]))
 }
 
+/// The snapshot's table and policy rows, for the policies of each entity.
+struct Access<'a> {
+    tables: Vec<&'a Value>,
+    policies: Vec<&'a Value>,
+}
+
+/// What the policies of one table become: `policies:` blocks, comments for the entity, and
+/// whether the entity stays `private`.
+struct TablePolicies {
+    blocks: Vec<String>,
+    notes: Vec<String>,
+    comment: Option<String>,
+    private: bool,
+}
+
+/// The policy as `CREATE POLICY`, rebuilt from its `pg_policies` row, for an `UNTRANSLATED` comment.
+fn original_policy(table: &str, p: &Value) -> String {
+    let roles = crate::inspect::roles(p);
+    let mut sql = format!(
+        "CREATE POLICY {} ON public.{table} AS {} FOR {} TO {}",
+        s(p, "name"),
+        s(p, "permissive"),
+        s(p, "cmd"),
+        if roles.is_empty() {
+            "PUBLIC".to_string()
+        } else {
+            roles.join(", ")
+        }
+    );
+    for (key, clause) in [("using", "USING"), ("check", "WITH CHECK")] {
+        if let Some(c) = p[key].as_str() {
+            sql += &format!(" {clause} ({c})");
+        }
+    }
+    sql
+}
+
+/// Translate a table's policies, never widening access (docs/infer.md, Policies).
+fn table_policies(
+    plan: &Plan,
+    users: &[String],
+    access: &Access,
+    used: &mut Vec<String>,
+    counts: &mut Counts,
+) -> TablePolicies {
+    let table = plan.table.as_str();
+    let rows = on(&access.policies, table);
+    let rls = access
+        .tables
+        .iter()
+        .find(|t| s(t, "schema") == "public" && s(t, "name") == table)
+        .is_some_and(|t| b(t, "rls"));
+    let granted = |role: &str, action: &str| {
+        access
+            .tables
+            .iter()
+            .find(|t| s(t, "schema") == "public" && s(t, "name") == table)
+            .is_some_and(|t| b(&t[role], action))
+    };
+    let mut out = TablePolicies {
+        blocks: Vec::new(),
+        notes: Vec::new(),
+        comment: None,
+        private: true,
+    };
+    counts.policies += rows.len();
+    if !rls {
+        out.comment = Some(
+            "row-level security is off here, so the database has no access rule (see the check finding). No policy is invented; add one deliberately."
+                .into(),
+        );
+    }
+    let mut results: Vec<(&Value, Result<Translated, String>)> = rows
+        .iter()
+        .map(|p| {
+            let r = if rls {
+                translate_policy(p, users, &granted)
+            } else {
+                Err("row-level security is off, so the policy isn't enforced".into())
+            };
+            (*p, r)
+        })
+        .collect();
+    let restrictive_lost = results
+        .iter()
+        .any(|(p, r)| r.is_err() && s(p, "permissive").eq_ignore_ascii_case("restrictive"));
+    let permissive_kept = results
+        .iter()
+        .any(|(_, r)| r.as_ref().is_ok_and(|t| !t.restrictive));
+    if restrictive_lost || !permissive_kept {
+        let why = if restrictive_lost {
+            "a restrictive policy on this table didn't translate, and without it this policy would be wider than the database"
+        } else {
+            "no permissive policy on this table translated, and a restrictive one alone lets nobody in"
+        };
+        for (_, r) in results.iter_mut() {
+            if r.is_ok() {
+                *r = Err(why.into());
+            }
+        }
+    }
+    let done = results.iter().filter(|(_, r)| r.is_ok()).count();
+    for (p, r) in &results {
+        match r {
+            Ok(t) => {
+                let name = s(p, "name");
+                let base = if is_snake(name) {
+                    name.to_string()
+                } else {
+                    format!("{table}_policy")
+                };
+                let mut final_name = base.clone();
+                let mut n = 2;
+                while used.contains(&final_name) {
+                    final_name = if n == 2 && is_snake(name) {
+                        format!("{table}_{name}")
+                    } else {
+                        format!("{base}_{n}")
+                    };
+                    n += 1;
+                }
+                used.push(final_name.clone());
+                let mut block = format!(
+                    "  {final_name}:\n    on: {}\n    as: {}\n    allow: [{}]\n",
+                    plan.entity,
+                    t.role,
+                    t.actions.join(", ")
+                );
+                if t.restrictive {
+                    block += "    restrictive: true\n";
+                }
+                let quote =
+                    |e: &str| format!("\"{}\"", e.replace('\\', "\\\\").replace('"', "\\\""));
+                block += &format!("    when: {}\n", quote(&t.when));
+                if let Some(k) = &t.check {
+                    block += &format!("    check: {}\n", quote(k));
+                }
+                out.blocks.push(block);
+            }
+            Err(why) => {
+                out.notes.push(untranslated(
+                    counts,
+                    format!(
+                        "policy {}: {} -- {why}",
+                        s(p, "name"),
+                        original_policy(table, p)
+                    ),
+                ));
+            }
+        }
+    }
+    counts.policies_done += done;
+    out.private = done == 0;
+    if rls && !rows.is_empty() {
+        out.comment = Some(if done == 0 {
+            format!(
+                "policies: none of {} translated. The database lets some people in; this draft keeps everyone out (private) until you port a policy.",
+                rows.len()
+            )
+        } else if done < rows.len() {
+            format!(
+                "policies: {done} of {} translated. The draft is NARROWER than the database: whatever an UNTRANSLATED policy below lets in, this draft keeps out, until you port it.",
+                rows.len()
+            )
+        } else {
+            return out;
+        });
+    }
+    out
+}
+
 #[allow(clippy::too_many_arguments)]
 fn entity(
     plan: &Plan,
@@ -1139,7 +1335,9 @@ fn entity(
     enums: &[&Value],
     findings: &[crate::inspect::Finding],
     rejected: &[(String, String)],
+    access: &Access,
     used: &mut Vec<String>,
+    used_policies: &mut Vec<String>,
     counts: &mut Counts,
 ) -> Entity {
     let table = plan.table.as_str();
@@ -1150,6 +1348,7 @@ fn entity(
     let mut lines: Vec<(String, Vec<String>)> = Vec::new(); // (key and spec, notes) or ("", [comment])
     let mut fields: Vec<String> = Vec::new();
     let mut consumed: Vec<String> = Vec::new();
+    let mut users: Vec<String> = Vec::new();
     for col in &cols {
         let name = s(col, "name");
         let ty = s(col, "type");
@@ -1274,6 +1473,9 @@ fn entity(
         }
         counts.fields += 1;
         fields.push(name.to_string());
+        if mapped.ty == "user" {
+            users.push(name.to_string());
+        }
         lines.push((format!("{name}: {{ {} }}", spec.join(", ")), note));
     }
     // Constraints, unique and indexes, now that the fields are known.
@@ -1345,6 +1547,8 @@ fn entity(
             None => notes.push(untranslated(counts, format!("index {name}: {def}"))),
         }
     }
+    let pol = table_policies(plan, &users, access, used_policies, counts);
+    notes.extend(pol.notes);
     // Render.
     let width = lines
         .iter()
@@ -1363,7 +1567,13 @@ fn entity(
             one_line(&f.message)
         );
     }
-    text += "    private: true\n    fields:\n";
+    if let Some(c) = &pol.comment {
+        text += &format!("    # {c}\n");
+    }
+    if pol.private {
+        text += "    private: true\n";
+    }
+    text += "    fields:\n";
     for (spec, note) in &lines {
         match spec.split_once(": ") {
             Some((n, rest)) => {
@@ -1408,7 +1618,11 @@ fn entity(
     for n in &notes {
         text += &format!("    {n}\n");
     }
-    Entity { text, placed }
+    Entity {
+        text,
+        placed,
+        policies: pol.blocks,
+    }
 }
 
 /// An index's columns when every position is a plain column.
