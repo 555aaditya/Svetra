@@ -31,11 +31,15 @@ Usage:
                                     Run the draft's access tests against a throwaway copy of
                                     the original database (Docker) and list where they
                                     disagree. Never touches the original
-  svetra doctor [DIR] [--json]      The pre-launch checklist for the project folder: service
-                                    keys and other secrets in code, committed .env files,
-                                    secrets in supabase/config.toml, generated files out of
-                                    date. Reads only, prints no secret's value, never says
-                                    ready: the database is not checked yet
+  svetra doctor [DIR] [--db URL | --local | --migrations [DIR] [--scratch URL] [--strict]]
+                [--schema public,...] [--json]
+                                    The pre-launch checklist: service keys and other secrets
+                                    in code, committed .env files, secrets in
+                                    supabase/config.toml, generated files out of date, and
+                                    with a database source everything `check` finds. Reads
+                                    only, prints no secret's value, never says ready while
+                                    a part is unchecked (auth settings and buckets are not
+                                    read yet)
   svetra view [FILE] [--out PATH] [--no-open] [--json]
                                     Write one page showing who can see and change what
                                     (default .svetra/view.html) and open it; --json prints
@@ -259,36 +263,86 @@ fn init(args: &[String]) -> ExitCode {
     }
 }
 
-/// `svetra doctor [DIR] [--json]` (docs/doctor.md). The database sources (`--db`, `--local`,
-/// `--migrations`) come in a later pull request.
+/// `svetra doctor [DIR] [--db URL | --local | --migrations [DIR]] ...` (docs/doctor.md).
 fn doctor(args: &[String]) -> ExitCode {
-    let json = args.iter().any(|a| a == "--json");
-    let dirs: Vec<&String> = args.iter().filter(|a| *a != "--json").collect();
-    if let Some(bad) = dirs.iter().find(|a| a.starts_with('-')) {
-        let why = if matches!(
-            bad.as_str(),
-            "--db" | "--local" | "--migrations" | "--scratch"
-        ) {
-            "doctor can't read a database yet; it reads the project folder only"
-        } else {
-            "unknown option"
-        };
-        return usage(&format!("{why}: '{bad}'"));
+    use svetra::inspect::{CheckError, Source};
+    let (mut json, mut strict, mut local) = (false, false, false);
+    let (mut db, mut scratch, mut migrations): (Option<String>, Option<String>, Option<String>) =
+        (None, None, None);
+    let mut migrations_given = false;
+    let mut schemas = vec!["public".to_string()];
+    let mut dirs: Vec<&String> = Vec::new();
+    let mut it = args.iter().peekable();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--json" => json = true,
+            "--strict" => strict = true,
+            "--local" => local = true,
+            "--migrations" => {
+                migrations_given = true;
+                if let Some(v) = it.next_if(|v| !v.starts_with("--")) {
+                    migrations = Some(v.clone());
+                }
+            }
+            "--db" | "--scratch" | "--schema" => {
+                let Some(v) = it.next() else {
+                    return usage(&format!("{a} needs a value"));
+                };
+                match a.as_str() {
+                    "--db" => db = Some(v.clone()),
+                    "--scratch" => scratch = Some(v.clone()),
+                    _ => {
+                        schemas = v
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect()
+                    }
+                }
+            }
+            other if other.starts_with('-') => {
+                return usage(&format!("unknown option: '{other}'"));
+            }
+            _ => dirs.push(a),
+        }
     }
     if dirs.len() > 1 {
         return usage("doctor takes one folder");
     }
+    if [db.is_some(), local, migrations_given]
+        .iter()
+        .filter(|b| **b)
+        .count()
+        > 1
+    {
+        return usage("give at most one of --db URL, --local and --migrations");
+    }
+    if !migrations_given && (scratch.is_some() || strict) {
+        return usage("--scratch and --strict go with --migrations");
+    }
     let dir = dirs.first().map_or(".", |d| d.as_str());
-    match svetra::doctor::run(std::path::Path::new(dir)) {
+    let path = std::path::Path::new(dir);
+    let source = if migrations_given {
+        let m =
+            migrations.unwrap_or_else(|| path.join("supabase/migrations").display().to_string());
+        Some(Source::Migrations { dir: m, scratch })
+    } else if local {
+        Some(Source::Db(
+            "postgresql://postgres:postgres@127.0.0.1:54322/postgres".to_string(),
+        ))
+    } else {
+        db.map(Source::Db)
+    };
+    match svetra::doctor::run(path, source.as_ref(), &schemas) {
         Ok(report) => {
             print!("{}", if json { report.json() } else { report.human() });
-            if report.has_critical() {
-                ExitCode::from(1)
-            } else {
-                ExitCode::SUCCESS
-            }
+            ExitCode::from(report.exit_code(strict))
         }
-        Err(e) => usage(&e),
+        Err(CheckError::Usage(m)) => usage(&m),
+        Err(CheckError::Fail(m)) => {
+            eprintln!("svetra: {m}");
+            ExitCode::from(2)
+        }
     }
 }
 
