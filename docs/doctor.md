@@ -194,3 +194,26 @@ A key missing from `config.toml` has Supabase's default, which doctor applies: s
 
 **Roles and MFA.** `mfa: true` only protects what an `aal2` session is required for. Doctor doesn't re-check that: `svetra compile --check` and the generated access tests do ([compiler.md](compiler.md#second-factors-in-sql)).
 
+## Backups and recovery
+
+**Doctor can't tell whether your data is backed up.** Backups live in your hosted Supabase project, and doctor makes no network calls and reads nothing from the hosted dashboard. It also doesn't guess from your plan: daily backups and point-in-time recovery are hosted-plan settings, and which plans include them changes. UNVERIFIED: Supabase's current plan limits, which is one more reason doctor states no plan facts.
+
+So backups are a **reminder, not a finding**, printed every run when a project looks hosted (there's a `supabase/` folder or a `--db` source), and never counted:
+
+```
+Reminders (doctor can't check these)
+  - Backups: open Supabase, Project Settings, Database, Backups. Check that backups are on, how many
+    days they are kept, and whether point-in-time recovery is enabled. Doctor can't see this.
+  - Restore: a backup you have never restored is a hope. Restore one into a new project once.
+  - Your own copy: a periodic `pg_dump`, kept somewhere that isn't your Supabase account, covers
+    the case where the account itself is lost.
+```
+
+What can be read locally, and is a finding:
+
+| Kind | Severity | Reads | When | Message and fix |
+|---|---|---|---|---|
+| `schema_not_in_git` | warning | `git ls-files`, `DIR/supabase/` | A `supabase/` folder with no tracked `.sql` file under `supabase/migrations/` or `supabase/schemas/`, while the project has tables (any source gave tables) | "Your tables exist only in the live database. If the project is lost, nothing can recreate them. fix: `supabase db pull` writes them as a migration; commit it." |
+
+With no git, or no `supabase/` folder, this check is skipped and listed under "Not checked".
+
