@@ -22,6 +22,11 @@ Usage:
                                     read, open policies, views and functions that skip
                                     row-level security. --print-query prints the read-only
                                     query, to run in the Supabase SQL editor without psql
+  svetra infer (--db URL | --local | --snapshot FILE) [--schema public,...] [--out FILE] [--force]
+                                    Draft a svetra.yaml from an existing database: entities,
+                                    fields, constraints, indexes. Whatever it can't translate
+                                    stays as an UNTRANSLATED comment; check's findings go in
+                                    comments too. --print-query prints the read-only query
   svetra view [FILE] [--out PATH] [--no-open] [--json]
                                     Write one page showing who can see and change what
                                     (default .svetra/view.html) and open it; --json prints
@@ -68,7 +73,7 @@ fn main() -> ExitCode {
             svetra::understand::context::context(doc)
         }),
         Some("view") => page(&args[1..]),
-        Some("check") => inspect(&args[1..]),
+        Some(cmd @ ("check" | "infer")) => inspect(cmd, &args[1..]),
         Some(cmd @ ("diff" | "plan")) => change(cmd, &args[1..]),
         Some("mcp") if args.len() == 1 => match svetra::mcp::serve() {
             Ok(()) => ExitCode::SUCCESS,
@@ -359,18 +364,22 @@ fn page(args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// `svetra check` (docs/check.md): find the leaks in an existing database.
-fn inspect(args: &[String]) -> ExitCode {
+/// `svetra check` (docs/check.md) and `svetra infer` (docs/infer.md): both read one catalog
+/// snapshot, `check` to find the leaks in it and `infer` to draft a `svetra.yaml` from it.
+fn inspect(command: &str, args: &[String]) -> ExitCode {
+    let infer = command == "infer";
     let (mut db, mut snapshot, mut json, mut print) = (None, None, false, false);
     let (mut migrations, mut scratch, mut strict): (Option<String>, Option<String>, bool) =
         (None, None, false);
+    let (mut out, mut force) = (None, false);
     let mut schemas = vec!["public".to_string()];
     let mut it = args.iter().peekable();
     while let Some(a) = it.next() {
         match a.as_str() {
-            "--json" => json = true,
-            "--strict" => strict = true,
-            "--migrations" => {
+            "--json" if !infer => json = true,
+            "--force" if infer => force = true,
+            "--strict" if !infer => strict = true,
+            "--migrations" if !infer => {
                 let dir = match it.peek() {
                     Some(v) if !v.starts_with("--") => it.next().cloned().unwrap_or_default(),
                     _ => "supabase/migrations".to_string(),
@@ -381,7 +390,9 @@ fn inspect(args: &[String]) -> ExitCode {
             "--local" => {
                 db = Some("postgresql://postgres:postgres@127.0.0.1:54322/postgres".to_string())
             }
-            "--db" | "--snapshot" | "--schema" | "--scratch" => {
+            "--db" | "--snapshot" | "--schema" | "--scratch" | "--out"
+                if (a != "--out" || infer) && (a != "--scratch" || !infer) =>
+            {
                 let Some(v) = it.next() else {
                     return usage(&format!("{a} needs a value"));
                 };
@@ -389,6 +400,7 @@ fn inspect(args: &[String]) -> ExitCode {
                     "--db" => db = Some(v.clone()),
                     "--scratch" => scratch = Some(v.clone()),
                     "--snapshot" => snapshot = Some(v.clone()),
+                    "--out" => out = Some(v.clone()),
                     _ => {
                         schemas = v
                             .split(',')
@@ -398,7 +410,7 @@ fn inspect(args: &[String]) -> ExitCode {
                     }
                 }
             }
-            other => return usage(&format!("unknown argument '{other}' for check")),
+            other => return usage(&format!("unknown argument '{other}' for {command}")),
         }
     }
     if migrations.is_none() && (scratch.is_some() || strict) {
@@ -410,8 +422,16 @@ fn inspect(args: &[String]) -> ExitCode {
         );
     }
     if print {
-        println!("{};", svetra::inspect::query(&schemas));
+        let query = if infer {
+            svetra::inspect::infer_query(&schemas)
+        } else {
+            svetra::inspect::query(&schemas)
+        };
+        println!("{query};");
         return ExitCode::SUCCESS;
+    }
+    if infer {
+        return infer_draft(db, snapshot, &schemas, out, force);
     }
     let source = match (migrations, db, snapshot) {
         (Some(dir), _, _) => svetra::inspect::Source::Migrations { dir, scratch },
@@ -436,6 +456,96 @@ fn inspect(args: &[String]) -> ExitCode {
         print!("{}", report.human(&schemas));
     }
     ExitCode::from(report.exit_code(strict))
+}
+
+/// `svetra infer` (docs/infer.md): read the snapshot with the infer query, then write the draft.
+fn infer_draft(
+    db: Option<String>,
+    snapshot: Option<String>,
+    schemas: &[String],
+    out: Option<String>,
+    force: bool,
+) -> ExitCode {
+    let text = match (&db, &snapshot) {
+        (Some(url), None) => {
+            let query = svetra::inspect::infer_query(schemas);
+            let run = std::process::Command::new("psql")
+                .args([
+                    url.as_str(),
+                    "-X",
+                    "-A",
+                    "-t",
+                    "-q",
+                    "-v",
+                    "ON_ERROR_STOP=1",
+                    "-c",
+                    &query,
+                ])
+                .output();
+            match run {
+                Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+                Ok(o) => {
+                    eprintln!(
+                        "svetra: the database refused the query: {}",
+                        String::from_utf8_lossy(&o.stderr).trim()
+                    );
+                    return ExitCode::from(2);
+                }
+                Err(_) => {
+                    eprintln!(
+                        "svetra: psql isn't installed. Run `svetra infer --print-query`, run the query in the Supabase SQL editor, save the JSON it returns to a file, then `svetra infer --snapshot <file>`."
+                    );
+                    return ExitCode::from(2);
+                }
+            }
+        }
+        (None, Some(f)) => match read(f) {
+            Ok(t) => t,
+            Err(e) => return usage(&e),
+        },
+        _ => return usage("infer needs one of --db URL, --local or --snapshot FILE"),
+    };
+    let snap: serde_json::Value = match serde_json::from_str(text.trim()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!(
+                "svetra: that isn't the JSON the infer query returns ({e}). Run `svetra infer --print-query` for the query."
+            );
+            return ExitCode::from(2);
+        }
+    };
+    draft(&snap, out.as_deref().unwrap_or("svetra.yaml"), force)
+}
+
+/// `svetra infer`: write the draft, or print it with `--out -` (docs/infer.md, Output).
+fn draft(snap: &serde_json::Value, out: &str, force: bool) -> ExitCode {
+    let d = match svetra::infer::infer(snap) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("svetra: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    if out == "-" {
+        print!("{}", d.yaml);
+        return ExitCode::SUCCESS;
+    }
+    if std::path::Path::new(out).exists() && !force {
+        eprintln!(
+            "svetra: {out} already exists. Pass --force to overwrite it, or --out to write elsewhere."
+        );
+        return ExitCode::from(2);
+    }
+    if let Err(e) = std::fs::write(out, &d.yaml) {
+        eprintln!("svetra: can't write {out}: {e}");
+        return ExitCode::from(2);
+    }
+    println!(
+        "wrote {out}: {} entities, {} fields, {} things left as UNTRANSLATED, {} critical findings in comments",
+        d.entities, d.fields, d.untranslated, d.critical
+    );
+    println!("Next: review the draft, then `svetra validate`, then `svetra compile`.");
+    ExitCode::SUCCESS
 }
 
 /// `svetra diff` and `svetra plan` (docs/change.md).
