@@ -369,3 +369,13 @@ Three build PRs, each shippable alone with its own golden files, `scripts/pg-che
 2. **Triggered holes:** the `old.` form in the expression language, `on` and `events`, `SVT038` and the loop graph, the trigger function and triggers, their tests, a breakage, and the `explain` and `view` text including the extra line under who can change.
 3. **Webhook holes:** the Edge Function generator, `config.toml` handling, `svetra.webhook_events`, `SVT039`, the `service_role`-only public function, their tests, and the "Before going live" lines.
 
+## Done when
+
+- A design with one hole of each kind validates, compiles, applies to PostgreSQL 16 and to a real local Supabase, and `scripts/pg-check.sh` and `scripts/supabase-check.sh` pass.
+- Every new code has a row in `src/diag.rs` and in `format.md`, a test that triggers it, a message and a hint.
+- The generated access tests fail, with the expected check names and no others, when any of these is changed by hand: a body function made executable by `authenticated`; a job's schedule; a trigger's `when` or table; a hole role's privileges; a webhook's public function made executable by `anon`.
+- No API role can call a scheduled hole, a triggered hole, or a webhook's body in any way the tests can find.
+- A trigger loop is refused by `validate` and, if one slips past it, by the depth limit.
+- `svetra.yaml` holds only secret names. A pasted secret is `SVT039`, and the message doesn't print it.
+- `svetra explain` says, for each hole, what starts it, what it can read and change, and for a webhook what to set before going live, with no jargon. Someone who has never written code can answer "can a visitor run this?" from it.
+- Every UNVERIFIED row in this document is either confirmed or replaced by what was found, in the same PR that builds the feature.
