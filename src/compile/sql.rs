@@ -137,8 +137,30 @@ pub fn schema_with(doc: &Document, bodies: &HashMap<String, String>) -> String {
             .iter()
             .map(|h| hole(h, doc, &entities, bodies))
             .collect();
+        let scheduled: Vec<String> = doc
+            .holes
+            .iter()
+            .filter(|h| matches!(h.kind, HoleKind::Schedule(_)))
+            .map(|h| lit(&job_name(&h.name)))
+            .collect();
+        // pg_cron is switched on only when a design schedules something. The stand-in has a
+        // stub `cron` schema instead of the extension.
+        let cron_on = if scheduled.is_empty() {
+            String::new()
+        } else {
+            "do $$ begin if to_regnamespace('cron') is null then create extension pg_cron; end if; end $$;\n".to_string()
+        };
+        // Jobs Svetra made for holes that are no longer declared. `_` is a wildcard in `like`.
+        let cleanup = if scheduled.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "select cron.unschedule(jobid) from cron.job\n  where jobname like 'svetra\\_%' and jobname not in ({});\n",
+                scheduled.join(", ")
+            )
+        };
         out += &format!(
-            "\n-- Holes\ncreate schema if not exists \"svetra_holes\";\n\n{}",
+            "\n-- Holes\ncreate schema if not exists \"svetra_holes\";\n{cron_on}\n{}{cleanup}",
             holes.join("\n")
         );
     }
@@ -289,6 +311,11 @@ fn param_type(t: &ParamType, entities: &HashMap<&str, &Entity>) -> String {
 
 /// One hole (docs/compiler.md, Holes): a role holding exactly the declared access, the body
 /// function that runs as that role behind the `when` guard, and the function the API calls.
+/// The pg_cron job of a scheduled hole.
+pub fn job_name(hole: &str) -> String {
+    format!("svetra_{hole}")
+}
+
 fn hole(
     h: &Hole,
     doc: &Document,
@@ -398,6 +425,21 @@ fn hole(
     out.push(format!(
         "grant execute on function {inner_sig} to current_user;"
     ));
+    if let HoleKind::Schedule(sched) = &h.kind {
+        // No function in `public`: nothing in the API can run it. Supabase also lets
+        // service_role run new functions, and the stand-in has no such role.
+        out.push(format!(
+            "do $$ begin if exists (select from pg_roles where rolname = 'service_role') then revoke all on function {inner_sig} from service_role; end if; end $$;"
+        ));
+        out.push(format!(
+            "select cron.schedule({}, {},\n  $job$select {}(null)\n    where pg_try_advisory_xact_lock(hashtext({}))$job$);",
+            lit(&job_name(&h.name)),
+            lit(&sched.cron),
+            inner_sig.trim_end_matches("(uuid)"),
+            lit(&job_name(&h.name)),
+        ));
+        return out.join("\n") + "\n";
+    }
     let outer_sig = format!("\"public\".{}({})", q(&h.name), types.join(", "));
     let outer_params: Vec<String> = inputs.iter().map(|(n, t)| format!("{n} {t}")).collect();
     let args: String = inputs.iter().map(|(n, _)| format!(", {n}")).collect();

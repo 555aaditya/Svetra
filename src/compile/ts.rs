@@ -58,10 +58,12 @@ pub fn types(doc: &Document) -> String {
             name = e.name
         );
     }
-    if !doc.holes.is_empty() {
+    // A scheduled hole has no function in `public`, so the app has nothing to call.
+    let callable = |h: &&Hole| h.kind == HoleKind::Function;
+    if doc.holes.iter().any(|h| callable(&h)) {
         out += HOLES_HEADER;
     }
-    for (h, fields) in doc.holes.iter().zip(&inputs) {
+    for (h, fields) in doc.holes.iter().zip(&inputs).filter(|(h, _)| callable(h)) {
         out += &hole(h, fields, &entities);
     }
     out
