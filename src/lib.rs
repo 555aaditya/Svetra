@@ -1,6 +1,7 @@
 pub mod change;
 pub mod check;
 pub mod compile;
+pub mod cron;
 pub mod diag;
 pub mod doctor;
 pub mod expr;
