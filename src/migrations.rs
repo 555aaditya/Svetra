@@ -19,6 +19,7 @@ const MAX_FILE_BYTES: u64 = 2_000_000;
 const LIFETIME_SECONDS: u32 = 900;
 
 /// What applying the migrations did.
+#[derive(Debug)]
 pub struct Outcome {
     pub files: usize,
     pub applied: usize,
