@@ -1,0 +1,3 @@
+# Every pull request adds its line under "## Unreleased", so two PRs always clash there. A union
+# merge keeps both lines, which is what a person resolving it would do.
+CHANGELOG.md merge=union

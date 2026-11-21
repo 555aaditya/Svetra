@@ -1,0 +1,64 @@
+name: update-prs
+
+# When a branch moves, merge it into every open pull request based on it, so a PR that only fell
+# behind stays mergeable without anyone touching it. CHANGELOG.md merges as a union
+# (.gitattributes), so the usual "two PRs added a changelog line" clash resolves itself. A real
+# conflict is left for a person: the PR gets one comment naming the files, and nothing is pushed.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: update-prs
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Merge the base into each open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUSHED: ${{ github.event_name == 'push' && github.ref_name || '' }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          marker="<!-- update-prs: conflict -->"
+          # Pull requests from this repository only; a fork's branch can't be pushed to.
+          gh pr list --state open --limit 100 \
+            --json number,headRefName,baseRefName,isCrossRepository \
+            --jq '.[] | select(.isCrossRepository | not) | "\(.number) \(.baseRefName) \(.headRefName)"' |
+          while read -r number base head; do
+            # On a push, only the pull requests based on the branch that moved.
+            if [ -n "$PUSHED" ] && [ "$base" != "$PUSHED" ]; then continue; fi
+            git fetch -q origin "$base" "$head"
+            git checkout -q -B "$head" "origin/$head"
+            if git merge-base --is-ancestor "origin/$base" HEAD; then
+              echo "#$number is up to date with $base"
+              continue
+            fi
+            if git merge --no-edit -m "Merge $base into $head" "origin/$base"; then
+              git push -q origin "HEAD:$head"
+              # Pushes made with this token don't start pull_request runs, so start ci by hand.
+              gh workflow run ci.yml --ref "$head"
+              echo "#$number: merged $base into $head"
+            else
+              files=$(git diff --name-only --diff-filter=U | sed 's/^/- `/; s/$/`/')
+              git merge --abort
+              if ! gh pr view "$number" --json comments --jq '.comments[].body' | grep -qF "$marker"; then
+                printf '%s\n%s\n\n%s\n' "$marker" \
+                  "Merging \`$base\` into this branch conflicts in these files, so it needs a person:" \
+                  "$files" | gh pr comment "$number" --body-file -
+              fi
+              echo "#$number: conflicts with $base, left for a person"
+            fi
+          done
