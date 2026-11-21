@@ -156,3 +156,22 @@ fn on_delete_problems_are_svt023() {
         ["SVT023"]
     );
 }
+
+#[test]
+fn audit_loads_on_entities_and_holes() {
+    let src = format!(
+        "{HEAD}entities:\n  A:\n    audit: true\n    fields:\n      id: {{ type: uuid, primary: true }}\n  B:\n    fields:\n      id: {{ type: uuid, primary: true }}\nholes:\n  go:\n    kind: function\n    writes: [B]\n    audit: true\n  stay:\n    kind: function\n"
+    );
+    let (doc, diags) = load(&src);
+    assert!(diags.is_empty(), "{diags:#?}");
+    assert!(doc.entities[0].audit && !doc.entities[1].audit);
+    assert!(doc.holes[0].audit && !doc.holes[1].audit);
+}
+
+#[test]
+fn audit_must_be_true_or_false() {
+    let src = format!(
+        "{HEAD}entities:\n  A:\n    audit: yes please\n    fields:\n      id: {{ type: uuid, primary: true }}\n"
+    );
+    assert_eq!(codes(&src), ["SVT029"]);
+}

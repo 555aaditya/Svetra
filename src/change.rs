@@ -594,6 +594,9 @@ fn entity(
             ));
         }
     }
+    if o.audit != n.audit {
+        changes.push(audit_change(path.clone(), n.audit, &plural(&n.name)));
+    }
     if !o.private && n.private {
         changes.push(hint(
             change(
@@ -652,9 +655,41 @@ fn signature(h: &Hole) -> String {
     )
 }
 
+/// Turning `audit` on or off (docs/change.md). Neither touches data; turning it off is listed so it
+/// is seen, because what happens next is no longer recorded.
+fn audit_change(path: String, on: bool, what: &str) -> Change {
+    if on {
+        change(
+            "add_audit",
+            path,
+            Data::Safe,
+            format!("{what} start being recorded in the audit log"),
+        )
+    } else {
+        hint(
+            change(
+                "remove_audit",
+                path,
+                Data::Safe,
+                format!("{what} are no longer recorded in the audit log"),
+            ),
+            "Records already in the log stay. Turn audit back on to keep recording.",
+        )
+    }
+}
+
 fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
     for h in &new.holes {
         let path = format!("holes.{}", h.name);
+        if let Some(x) = old.holes.iter().find(|x| x.name == h.name)
+            && x.audit != h.audit
+        {
+            changes.push(audit_change(
+                path.clone(),
+                h.audit,
+                &format!("calls of {}", h.name),
+            ));
+        }
         match old.holes.iter().find(|x| x.name == h.name) {
             None => changes.push(change("add_hole", path, Data::Safe, format!("add custom code {}", h.name))),
             Some(x) if signature(x) != signature(h) => changes.push(hint(

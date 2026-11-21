@@ -128,6 +128,9 @@ pub fn schema_with(doc: &Document, bodies: &HashMap<String, String>) -> String {
             guards.join("\n")
         );
     }
+    if doc.entities.iter().any(|e| e.audit) || doc.holes.iter().any(|h| h.audit) {
+        out += &format!("\n-- Audit\n{}", audit(doc));
+    }
     if !doc.holes.is_empty() {
         let holes: Vec<String> = doc
             .holes
@@ -137,6 +140,56 @@ pub fn schema_with(doc: &Document, bodies: &HashMap<String, String>) -> String {
         out += &format!(
             "\n-- Holes\ncreate schema if not exists \"svetra_holes\";\n\n{}",
             holes.join("\n")
+        );
+    }
+    out
+}
+
+/// The audit log, its append-only trigger and one row trigger per audited entity
+/// (docs/compiler.md, Audit).
+fn audit(doc: &Document) -> String {
+    let mut out = String::from(
+        r#"create schema if not exists "svetra";
+create table "svetra"."audit_log" (
+  "id" bigint generated always as identity primary key,
+  "at" timestamptz not null default now(),
+  "actor" uuid,
+  "kind" text not null check ("kind" in ('row', 'call')),
+  "subject" text not null,
+  "action" text not null check ("action" in ('insert', 'update', 'delete', 'call')),
+  "old" jsonb,
+  "new" jsonb
+);
+alter table "svetra"."audit_log" enable row level security;
+revoke all on table "svetra"."audit_log" from public, anon, authenticated;
+
+create function "svetra"."audit_frozen"() returns trigger language plpgsql as $svetra$
+begin
+  raise exception 'the audit log is append-only' using errcode = '42501';
+end $svetra$;
+create trigger "svetra_audit_frozen" before update or delete on "svetra"."audit_log"
+  for each row execute function "svetra"."audit_frozen"();
+create trigger "svetra_audit_frozen_truncate" before truncate on "svetra"."audit_log"
+  for each statement execute function "svetra"."audit_frozen"();
+"#,
+    );
+    if doc.entities.iter().any(|e| e.audit) {
+        out += r#"
+create function "svetra"."audit_row"() returns trigger language plpgsql
+  security definer set search_path = '' as $svetra$
+begin
+  insert into "svetra"."audit_log" ("actor", "kind", "subject", "action", "old", "new")
+  values ((select auth.uid()), 'row', tg_table_name, lower(tg_op),
+    case when tg_op <> 'INSERT' then to_jsonb(old) end,
+    case when tg_op <> 'DELETE' then to_jsonb(new) end);
+  return null;
+end $svetra$;
+"#;
+    }
+    for e in doc.entities.iter().filter(|e| e.audit) {
+        out += &format!(
+            "create trigger \"svetra_audit\" after insert or update or delete on {}\n  for each row execute function \"svetra\".\"audit_row\"();\n",
+            table(&e.name)
         );
     }
     out
@@ -354,8 +407,27 @@ fn hole(
     } else {
         format!("perform {call};")
     };
+    // The record is written here, by the migration's role, so the hole's own role never touches
+    // the log. A guard that refuses rolls it back with everything else.
+    let log = if h.audit {
+        let inputs = if inputs.is_empty() {
+            "'{}'::jsonb".to_string()
+        } else {
+            let pairs: Vec<String> = inputs
+                .iter()
+                .map(|(n, _)| format!("{}, {n}", lit(n)))
+                .collect();
+            format!("jsonb_build_object({})", pairs.join(", "))
+        };
+        format!(
+            " insert into \"svetra\".\"audit_log\" (\"actor\", \"kind\", \"subject\", \"action\", \"new\") values ((select auth.uid()), 'call', {}, 'call', {inputs});",
+            lit(&h.name)
+        )
+    } else {
+        String::new()
+    };
     out.push(format!(
-        "create function \"public\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$ begin {run} end $svetra$;",
+        "create function \"public\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$ begin{log} {run} end $svetra$;",
         q(&h.name),
         outer_params.join(", ")
     ));

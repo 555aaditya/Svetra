@@ -90,6 +90,8 @@ pub struct Entity {
     pub unique: Vec<FieldList>,
     pub indexes: Vec<FieldList>,
     pub private: bool,
+    /// Every change to a row is recorded in the audit log (docs/format.md, Audit).
+    pub audit: bool,
     /// What it was called in the design the database has: declares a rename (docs/change.md).
     pub was: Option<NameRef>,
 }
@@ -208,6 +210,8 @@ pub struct Hole {
     pub role: Role,
     /// A condition over the inputs that must hold for the call to run.
     pub when: Option<String>,
+    /// Every call that runs is recorded in the audit log.
+    pub audit: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

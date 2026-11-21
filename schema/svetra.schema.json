@@ -112,6 +112,10 @@
           "description": "Keep this entity out of the generated API.",
           "type": "boolean"
         },
+        "audit": {
+          "description": "Record every insert, update and delete of a row in the append-only audit log, with who did it.",
+          "type": "boolean"
+        },
         "was": {
           "description": "Its name in the design the database has: declares a rename, so `svetra plan` keeps the data.",
           "type": "string",
@@ -386,6 +390,10 @@
         "when": {
           "description": "A condition over the inputs that must hold for the call to run, such as \"source.owner == auth.user\".",
           "type": "string"
+        },
+        "audit": {
+          "description": "Record every call that runs in the append-only audit log, with who made it and the inputs.",
+          "type": "boolean"
         }
       }
     },
