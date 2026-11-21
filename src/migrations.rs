@@ -145,19 +145,16 @@ pub fn docker_available() -> bool {
         .is_ok_and(|s| s.success())
 }
 
-/// Build the migrations in a throwaway Docker database and read the snapshot.
-pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
-    let paths = files(dir).map_err(Fail)?;
+/// Start a throwaway container of `image`, no network and no extra privileges, and wait until
+/// its server stays up. It is removed when the returned value drops, or stops itself after
+/// `LIFETIME_SECONDS`.
+fn start(image: &str, memory: &str) -> Result<Container, Fail> {
     if !docker_available() {
         return Err(Fail(
             "Docker isn't running. Start Docker, or use --scratch with a throwaway database."
                 .into(),
         ));
     }
-    eprintln!(
-        "svetra: building {} migrations in a throwaway PostgreSQL (Docker)…",
-        paths.len()
-    );
     let name = format!("svetra-check-{}", std::process::id());
     let started = Command::new("docker")
         .args([
@@ -183,12 +180,12 @@ pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
             "--security-opt",
             "no-new-privileges",
             "--memory",
-            "1g",
+            memory,
             "--pids-limit",
             "512",
             "-e",
             "POSTGRES_PASSWORD=svetra",
-            IMAGE,
+            image,
             "timeout",
             &LIFETIME_SECONDS.to_string(),
             "docker-entrypoint.sh",
@@ -218,20 +215,15 @@ pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
     if steady < 3 {
         return Err(Fail("the throwaway database didn't start in time".into()));
     }
-    for (what, sql) in [("base", BASE), ("extra", EXTRA)] {
-        let out = container
-            .psql(&["-v", "ON_ERROR_STOP=1"], sql)
-            .map_err(|e| Fail(format!("couldn't load the Supabase stand-in: {e}")))?;
-        if !out.status.success() {
-            return Err(Fail(format!(
-                "couldn't load the Supabase stand-in ({what}): {}",
-                first_error(&String::from_utf8_lossy(&out.stderr))
-            )));
-        }
-    }
+    Ok(container)
+}
+
+/// Apply each migration in `paths` in order, each in one transaction: how many applied, and
+/// (file name, first line of the database's error) for each that didn't.
+fn apply(container: &Container, paths: &[PathBuf]) -> Result<(usize, Vec<(String, String)>), Fail> {
     let mut failed = Vec::new();
     let mut applied = 0;
-    for p in &paths {
+    for p in paths {
         let file = name_of(p);
         if std::fs::metadata(p).map_or(true, |m| m.len() > MAX_FILE_BYTES) {
             failed.push((file, "the file is larger than 2 MB".to_string()));
@@ -245,6 +237,35 @@ pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
             Err(e) => return Err(Fail(format!("lost the throwaway database: {e}"))),
         }
     }
+    Ok((applied, failed))
+}
+
+/// Build the migrations in a throwaway Docker database and read the snapshot.
+pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
+    let paths = files(dir).map_err(Fail)?;
+    if !docker_available() {
+        return Err(Fail(
+            "Docker isn't running. Start Docker, or use --scratch with a throwaway database."
+                .into(),
+        ));
+    }
+    eprintln!(
+        "svetra: building {} migrations in a throwaway PostgreSQL (Docker)…",
+        paths.len()
+    );
+    let container = start(IMAGE, "1g")?;
+    for (what, sql) in [("base", BASE), ("extra", EXTRA)] {
+        let out = container
+            .psql(&["-v", "ON_ERROR_STOP=1"], sql)
+            .map_err(|e| Fail(format!("couldn't load the Supabase stand-in: {e}")))?;
+        if !out.status.success() {
+            return Err(Fail(format!(
+                "couldn't load the Supabase stand-in ({what}): {}",
+                first_error(&String::from_utf8_lossy(&out.stderr))
+            )));
+        }
+    }
+    let (applied, failed) = apply(&container, &paths)?;
     let snapshot = if applied == 0 {
         String::new()
     } else {
