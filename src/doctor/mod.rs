@@ -4,9 +4,12 @@
 //! Nothing here touches the network, writes a file, or prints a secret's value: a finding names
 //! a file, a line and a kind of key.
 
+pub mod files;
 pub mod jwt;
+pub mod keys;
 
 use serde_json::{Value, json};
+use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Severity {
@@ -199,4 +202,34 @@ fn plural(n: usize, one: &'static str, many: &'static str) -> &'static str {
 
 fn yes(b: bool) -> &'static str {
     if b { "yes" } else { "no" }
+}
+
+/// Reads the project folder `dir` and reports. Errors only when `dir` isn't a folder.
+pub fn run(dir: &Path) -> Result<Report, String> {
+    if !dir.is_dir() {
+        return Err(format!("{} is not a folder", dir.display()));
+    }
+    let files = files::walk(dir);
+    let git = files::Git::open(dir);
+    let mut report = Report {
+        project: dir.display().to_string(),
+        git: git.is_some(),
+        ..Report::default()
+    };
+    report.findings.extend(keys::check(&files, git.as_ref()));
+    report.findings.sort_by(|a, b| {
+        (a.area, a.severity, &a.file, a.line, a.kind)
+            .cmp(&(b.area, b.severity, &b.file, b.line, b.kind))
+    });
+    if git.is_none() {
+        report.not_checked.push((
+            "Git",
+            "this folder isn't a git repository, so doctor can't tell which files are committed and treats every secret as if its file were".to_string(),
+        ));
+    }
+    report.not_checked.push((
+        "Database",
+        "no database was read: data exposure and storage buckets are not checked".to_string(),
+    ));
+    Ok(report)
 }
