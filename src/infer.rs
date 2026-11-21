@@ -4,6 +4,7 @@
 
 use crate::check::MONEY_WORDS;
 use crate::compile::names::snake;
+use crate::inspect::{b, s};
 use serde_json::Value;
 
 /// Is this a name Svetra accepts for a field, constraint or table: `^[a-z][a-z0-9_]*$`?
@@ -586,6 +587,569 @@ pub fn translate_check(definition: &str, fields: &[String]) -> Option<String> {
     let text = rewrite(&unparen(drop_casts(lex(d)?)?))?;
     let parsed = crate::expr::parse(&text).ok()?;
     reads_only(&parsed, fields).then_some(text)
+}
+
+/// A drafted `svetra.yaml` and what it holds, for the summary line.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Draft {
+    pub yaml: String,
+    pub entities: usize,
+    pub fields: usize,
+    /// Things left as `UNTRANSLATED` comments: columns, defaults, constraints, indexes, keys, tables.
+    pub untranslated: usize,
+    pub critical: usize,
+}
+
+fn rows<'a>(snap: &'a Value, key: &str) -> Vec<&'a Value> {
+    snap[key].as_array().into_iter().flatten().collect()
+}
+
+fn on<'a>(rows: &[&'a Value], table: &str) -> Vec<&'a Value> {
+    rows.iter()
+        .filter(|r| s(r, "schema") == "public" && s(r, "table") == table)
+        .copied()
+        .collect()
+}
+
+fn names(v: &Value) -> Vec<String> {
+    v.as_array()
+        .into_iter()
+        .flatten()
+        .map(|x| x.as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+/// SQL on one line, so a comment can't end early.
+fn one_line(sql: &str) -> String {
+    sql.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn plural(n: usize, word: &str) -> String {
+    format!("{n} {word}{}", if n == 1 { "" } else { "s" })
+}
+
+fn untranslated(counts: &mut Counts, text: String) -> String {
+    counts.untranslated += 1;
+    format!("# UNTRANSLATED {}", one_line(&text))
+}
+
+struct Plan {
+    table: String,
+    entity: String,
+    pk: String,
+    pk_uuid: bool,
+}
+
+struct Counts {
+    fields: usize,
+    untranslated: usize,
+}
+
+/// A constraint put in the draft, so a validation error can send it back to a comment.
+struct Placed {
+    entity: String,
+    name: String,
+    table: String,
+    original: String,
+}
+
+/// Which parts of an entity can't be said, and the lines that say so.
+struct Entity {
+    text: String,
+    placed: Vec<Placed>,
+}
+
+/// Draft a `svetra.yaml` from a snapshot taken with `inspect::infer_query`.
+pub fn infer(snap: &Value) -> Result<Draft, String> {
+    if !snap["columns"].is_array() {
+        return Err(
+            "That snapshot predates `infer`. Run `svetra infer --print-query` and take it again."
+                .into(),
+        );
+    }
+    let mut rejected: Vec<(String, String)> = Vec::new();
+    // A constraint that builds but doesn't type-check goes back to a comment, then we build again.
+    for _ in 0..20 {
+        let (draft, placed) = build(snap, &rejected)?;
+        let bad: Vec<(String, String)> = crate::report::validate(&draft.yaml)
+            .iter()
+            .filter(|d| d.code == crate::diag::Code::Svt003)
+            .filter_map(|d| {
+                let path = d.path.strip_prefix("entities.")?;
+                let (entity, rest) = path.split_once(".constraints.")?;
+                let name = rest.split('.').next()?;
+                placed
+                    .iter()
+                    .find(|p| p.entity == entity && p.name == name)
+                    .map(|p| (p.table.clone(), p.original.clone()))
+            })
+            .filter(|b| !rejected.contains(b))
+            .collect();
+        if bad.is_empty() {
+            return Ok(draft);
+        }
+        rejected.extend(bad);
+    }
+    build(snap, &rejected).map(|(d, _)| d)
+}
+
+fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Placed>), String> {
+    let columns = rows(snap, "columns");
+    let constraints = rows(snap, "constraints");
+    let indexes = rows(snap, "indexes");
+    let enums = rows(snap, "enums");
+    let findings = crate::inspect::findings(snap);
+    let mut counts = Counts {
+        fields: 0,
+        untranslated: 0,
+    };
+    let mut left_out: Vec<String> = Vec::new();
+    let mut plans: Vec<Plan> = Vec::new();
+    let tables = rows(snap, "tables");
+    for t in &tables {
+        let (schema, name) = (s(t, "schema"), s(t, "name"));
+        let mut out = |why: String| {
+            counts.untranslated += 1;
+            left_out.push(format!(
+                "# UNTRANSLATED table {schema}.{name}: {}",
+                one_line(&why)
+            ));
+        };
+        if schema != "public" {
+            out("only tables in public become entities".into());
+            continue;
+        }
+        let cols = on(&columns, name);
+        if cols.is_empty() {
+            out("a partition of another table, or a table with no columns".into());
+            continue;
+        }
+        let Some(entity) = entity_name(name) else {
+            out("its name doesn't compile back to the same table".into());
+            continue;
+        };
+        let pks: Vec<_> = on(&constraints, name)
+            .into_iter()
+            .filter(|c| s(c, "kind") == "p")
+            .collect();
+        let [pk] = pks[..] else {
+            out("no primary key".into());
+            continue;
+        };
+        let pk_cols = names(&pk["columns"]);
+        let [pk_col] = &pk_cols[..] else {
+            out(format!(
+                "an entity needs one primary field: {} {}",
+                s(pk, "name"),
+                s(pk, "definition")
+            ));
+            continue;
+        };
+        let Some(col) = cols.iter().find(|c| s(c, "name") == pk_col) else {
+            continue;
+        };
+        let problem = if !is_snake(pk_col) {
+            Some("the primary key's name isn't snake_case".to_string())
+        } else if b(col, "generated") {
+            Some("the primary key is a generated column".to_string())
+        } else {
+            map_type(col, &enums).err()
+        };
+        if let Some(why) = problem {
+            out(format!("primary key {pk_col}: {why}"));
+            continue;
+        }
+        let uuid = map_type(col, &enums).is_ok_and(|m| m.kind == Kind::Uuid);
+        plans.push(Plan {
+            table: name.to_string(),
+            entity,
+            pk: pk_col.clone(),
+            pk_uuid: uuid,
+        });
+    }
+    if plans.is_empty() {
+        return Err("Nothing to infer: no table in public could become an entity.".into());
+    }
+    plans.sort_by(|a, b| a.table.cmp(&b.table));
+    let mut used: Vec<String> = Vec::new();
+    let mut placed = Vec::new();
+    let mut body = String::new();
+    for plan in &plans {
+        let e = entity(
+            plan,
+            &plans,
+            &columns,
+            &constraints,
+            &indexes,
+            &enums,
+            &findings,
+            rejected,
+            &mut used,
+            &mut counts,
+        );
+        body += &e.text;
+        placed.extend(e.placed);
+    }
+    if !left_out.is_empty() {
+        body += "\n# Tables left out of the entities:\n";
+        for l in &left_out {
+            body += l;
+            body.push('\n');
+        }
+    }
+    let count =
+        |sev: crate::inspect::Severity| findings.iter().filter(|f| f.severity == sev).count();
+    let (critical, warnings) = (
+        count(crate::inspect::Severity::Critical),
+        count(crate::inspect::Severity::Warning),
+    );
+    let mut head = String::from(
+        "# Drafted by `svetra infer` from a database snapshot. Review before adopting.\n\
+# Every entity is `private: true`: no policies are inferred yet, so nothing is exposed through\n\
+# the API until you add policies and remove `private`. That differs from the live database.\n",
+    );
+    head += &format!(
+        "# {} entities from {} tables. Skipped: {}, {}.\n",
+        plans.len(),
+        tables.len(),
+        plural(rows(snap, "views").len(), "view"),
+        plural(rows(snap, "functions").len(), "function")
+    );
+    head += &format!(
+        "# {} things left as UNTRANSLATED (search for UNTRANSLATED).\n#\n",
+        counts.untranslated
+    );
+    if findings.is_empty() {
+        head += "# svetra check found nothing.\n";
+    } else {
+        head += &format!(
+            "# svetra check found {critical} critical, {warnings} warning{} and {} note{}:\n",
+            if warnings == 1 { "" } else { "s" },
+            count(crate::inspect::Severity::Info),
+            if count(crate::inspect::Severity::Info) == 1 {
+                ""
+            } else {
+                "s"
+            },
+        );
+        for f in &findings {
+            head += &format!(
+                "#   {:<9} {}: {}\n",
+                f.severity.word(),
+                f.object,
+                one_line(&f.message)
+            );
+        }
+    }
+    head += "# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json\n";
+    head += "svetra: \"0.1\"\nsystem: App   # rename\n\nentities:\n";
+    Ok((
+        Draft {
+            yaml: head + &body,
+            entities: plans.len(),
+            fields: counts.fields,
+            untranslated: counts.untranslated,
+            critical,
+        },
+        placed,
+    ))
+}
+
+/// How a foreign key's `on delete` / `on update` shows in its definition.
+fn fk_actions(definition: &str) -> Option<String> {
+    let at = definition
+        .find(" ON DELETE")
+        .or_else(|| definition.find(" ON UPDATE"))?;
+    Some(one_line(&definition[at..]))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn entity(
+    plan: &Plan,
+    plans: &[Plan],
+    columns: &[&Value],
+    constraints: &[&Value],
+    indexes: &[&Value],
+    enums: &[&Value],
+    findings: &[crate::inspect::Finding],
+    rejected: &[(String, String)],
+    used: &mut Vec<String>,
+    counts: &mut Counts,
+) -> Entity {
+    let table = plan.table.as_str();
+    let cols = on(columns, table);
+    let cons = on(constraints, table);
+    let idxs = on(indexes, table);
+    let mut notes: Vec<String> = Vec::new(); // entity-level UNTRANSLATED lines
+    let mut lines: Vec<(String, Vec<String>)> = Vec::new(); // (key and spec, notes) or ("", [comment])
+    let mut fields: Vec<String> = Vec::new();
+    let mut consumed: Vec<String> = Vec::new();
+    for col in &cols {
+        let name = s(col, "name");
+        let ty = s(col, "type");
+        let is_pk = name == plan.pk;
+        if !is_snake(name) {
+            let c = untranslated(
+                counts,
+                format!("column \"{name}\" {ty}: its name isn't snake_case"),
+            );
+            lines.push((String::new(), vec![c]));
+            continue;
+        }
+        if b(col, "generated") {
+            let c = untranslated(
+                counts,
+                format!(
+                    "column {name} {ty}: a generated column, default {}",
+                    s(col, "default")
+                ),
+            );
+            lines.push((String::new(), vec![c]));
+            continue;
+        }
+        let fk = cons.iter().find(|c| {
+            s(c, "kind") == "f"
+                && names(&c["columns"]) == [name]
+                && names(&c["ref_columns"]).len() == 1
+        });
+        let mut mapped = None;
+        let mut note: Vec<String> = Vec::new();
+        if let (Some(fk), false) = (fk, is_pk) {
+            let (rs, rt) = (s(fk, "ref_schema"), s(fk, "ref_table"));
+            let rc = names(&fk["ref_columns"]).remove(0);
+            let target = plans
+                .iter()
+                .find(|p| rs == "public" && p.table == rt && p.pk == rc && p.pk_uuid);
+            let kind = if ty == "uuid" { Some(()) } else { None };
+            if kind.is_some() && rs == "auth" && rt == "users" && rc == "id" {
+                mapped = Some(Mapped {
+                    ty: "user",
+                    opts: vec![],
+                    kind: Kind::Uuid,
+                    lossy: None,
+                });
+            } else if let (Some(_), Some(t)) = (kind, target) {
+                mapped = Some(Mapped {
+                    ty: "ref",
+                    opts: vec![format!("entity: {}", t.entity)],
+                    kind: Kind::Uuid,
+                    lossy: None,
+                });
+            }
+            if mapped.is_some() {
+                consumed.push(s(fk, "name").to_string());
+                if let Some(a) = fk_actions(s(fk, "definition")) {
+                    note.push(format!("lossy: the foreign key had {a}, Svetra writes none"));
+                }
+            }
+        }
+        let is_link = mapped.is_some();
+        let mapped = match mapped {
+            Some(m) => m,
+            None => match map_type(col, enums) {
+                Ok(m) => m,
+                Err(why) => {
+                    let c = untranslated(counts, format!("column {name} {ty}: {why}"));
+                    lines.push((String::new(), vec![c]));
+                    continue;
+                }
+            },
+        };
+        if let Some(l) = &mapped.lossy {
+            note.push(format!("lossy: {l}"));
+        }
+        let mut spec = vec![format!("type: {}", mapped.ty)];
+        spec.extend(mapped.opts.iter().cloned());
+        if is_pk {
+            spec.push("primary: true".into());
+        } else if b(col, "not_null") {
+            spec.push("required: true".into());
+        }
+        let single_unique = cons
+            .iter()
+            .filter(|c| s(c, "kind") == "u" && names(&c["columns"]) == [name])
+            .map(|c| s(c, "name"))
+            .chain(
+                idxs.iter()
+                    .filter(|i| {
+                        b(i, "unique")
+                            && !b(i, "partial")
+                            && s(i, "method") == "btree"
+                            && simple(i) == Some(vec![name.to_string()])
+                    })
+                    .map(|i| s(i, "name")),
+            )
+            .next();
+        if let (Some(u), false) = (single_unique, is_pk) {
+            spec.push("unique: true".into());
+            consumed.push(u.to_string());
+        }
+        if let Some(d) = col["default"].as_str() {
+            match if is_link {
+                Default::Untranslated
+            } else {
+                translate_default(d, &mapped.kind, is_pk)
+            } {
+                Default::Value(v) => spec.push(format!("default: {v}")),
+                Default::Auto => spec.push("auto: now".into()),
+                Default::Implied => {}
+                Default::Untranslated => {
+                    note.push(untranslated(counts, format!("default: {d}")));
+                }
+            }
+        }
+        if let Some(i) = col["identity"].as_str() {
+            note.push(untranslated(
+                counts,
+                format!("identity ({i}): Svetra has no auto-increment, inserts must give a value"),
+            ));
+        }
+        counts.fields += 1;
+        fields.push(name.to_string());
+        lines.push((format!("{name}: {{ {} }}", spec.join(", ")), note));
+    }
+    // Constraints, unique and indexes, now that the fields are known.
+    let mut expressions: Vec<(String, String)> = Vec::new();
+    let mut placed = Vec::new();
+    let mut unique: Vec<Vec<String>> = Vec::new();
+    let mut index_lists: Vec<Vec<String>> = Vec::new();
+    for c in &cons {
+        let (name, def) = (s(c, "name"), s(c, "definition"));
+        match s(c, "kind") {
+            "c" => {
+                let hit = if rejected.contains(&(table.to_string(), def.to_string())) {
+                    None
+                } else {
+                    translate_check(def, &fields)
+                };
+                match hit {
+                    Some(expr) => {
+                        let base = if is_snake(name) {
+                            name.to_string()
+                        } else {
+                            format!("{table}_check")
+                        };
+                        let mut final_name = base.clone();
+                        let mut n = 2;
+                        while used.contains(&final_name) {
+                            final_name = format!("{base}_{n}");
+                            n += 1;
+                        }
+                        used.push(final_name.clone());
+                        placed.push(Placed {
+                            entity: plan.entity.clone(),
+                            name: final_name.clone(),
+                            table: table.to_string(),
+                            original: def.to_string(),
+                        });
+                        expressions.push((final_name, expr));
+                    }
+                    None => notes.push(untranslated(counts, format!("check {name}: {def}"))),
+                }
+            }
+            "u" if !consumed.iter().any(|x| x == name) => {
+                let cols = names(&c["columns"]);
+                if cols.iter().all(|x| fields.contains(x)) {
+                    unique.push(cols);
+                } else {
+                    notes.push(untranslated(counts, format!("unique {name}: {def}")));
+                }
+            }
+            "f" if !consumed.iter().any(|x| x == name) => {
+                notes.push(untranslated(counts, format!("foreign key {name}: {def}")));
+            }
+            _ => {}
+        }
+    }
+    for i in &idxs {
+        let (name, def) = (s(i, "name"), s(i, "definition"));
+        if consumed.iter().any(|x| x == name) {
+            continue;
+        }
+        let plain = !b(i, "partial")
+            && s(i, "method") == "btree"
+            && ![" DESC", " NULLS ", " COLLATE ", " INCLUDE "]
+                .iter()
+                .any(|w| def.contains(w));
+        match simple(i).filter(|cols| plain && cols.iter().all(|x| fields.contains(x))) {
+            Some(cols) if b(i, "unique") => unique.push(cols),
+            Some(cols) => index_lists.push(cols),
+            None => notes.push(untranslated(counts, format!("index {name}: {def}"))),
+        }
+    }
+    // Render.
+    let width = lines
+        .iter()
+        .filter_map(|(k, _)| k.split_once(": ").map(|(n, _)| n.len()))
+        .max()
+        .unwrap_or(0);
+    let mut text = format!("  {}:\n", plan.entity);
+    for f in findings
+        .iter()
+        .filter(|f| f.object == format!("public.{table}"))
+    {
+        text += &format!(
+            "    # check: {}, {}: {}\n",
+            f.severity.word(),
+            f.kind,
+            one_line(&f.message)
+        );
+    }
+    text += "    private: true\n    fields:\n";
+    for (spec, note) in &lines {
+        match spec.split_once(": ") {
+            Some((n, rest)) => {
+                let pad = " ".repeat(width - n.len());
+                let tail = if note.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "   # {}",
+                        note.iter()
+                            .map(|x| x.trim_start_matches("# ").to_string())
+                            .collect::<Vec<_>>()
+                            .join("; ")
+                    )
+                };
+                text += &format!("      {n}:{pad} {rest}{tail}\n");
+            }
+            None => {
+                for c in note {
+                    text += &format!("      {c}\n");
+                }
+            }
+        }
+    }
+    if !expressions.is_empty() {
+        text += "    constraints:\n";
+        for (n, e) in &expressions {
+            text += &format!(
+                "      {n}: \"{}\"\n",
+                e.replace('\\', "\\\\").replace('"', "\\\"")
+            );
+        }
+    }
+    for (key, lists) in [("unique", &unique), ("indexes", &index_lists)] {
+        if !lists.is_empty() {
+            text += &format!("    {key}:\n");
+            for l in lists {
+                text += &format!("      - [{}]\n", l.join(", "));
+            }
+        }
+    }
+    for n in &notes {
+        text += &format!("    {n}\n");
+    }
+    Entity { text, placed }
+}
+
+/// An index's columns when every position is a plain column.
+fn simple(index: &Value) -> Option<Vec<String>> {
+    index["columns"]
+        .as_array()?
+        .iter()
+        .map(|c| c.as_str().map(String::from))
+        .collect()
 }
 
 #[cfg(test)]
