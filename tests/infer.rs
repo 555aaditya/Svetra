@@ -18,7 +18,7 @@ fn draft() -> String {
 }
 
 /// The snapshot was taken from tests/pg/infer/shop_app.sql applied to PostgreSQL 16 with the
-/// Supabase stand-in (tests/pg/supabase_stub.sql), through `svetra infer --print-query`.
+/// Supabase stand-in (src/standin/base.sql), through `svetra infer --print-query`.
 #[test]
 fn the_draft_matches_the_golden_file() {
     assert_eq!(draft(), include_str!("golden/shop_app.infer.yaml"));
