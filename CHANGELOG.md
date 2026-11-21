@@ -7,6 +7,7 @@
 
 - **`svetra mcp` has a `check` tool: ask an agent "what is open in this database or these migrations?"** It takes exactly one of `db`, `local`, `snapshot` or `migrations` (a folder, or `true` for `supabase/migrations`), with `scratch` and `strict` for migrations and `schemas` (default `["public"]`), and returns the JSON of `svetra check --json` plus a one-sentence `summary`. Findings are results, not errors; a call that can't run, or `strict` with a failed migration, is a tool error. Connection passwords are never returned. The CLI and the tool now share one function for reading the source. Spec: `docs/agents.md`.
 - **`diff` and `plan` now compare column rules.** Removing `only` from a policy, or adding a field to its `only` list, is reported as wider access and `plan` refuses it until `--accept wider_access`; gaining `only` or removing a field is reported as narrower. Before, any change to `only` was listed as a safe "change rule" with no access line.
+- **`svetra new <template> [DIR]` starts a project from a template.** Five small, commented designs ship in the binary: `notes`, `blog`, `bookings`, `teams` and `approvals`. `svetra new --list` describes them in plain English. It writes only `svetra.yaml`, never replaces an existing one (exit 2), and suggests `explain`, `compile` and `init` as next steps. Spec: `docs/new.md`.
 
 ## 0.8.2 (2026-11-21)
 
