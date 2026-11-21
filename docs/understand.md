@@ -120,6 +120,7 @@ For each entity, `explain` lists every allowed action. Then it says plainly what
 - **"Nobody can see accounts any other way."** This is always stated, because access is denied by default.
 - **"Nobody can create, change or delete accounts directly."** This appears when no policy allows those actions. If holes write the entity, it adds "Only custom code can change them: `transfer`."
 - **"Audit logs are private: the app can't reach them at all; only custom code can."** This is for private entities. If holes write them, it ends instead with "Only custom code can change them: `write_audit`."
+- **"Every change to notes is recorded in the audit log: who made it, when, and the row before and after."** This is for entities with `audit: true`, after their access lines. An audited hole ends its Custom code list with "every call is recorded in the audit log, with who made it and what they sent."
 - **"Anyone, signed in or not, can see posts."** Public access (`as: anyone`) is always called out, as its own line. A logged-out-only policy (`as: anon`) reads "People who aren't signed in can see posts.", so it's never mistaken for public access.
 
 ### Example (the ledger)
