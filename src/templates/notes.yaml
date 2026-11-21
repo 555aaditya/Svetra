@@ -1,0 +1,29 @@
+# A private to-do list. Each person sees and changes only their own items.
+# Edit this file (or ask your coding agent to), then run `svetra validate`.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+svetra: "0.1"
+system: Notes
+
+# People sign in with their email.
+auth:
+  sign_in: [email]
+
+entities:
+  Note:
+    fields:
+      id:     { type: uuid, primary: true }
+      # The person who owns the note. `user` means "someone who signed in".
+      author: { type: user, required: true }
+      body:   { type: text, required: true }
+      done:   { type: bool, default: false, required: true }
+    # An index makes "find my notes" fast.
+    indexes:
+      - [author]
+
+policies:
+  # Signed-in people can see, add, change and delete a note only when they are its author.
+  # Nobody else can see it, and people who aren't signed in can't see anything.
+  own_notes:
+    on: Note
+    allow: [select, insert, update, delete]
+    when: "author == auth.user"
