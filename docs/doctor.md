@@ -52,3 +52,54 @@ The rest of doctor is new:
 - **It never writes.** Not to your project, not to `supabase/config.toml`, not to git. With `--migrations`, the only thing written is the throwaway database, as in `check`.
 - **It never prints a secret.** A finding about a key names the file, the line and the kind of key, and nothing of the value: no prefix, no last four characters, no length. The report, `--json` and error messages all follow this. Connection strings are printed without their password, as in `check`.
 - **It never runs your code,** hooks or scripts, and never reads outside `DIR` (it doesn't follow a link that leaves it).
+
+## Findings and output
+
+Every finding has a stable `kind`, a severity (`critical`, `warning` or `info`, as in `check`), an `area`, an object (a database object, or `file:line`), a message in plain English and a fix.
+
+| Area | Kinds | Severity |
+|---|---|---|
+| `data` | every kind of `check` | as in `check` |
+| `keys` | `service_key_exposed`, `secret_exposed`, `jwt_secret_exposed`, `db_password_exposed`, `env_committed`, `env_not_ignored`, `config_secret`, `jwt_unrecognized` | critical, warning or info |
+| `auth` | `email_unconfirmed`, `weak_password`, `anonymous_sign_ins`, `open_signup`, `admin_no_mfa`, `mfa_off`, `redirect_open` | warning or info |
+| `storage` | `public_bucket` | warning |
+| `generated` | `stale_generated`, `design_invalid` | warning |
+| `backups` | none: reminders, not findings | none |
+
+**Data exposure** is `check`'s output, unchanged, with the area `data`. Nothing else in this document applies to it.
+
+**Reminders** are things doctor can't read and you should do. They are listed at the end, are never counted and never change the exit code.
+
+```
+svetra doctor: 2 critical, 3 warnings, 1 note
+  Database: 14 migrations, 12 applied (reads your migrations, not your live database)
+  Project:  /home/me/shop (git: yes, svetra.yaml: yes)
+
+Data exposure
+  critical  public.orders
+            Anyone on the internet can read every row of public.orders: row-level security is off.
+            fix: ...
+
+Leaked keys
+  critical  src/lib/supabase.ts:4
+            ...
+
+Auth settings
+  warning   supabase/config.toml:48
+            ...
+
+Reminders (doctor can't check these)
+  - Backups: ...
+
+Not checked
+  - Storage buckets: no database given.
+
+Before launch: fix the 2 critical findings first. Not ready.
+```
+
+**The last line** is one of three, and only the third calls the project clear:
+- "Fix the N critical findings first. Not ready." with at least one critical finding.
+- "No critical findings, but N parts were not checked (listed above). Not a clearance." when any part was skipped: no database given, no git, no `svetra.yaml`, or migrations that failed to apply.
+- "No critical findings in everything doctor can check. The reminders above are yours." otherwise.
+
+`--json` prints `{ "findings": [{ "kind", "severity", "area", "object", "message", "fix", "file", "line" }], "counts": { "critical", "warning", "info" }, "reminders": [{ "id", "message" }], "not_checked": [{ "area", "why" }], "ready": false }`. `file` and `line` are present only for folder findings, and `migrations` is added as in `check`. `ready` is true only for the third last line. No message, fix or error contains a secret's value.
