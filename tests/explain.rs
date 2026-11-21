@@ -34,3 +34,12 @@ fn audited_entities_and_holes_say_they_are_recorded() {
     let (doc, diags) = load(include_str!("fixtures/finledger.yaml"));
     assert!(!explain(&doc, &diags).contains("audit log"));
 }
+
+#[test]
+fn context_marks_audited_entities_and_holes() {
+    let (doc, _) = load(include_str!("fixtures/audited.yaml"));
+    let out = svetra::understand::context::context(&doc);
+    assert!(out.contains("\naudit Note: "), "{out}");
+    assert!(out.contains("; when note.owner == auth.user; audit\n"), "{out}");
+    assert!(out.contains("hole sweep: () -> none; writes Note; audit\n"), "{out}");
+}
