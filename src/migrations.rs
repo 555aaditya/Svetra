@@ -296,7 +296,12 @@ pub fn run_docker(dir: &Path, query: &str) -> Result<Outcome, Fail> {
 /// `auth` schema are in it, and the container has no network to install anything.
 pub const SUPABASE_IMAGE: &str = "public.ecr.aws/supabase/postgres:17.11.0.018";
 /// What the image's `auth` schema can lack: `auth.jwt()`, which policies and the access tests read.
-const JWT_TOP_UP: &str = "do $$ begin if to_regprocedure('auth.jwt()') is null then \
+/// Its `auth.role()` reads only the old per-claim setting, which the access tests (like PostgREST
+/// today) don't set; it gets the definition current Supabase ships, which also reads the claims.
+const JWT_TOP_UP: &str = "create or replace function auth.role() returns text language sql stable \
+    as $f$ select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), \
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'))::text $f$; \
+    do $$ begin if to_regprocedure('auth.jwt()') is null then \
     create function auth.jwt() returns jsonb language sql stable \
     as $f$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $f$; \
     grant execute on function auth.jwt() to anon, authenticated; end if; end $$;";

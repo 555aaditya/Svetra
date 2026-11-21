@@ -26,6 +26,9 @@ fn temp(name: &str) -> PathBuf {
 }
 
 const SHOP: &str = include_str!("pg/infer/shop_app.sql");
+const MODERATOR: &str = "create policy reviews_delete_moderator on public.reviews for delete to authenticated
+  using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.display_name = 'moderator'));
+";
 const STAFF_READ: &str = "create policy orders_staff_read on public.orders for select to authenticated using ((auth.jwt() ->> 'role') = 'staff');\n";
 
 /// The shop's draft as `infer` wrote it.
@@ -40,14 +43,22 @@ fn raw_draft() -> String {
     String::from_utf8(out.stdout).unwrap()
 }
 
-/// The shop's draft with Orders ported: its one untranslated policy and the note about it
-/// removed, as a person would after writing the policy by hand.
+/// The shop's SQL without the two policies the draft can't say, which the draft's ported form
+/// below no longer mentions either.
+fn ported(sql: &str) -> String {
+    sql.replace(STAFF_READ, "").replace(MODERATOR, "")
+}
+
+/// The shop's draft with Orders and Reviews ported: their untranslated policies and the notes
+/// about them removed, as a person would after writing the policies by hand.
 fn draft() -> String {
     raw_draft()
         .lines()
         .filter(|l| {
             !l.contains("# UNTRANSLATED policy orders_staff_read")
+                && !l.contains("# UNTRANSLATED policy reviews_delete_moderator")
                 && !l.contains("# policies: 5 of 6")
+                && !l.contains("# policies: 4 of 5")
         })
         .map(|l| format!("{l}\n"))
         .collect()
@@ -92,14 +103,16 @@ fn every_translated_table_passes_against_the_database_it_came_from() {
         eprintln!("skipped: Docker or Supabase's database image isn't there");
         return;
     }
-    let (migrations, file) = setup("agree", |sql| sql.replace(STAFF_READ, ""));
+    let (migrations, file) = setup("agree", ported);
     let (code, text, err) = run(&file, &migrations);
     assert_eq!(code, Some(0), "{text}{err}");
     assert!(line(&text, "Products").contains("agrees"), "{text}");
     assert!(line(&text, "Orders").contains("agrees"), "{text}");
-    // Row-level security is off on order_items, and profiles' own-row policy didn't translate.
+    // A profile table keyed by the person, and reviews owned through it and read by `auth.role()`.
+    assert!(line(&text, "Profiles").contains("agrees"), "{text}");
+    assert!(line(&text, "Reviews").contains("agrees"), "{text}");
+    // Row-level security is off on order_items.
     assert!(line(&text, "OrderItems").contains("skipped"), "{text}");
-    assert!(line(&text, "Profiles").contains("skipped"), "{text}");
     assert!(text.contains("does what the draft says"), "{text}");
 }
 
@@ -130,7 +143,7 @@ fn a_policy_that_differs_fails_the_checks_that_name_it() {
     // The database lets every signed-in user see every order, and keeps anonymous people from
     // products; the draft says the opposite on both.
     let (migrations, file) = setup("differ", |sql| {
-        sql.replace(STAFF_READ, "")
+        ported(sql)
             .replace(
                 "for select to authenticated using (customer = auth.uid());",
                 "for select to authenticated using (true);",
