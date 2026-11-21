@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **`svetra check --migrations [DIR]`: check what your migrations build, with no live database.** It applies `supabase/migrations` (or `DIR`) in file-name order to a throwaway PostgreSQL 16 in Docker (no network, no extra privileges, removed afterwards, or stopping itself after 15 minutes if interrupted), with a stand-in for Supabase, then runs the usual checks. A migration that fails is rolled back whole and the others still run; the report lists each failure (file name and the database's first error line, never the SQL) and says this reads migrations, not the live database. `--strict` exits 2 on any failure, `--scratch URL` uses an empty database you provide instead of Docker (a fresh `supabase start` database makes it a check on real Supabase), and `--json` adds a `migrations` object. The Supabase stand-in moved to `src/standin/` so the binary, the access-test scripts and the leak study share it. Spec: `docs/check.md`.
+- **`svetra view` shows which fields a change may touch.** A Change cell covered by an update rule with `only` now says so in the detail panel and in `--json` (`only`: the fields, the sentence "They can change only its status." and the rule), in the words `explain` uses.
 
 ## 0.8.2 (2026-11-21)
 
