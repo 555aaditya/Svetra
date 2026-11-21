@@ -354,3 +354,18 @@ Words follow [`understand.md`](understand.md): no "hole", "trigger" or "cron". T
 - **Hand-written Edge Function code.** The only Edge Functions Svetra knows are the generated ones.
 - **`svetra check` for automations:** finding `cron.job` entries or triggers nobody declared on an existing database.
 
+## How to build it
+
+Three build PRs, each shippable alone with its own golden files, `scripts/pg-check.sh` assertions and one fixture. Each also updates [`format.md`](format.md), [`compiler.md`](compiler.md), [`understand.md`](understand.md), [`view.md`](view.md), the JSON Schema, [`agents.md`](agents.md) and the changelog, as `AGENTS.md` requires.
+
+1. **Scheduled holes and the shared groundwork** (the first build PR):
+   - `kind` accepts `schedule` (`src/load/access.rs` refuses anything but `function` today), with a per-kind table of allowed keys so `SVT020` hints say which keys a kind takes;
+   - `schedule` parsing, a cron validator and `SVT037`, with `SVT040` for `grants`;
+   - the `-- Holes` output: role, body function, single-run guard, the job, cleanup of removed jobs; no `public` function and no TypeScript;
+   - access tests: the schedule rows of the table above, and a stub `cron` schema in the stand-in so `scripts/pg-check.sh` can run them;
+   - `explain`, `context`, `graph` and `view` text for scheduled holes;
+   - a fixture `jobs.yaml` with one hole and its body in `tests/fixtures/holes/jobs/`;
+   - first, it resolves the UNVERIFIED pg_cron rows on the pinned local Supabase. If pg_cron isn't in the local stack, the PR says so and the tests that need it skip with a message, never pass silently.
+2. **Triggered holes:** the `old.` form in the expression language, `on` and `events`, `SVT038` and the loop graph, the trigger function and triggers, their tests, a breakage, and the `explain` and `view` text including the extra line under who can change.
+3. **Webhook holes:** the Edge Function generator, `config.toml` handling, `svetra.webhook_events`, `SVT039`, the `service_role`-only public function, their tests, and the "Before going live" lines.
+
