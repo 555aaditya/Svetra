@@ -446,7 +446,7 @@ fn other_secrets_are_reported_by_their_format() {
     let p = Project::new("vendors").init();
     p.write(
         "server/pay.ts",
-        &format!("const live = '{live}'\nconst test = '{test}'\nconst gh = '{pat}'\nconst sample = 'sk_live_your_key_here_xxxxxxxxxxxx'\n"),
+        &format!("const live = '{live}'\nconst test = '{test}'\nconst gh = '{pat}'\nconst sample = 'sk_live_your_key_here_xxxxxxxxxxxx'\n// a header looks like -----BEGIN ... PRIVATE KEY-----\n"),
     );
     p.write("deploy.pem", &format!("{begin}\nMIIEvQIBADANBg\n"));
     p.track("server/pay.ts");

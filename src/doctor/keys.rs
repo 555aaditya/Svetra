@@ -386,7 +386,17 @@ fn scan_line(line: &str, path: &str) -> Vec<Hit> {
     // The two halves of a PEM header, apart so that this file doesn't match itself.
     const BEGIN: &str = "-----BEGIN ";
     const END: &str = "PRIVATE KEY-----";
-    if line.contains(BEGIN) && line.contains(END) {
+    // Between them, only the key's kind in capitals (`RSA `, `EC `, ``): prose that writes
+    // `BEGIN ... PRIVATE KEY` isn't a key.
+    let pem = line.find(BEGIN).is_some_and(|at| {
+        let rest = &line[at + BEGIN.len()..];
+        rest.find(END).is_some_and(|end| {
+            rest[..end]
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c == ' ')
+        })
+    });
+    if pem {
         hits.push(Hit::Secret(VENDORS.len() - 1));
     }
     for token in tokens(line) {
