@@ -1,9 +1,9 @@
 # Drafted by `svetra infer` from a database snapshot. Review before adopting.
 # An entity is `private: true` only when none of its policies translated; the draft is never
 # wider than the database (docs/infer.md, Policies).
-# Policies: 6 of 9 translated.
-# 4 entities from 6 tables. Skipped: 1 view, 0 functions.
-# 13 things left as UNTRANSLATED (search for UNTRANSLATED).
+# Policies: 12 of 15 translated.
+# 5 entities from 7 tables. Skipped: 1 view, 0 functions.
+# 12 things left as UNTRANSLATED (search for UNTRANSLATED).
 #
 # svetra check found 3 critical, 2 warnings and 0 notes:
 #   critical  public.legacy_codes: Anyone on the internet can read, add, change and delete every row of public.legacy_codes: row-level security is off.
@@ -33,7 +33,7 @@ entities:
     # policies: 5 of 6 translated. The draft is NARROWER than the database: whatever an UNTRANSLATED policy below lets in, this draft keeps out, until you port it.
     fields:
       id:         { type: uuid, primary: true }
-      customer:   { type: user, required: true }   # lossy: the foreign key had ON DELETE CASCADE, Svetra writes none
+      customer:   { type: user, required: true }   # lossy: the foreign key had ON DELETE CASCADE, a user field has none
       status:     { type: enum, values: [open, paid, shipped], required: true, default: open }   # lossy: was enum type order_status, compiles to text with a check
       placed_on:  { type: date, auto: now }
       note:       { type: text, default: none }
@@ -44,7 +44,7 @@ entities:
     indexes:
       - [customer]
     # UNTRANSLATED index orders_note_idx: CREATE INDEX orders_note_idx ON public.orders USING btree (lower(note))
-    # UNTRANSLATED policy orders_staff_read: CREATE POLICY orders_staff_read ON public.orders AS PERMISSIVE FOR SELECT TO authenticated USING (((auth.jwt() ->> 'role'::text) = 'staff'::text)) -- a condition that isn't an owner check or `true`
+    # UNTRANSLATED policy orders_staff_read: CREATE POLICY orders_staff_read ON public.orders AS PERMISSIVE FOR SELECT TO authenticated USING (((auth.jwt() ->> 'role'::text) = 'staff'::text)) -- reads a JWT claim (auth.jwt())
   Products:
     # check: warning, open_read: Anyone on the internet can read every row of public.products (policy products_read). Fine for public data; a leak otherwise.
     fields:
@@ -63,15 +63,20 @@ entities:
     # UNTRANSLATED check stock_text: CHECK (((stock)::text <> '-1'::text))
     # UNTRANSLATED index products_tags_idx: CREATE INDEX products_tags_idx ON public.products USING gin (tags)
   Profiles:
-    # policies: none of 1 translated. The database lets some people in; this draft keeps everyone out (private) until you port a policy.
-    private: true
     fields:
-      id:           { type: uuid, primary: true }
+      id:           { type: user, primary: true }
       display_name: { type: text, required: true }
       bio:          { type: text }   # lossy: was character varying(280), the length limit is dropped
       created_at:   { type: timestamp, required: true, auto: now }
-    # UNTRANSLATED foreign key profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id)
-    # UNTRANSLATED policy profiles_own: CREATE POLICY profiles_own ON public.profiles AS PERMISSIVE FOR SELECT TO authenticated USING ((id = auth.uid())) -- a condition that isn't an owner check or `true`
+  Reviews:
+    # policies: 4 of 5 translated. The draft is NARROWER than the database: whatever an UNTRANSLATED policy below lets in, this draft keeps out, until you port it.
+    fields:
+      id:         { type: uuid, primary: true }
+      product_id: { type: ref, entity: Products, on_delete: cascade, required: true }
+      author:     { type: user, required: true }   # lossy: was a foreign key to public.profiles (id), now one to auth.users: it accepts a person with no row in profiles; the foreign key had ON DELETE CASCADE, a user field has none
+      parent_id:  { type: ref, entity: Reviews, on_delete: set_null }
+      body:       { type: text, required: true }
+    # UNTRANSLATED policy reviews_delete_moderator: CREATE POLICY reviews_delete_moderator ON public.reviews AS PERMISSIVE FOR DELETE TO authenticated USING ((EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND (p.display_name = 'moderator'::text))))) -- a subquery
 
 policies:
   orders_delete_guard:
@@ -105,6 +110,36 @@ policies:
     as: anyone
     allow: [select]
     when: "true"
+  profiles_insert_own:
+    on: Profiles
+    as: authenticated
+    allow: [insert]
+    when: "id == auth.user"
+  profiles_own:
+    on: Profiles
+    as: authenticated
+    allow: [select]
+    when: "id == auth.user"
+  reviews_delete_own:
+    on: Reviews
+    as: authenticated
+    allow: [delete]
+    when: "author == auth.user"
+  reviews_insert_own:
+    on: Reviews
+    as: authenticated
+    allow: [insert]
+    when: "author == auth.user"
+  reviews_read:
+    on: Reviews
+    as: authenticated
+    allow: [select]
+    when: "true"
+  reviews_update_own:
+    on: Reviews
+    as: authenticated
+    allow: [update]
+    when: "author == auth.user"
 
 # Tables left out of the entities:
 # UNTRANSLATED table public.legacy_codes: no primary key
