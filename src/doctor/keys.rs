@@ -143,6 +143,7 @@ pub fn check(files: &[File], git: Option<&Git>) -> Vec<Finding> {
     for file in files {
         let tracked = git.is_none_or(|g| g.tracked(&file.path));
         let front_file = is_front_end(&file.path);
+        let first = out.len();
         let mut seen: HashSet<(Hit, usize)> = HashSet::new();
         let mut unrecognized = false;
         for (i, line) in file.text.lines().enumerate() {
@@ -168,8 +169,99 @@ pub fn check(files: &[File], git: Option<&Git>) -> Vec<Finding> {
                 }
             }
         }
+        if let Some(git) = git.filter(|_| is_env_file(&file.path)) {
+            if git.tracked(&file.path) {
+                let critical = out[first..]
+                    .iter()
+                    .any(|f| f.severity == Severity::Critical);
+                let values = non_public_values(&file.text);
+                if critical || values > 0 {
+                    out.push(env_committed(&file.path, values, critical));
+                }
+            } else if !git.ignored(&file.path) {
+                out.push(env_not_ignored(&file.path));
+            }
+        }
     }
     out
+}
+
+/// A dotenv file: `.env`, `.env.local`, `.env.production` and so on, but not the examples that
+/// are committed on purpose.
+pub fn is_env_file(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    (name == ".env" || name.starts_with(".env."))
+        && !name.ends_with(".example")
+        && !name.ends_with(".sample")
+        && !name.ends_with(".template")
+}
+
+/// How many values in a dotenv file aren't public by design: a name with `SECRET`, `PASSWORD`,
+/// `TOKEN`, `PRIVATE` or `KEY` whose value isn't the anon or publishable key, or a value that is
+/// a service key whatever its name. Empty values and placeholders don't count.
+fn non_public_values(text: &str) -> usize {
+    text.lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            let line = line.strip_prefix("export ").unwrap_or(line);
+            if line.starts_with('#') {
+                return None;
+            }
+            let (name, value) = line.split_once('=')?;
+            let value = value.trim().trim_matches(['"', '\'']);
+            if is_placeholder(value) {
+                return None;
+            }
+            let name = name.trim().to_ascii_uppercase();
+            let public =
+                value.starts_with("sb_publishable_") || jwt::role(value) == Some(Role::Anon);
+            let secret_value =
+                value.starts_with("sb_secret_") || jwt::role(value) == Some(Role::Service);
+            let sensitive = ["SECRET", "PASSWORD", "TOKEN", "PRIVATE", "KEY"]
+                .iter()
+                .any(|w| name.contains(w));
+            ((sensitive && !public) || secret_value).then_some(())
+        })
+        .count()
+}
+
+fn env_committed(path: &str, values: usize, critical: bool) -> Finding {
+    let held = match values {
+        0 => String::new(),
+        1 => " It holds 1 value that isn't public by design.".to_string(),
+        n => format!(" It holds {n} values that aren't public by design."),
+    };
+    Finding {
+        kind: "env_committed",
+        severity: if critical {
+            Severity::Critical
+        } else {
+            Severity::Warning
+        },
+        area: "keys",
+        message: format!(
+            "This file is committed to git.{held} Deleting it now doesn't remove it from history."
+        ),
+        fix: format!(
+            "run `git rm --cached {path}`, add it to .gitignore, and rotate every secret it held: it is in git's history, and on GitHub once pushed."
+        ),
+        file: path.to_string(),
+        line: None,
+    }
+}
+
+fn env_not_ignored(path: &str) -> Finding {
+    Finding {
+        kind: "env_not_ignored",
+        severity: Severity::Warning,
+        area: "keys",
+        message: "This file isn't in .gitignore. One careless `git add .` would commit it."
+            .to_string(),
+        fix: "add `.env*` to .gitignore, then `!.env.example` if you keep an example file."
+            .to_string(),
+        file: path.to_string(),
+        line: None,
+    }
 }
 
 /// The value assigned to `name` on this line (`NAME=value`, `NAME: "value"`, `"NAME": "value"`),
