@@ -103,3 +103,68 @@ Before launch: fix the 2 critical findings first. Not ready.
 - "No critical findings in everything doctor can check. The reminders above are yours." otherwise.
 
 `--json` prints `{ "findings": [{ "kind", "severity", "area", "object", "message", "fix", "file", "line" }], "counts": { "critical", "warning", "info" }, "reminders": [{ "id", "message" }], "not_checked": [{ "area", "why" }], "ready": false }`. `file` and `line` are present only for folder findings, and `migrations` is added as in `check`. `ready` is true only for the third last line. No message, fix or error contains a secret's value.
+
+## Leaked keys in the project folder
+
+### The anon key is not a leak
+
+Supabase gives every project two keys that are easy to confuse:
+
+- **The anon key** (in newer projects, the *publishable* key, `sb_publishable_...`) is **public by design.** It goes into your front-end code and ships to every visitor's browser, so anyone can read it. It only lets a caller act as `anon`, and what `anon` can reach is decided by row-level security. A leaked anon key isn't a leak; an open table is, and `check` reports that.
+- **The service role key** (in newer projects, the *secret* key, `sb_secret_...`) **skips row-level security entirely.** Whoever holds it can read, change and delete every row. It belongs on a server, never in code that runs in a browser.
+
+So doctor never flags the anon or publishable key, in any file. Flagging it would teach people to ignore the report. How it tells the two apart:
+
+- **A JWT** is three base64url parts joined by dots, the first starting with `eyJ`. Doctor decodes the middle part locally (no signature check, no network) and reads the `role` claim. `service_role` is a secret. `anon` is public and skipped. A JWT with no `role`, or any other role, gets `jwt_unrecognized` (info), never `service_key_exposed`.
+- **A new-style key** is judged by its prefix: `sb_secret_` is a secret, `sb_publishable_` is public. UNVERIFIED: these prefixes are from Supabase's announced key format and must be checked against the Supabase docs before the build.
+- **A variable's name is never enough.** `SUPABASE_KEY=eyJ...` is judged by what the value decodes to. A variable named `SUPABASE_SERVICE_ROLE_KEY` holding an anon key is not flagged. A value that decodes to `service_role` is flagged under any name.
+- **Placeholders are skipped:** an empty value, `env(NAME)` or `${NAME}` references, `your-...`, `<...>`, `xxx...` and the like. A key that decodes to `service_role` is still flagged in `.env.example`, `.env.sample` and `.env.template`: they are committed on purpose, so a real key there is a leak.
+
+### Where doctor looks
+
+Every text file under `DIR` up to 1 MB, except `.git`, `node_modules`, `target`, `dist`, `build`, `.next`, `vendor`, lockfiles and binary files. If `DIR` is in a git repository, doctor asks git (`git ls-files`, and `git check-ignore` for the rest) which files are **tracked** (in the repository, so in its history and on GitHub once pushed), **ignored**, or neither. Without git it can't tell, says so under "Not checked", and treats every secret as if its file were tracked.
+
+A file is **front-end** when it ships to the browser:
+- it's under `public/`, `static/` or `www/`, or it's `.html`;
+- it's `.js`, `.jsx`, `.ts`, `.tsx`, `.vue`, `.svelte` or `.astro` and not under a folder named `server`, `api`, `functions`, `scripts` or `supabase/functions`;
+- it's an environment variable whose name starts with `NEXT_PUBLIC_`, `VITE_`, `REACT_APP_`, `EXPO_PUBLIC_`, `PUBLIC_` or `NUXT_PUBLIC_`, because those are put into the browser bundle on purpose. UNVERIFIED: the full list of prefixes per framework.
+
+Any other file is **server-side**.
+
+### The checks
+
+| Kind | Severity | When | Message, for example |
+|---|---|---|---|
+| `service_key_exposed` | critical | A service role or `sb_secret_` key in a front-end file, or in **any tracked file** (any file when git is unavailable) | "src/lib/supabase.ts:4 holds your Supabase service role key. It skips every row-level security rule, and everyone who opens your site can read it." |
+| `secret_exposed` | critical, warning for a Stripe test key | A secret from the list below, in a front-end or tracked file | "server/pay.ts:12 holds a Stripe live secret key. Anyone who can read this file can charge and refund your customers." |
+| `jwt_secret_exposed` | critical | A value for `SUPABASE_JWT_SECRET`, or `jwt_secret` in `config.toml`, that isn't an `env(...)` reference, in a front-end or tracked file | "supabase/config.toml:21 holds your project's JWT secret. With it anyone can sign in as any user, admins included." |
+| `db_password_exposed` | critical | A connection string with a password (`postgres://user:password@host/db`) in a front-end or tracked file. The local database (`127.0.0.1`, `localhost`) and placeholders (`[YOUR-PASSWORD]`, `password`) are skipped | ".env:3 holds your database password. It gives full access to every table." |
+| `env_committed` | critical when the file holds a secret named above, otherwise warning | A tracked `.env`, `.env.local`, `.env.production` and so on, but not `.env.example`, `.env.sample` or `.env.template`. The warning is for a file with any value that isn't public by design: a name containing `SECRET`, `PASSWORD`, `TOKEN` or `PRIVATE`, or a `KEY` that isn't the anon or publishable key | "`.env.production` is committed to git. It holds 2 values that aren't public by design. Deleting it now doesn't remove it from history." |
+| `env_not_ignored` | warning | A `.env*` file that exists, isn't tracked and isn't ignored: one `git add .` from being committed | "`.env.local` isn't in .gitignore. One careless `git add .` would commit it." |
+| `config_secret` | critical when tracked or git is unavailable, warning when ignored | In `supabase/config.toml`, a key named like a secret (`secret`, `pass`, `password`, `api_key`, `auth_token`, `client_secret`) whose value is a literal instead of `env(NAME)` | "supabase/config.toml:58 holds an OAuth secret in plain text. Use `env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)` and keep the value in a `.env` file that isn't committed." |
+| `jwt_unrecognized` | info, at most one per file | A JWT-looking string in a front-end or tracked file that decodes but has no `role`, or a role other than `anon` and `service_role`, outside paths containing `test`, `fixture`, `mock` or `__snapshots__` | "docs/notes.md:9 holds a signed token Svetra doesn't recognize. If it's someone's session, sign them out." |
+
+`env(NAME)` is the Supabase CLI's way of reading a value from the environment. Svetra's compiler already writes OAuth secrets into `config.toml` that way ([compiler.md](compiler.md#sign-in-settings)).
+
+**Other secrets** (`secret_exposed`) are a short list of formats specific enough to give almost no false alarms: Stripe `sk_live_`, `rk_live_` and `whsec_` (and `sk_test_`, the warning); AWS access key ids (`AKIA` and 16 capital letters and digits); GitHub `ghp_` and `github_pat_`; Supabase personal access tokens (`sbp_` and 40 hex characters); and `-----BEGIN ... PRIVATE KEY-----`. UNVERIFIED: the exact lengths and prefixes, to be checked against each vendor's documentation. A format that can't be made specific stays out. Adding a vendor is a table row and a test.
+
+**The fix** is the same for every key found in a tracked file, and doctor says so: **remove the key from the code, rotate it (Supabase dashboard, Settings, API; or the vendor's dashboard), and only then delete it from git.** A key that was ever committed or shipped must be treated as stolen, because deleting the line deletes neither the history nor the copies. For a front-end file the fix adds: "Do the work that needs this key in a server function (a Supabase Edge Function, or your own backend), and have the front end call that with the signed-in person's token. The front end only needs the anon key."
+
+### How doctor avoids false alarms
+
+- The anon and publishable keys are never flagged (above).
+- A key is judged by what it decodes to or by its prefix, never by its variable name or by looking random. There is no entropy guessing: a long random string isn't reported for being long.
+- A server-side, git-ignored `.env` holding the service key is where that key belongs, and isn't reported.
+- Placeholders, `env(...)` references and the local database's defaults are skipped.
+- One finding per file, kind and line.
+- A suppressions file isn't in version 0.1 (see the end), so each rule has to be right on its own.
+
+**A finding never contains the value.** Example:
+
+```
+critical  src/lib/supabase.ts:4
+          This line holds your Supabase service role key. It skips every row-level security rule,
+          and everyone who opens your site can read it.
+          fix: remove it from the code and rotate it now (Supabase dashboard, Settings, API).
+               Do the work that needs it in a server function; the front end only needs the anon key.
+```
