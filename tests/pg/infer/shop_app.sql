@@ -1,5 +1,5 @@
 -- A small shop, as an AI app builder might write it, for `svetra infer` (docs/infer.md).
--- Applied after tests/pg/supabase_stub.sql. Covers each mapping, and what can't be translated.
+-- Applied after src/standin/base.sql. Covers each mapping, and what can't be translated.
 create type public.order_status as enum ('open', 'paid', 'shipped');
 create table public.profiles (
   id uuid primary key references auth.users (id),
