@@ -18,3 +18,7 @@ Thanks for your interest. Svetra is early, and the rules are simple.
 ## Before you start
 
 Open an issue first for anything larger than a small fix, so we can agree on the approach before you write code.
+
+## Pull requests that fall behind
+
+When `develop` (or any base branch) moves, the `update-prs` workflow merges it into every open pull request based on it and reruns `ci`. `CHANGELOG.md` merges as a union (`.gitattributes`), so changelog lines never conflict. A real conflict is never resolved by the workflow: the pull request gets one comment listing the files, and a person merges or rebases it.
