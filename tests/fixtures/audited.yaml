@@ -1,0 +1,26 @@
+svetra: "0.1"
+system: Audited
+entities:
+  Note:
+    audit: true
+    fields:
+      id: { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      body: { type: text }
+policies:
+  owner_all:
+    on: Note
+    allow: [select, insert, update, delete]
+    when: "owner == auth.user"
+holes:
+  archive:
+    kind: function
+    input:
+      note: Note.id
+    writes: [Note]
+    when: "note.owner == auth.user"
+    audit: true
+  sweep:
+    kind: function
+    writes: [Note]
+    audit: true

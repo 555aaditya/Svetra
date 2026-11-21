@@ -160,10 +160,14 @@ impl Cx {
             grants: Vec::new(),
             role: Role::Authenticated,
             when: None,
+            audit: false,
         };
         hole.role = self.role_as(k.get("as").copied(), &path)?;
         if let Some(v) = k.get("when") {
             hole.when = self.string(v, &format!("{path}.when"));
+        }
+        if let Some(v) = k.get("audit") {
+            hole.audit = self.boolean(v, &format!("{path}.audit"));
         }
         if let Some(v) = k.get("input") {
             let ipath = format!("{path}.input");

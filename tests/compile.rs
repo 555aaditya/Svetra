@@ -198,3 +198,48 @@ fn profiles_sql_matches_golden_file() {
     let got = compile(include_str!("fixtures/profiles.yaml"));
     assert_eq!(got, include_str!("golden/profiles.sql"));
 }
+
+/// Checked on Postgres 16 by `scripts/pg-check.sh` (`tests/pg/audited_assert.sql`): row changes and
+/// hole calls are logged with the actor, and the log is closed to the app and append-only.
+#[test]
+fn audited_sql_matches_golden_file() {
+    let got = compile(include_str!("fixtures/audited.yaml"));
+    assert_eq!(got, include_str!("golden/audited.sql"));
+}
+
+#[test]
+fn audit_output_appears_only_when_something_is_audited() {
+    for src in [
+        include_str!("fixtures/finledger.yaml"),
+        include_str!("fixtures/posts.yaml"),
+    ] {
+        let sql = compile(src);
+        assert!(
+            !sql.contains("\"svetra\".\"audit_log\""),
+            "unexpected audit log"
+        );
+        assert!(!sql.contains("-- Audit"));
+    }
+    let sql = compile(include_str!("fixtures/audited.yaml"));
+    assert_eq!(sql.matches("create trigger \"svetra_audit\" ").count(), 1);
+    assert!(sql.contains("-- Audit\n"));
+}
+
+#[test]
+fn an_audited_hole_logs_in_the_wrapper_and_never_in_its_own_role() {
+    let sql = compile(include_str!("fixtures/audited.yaml"));
+    // Both holes are audited; their roles get no grant on the log.
+    assert_eq!(sql.matches("'call', 'archive'").count(), 1);
+    assert!(sql.contains("jsonb_build_object('note', note)"));
+    assert!(sql.contains("'call', 'sweep', 'call', '{}'::jsonb"));
+    assert!(!sql.contains(
+        "to \"svetra_hole_archive\";\ncreate policy \"svetra_hole_archive\" on \"svetra\""
+    ));
+    assert!(!sql.contains("on table \"svetra\".\"audit_log\" to"));
+}
+
+#[test]
+fn an_unaudited_hole_has_the_plain_wrapper() {
+    let sql = compile(include_str!("fixtures/posts.yaml"));
+    assert!(sql.contains("as $svetra$ begin perform"));
+}
