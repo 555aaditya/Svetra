@@ -6,6 +6,8 @@ name: update-prs
 # conflict is left for a person: the PR gets one comment naming the files, and nothing is pushed.
 on:
   push:
+    # Branches only: a tag can't be the base of a pull request.
+    branches: ["**"]
   workflow_dispatch:
 
 permissions:
