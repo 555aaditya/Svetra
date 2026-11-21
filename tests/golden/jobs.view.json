@@ -1,0 +1,490 @@
+{
+  "svetra": "0.1",
+  "system": "Invites",
+  "revision": "8a175e01988b",
+  "people": [
+    {
+      "id": "anon",
+      "label": "Someone not signed in"
+    },
+    {
+      "id": "alice",
+      "label": "A signed-in person"
+    },
+    {
+      "id": "bob",
+      "label": "Another signed-in person"
+    },
+    {
+      "id": "carol",
+      "label": "A signed-in person who owns nothing"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Invite",
+      "label": "Invites",
+      "private": false,
+      "fields": [
+        "the signed-in person who owns it (required)",
+        "email: text (required)",
+        "status: one of pending, accepted or expired (starts as pending)",
+        "expires at: a date and time (required)"
+      ],
+      "links": []
+    }
+  ],
+  "cells": [
+    {
+      "person": "anon",
+      "entity": "Invite",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see invites any other way."
+      ],
+      "rules": [
+        "Signed-in people can see an invite when its owner is them."
+      ],
+      "tests": [
+        4,
+        5
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Invite",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's invite",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's invite",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create an invite when its owner is them."
+      ],
+      "tests": [
+        10,
+        11
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Invite",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete invites directly. Only custom code can change them: expire_invites."
+      ],
+      "rules": [],
+      "tests": [
+        6,
+        7
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Invite",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete invites directly. Only custom code can change them: expire_invites."
+      ],
+      "rules": [],
+      "tests": [
+        8,
+        9
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Invite",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own invite",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see an invite when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see an invite when its owner is them."
+      ],
+      "tests": [
+        12,
+        13
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Invite",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own invite",
+          "allowed": true
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can create an invite when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can create an invite when its owner is them."
+      ],
+      "tests": [
+        18,
+        19
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Invite",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete invites directly. Only custom code can change them: expire_invites."
+      ],
+      "rules": [],
+      "tests": [
+        14,
+        15
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Invite",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete invites directly. Only custom code can change them: expire_invites."
+      ],
+      "rules": [],
+      "tests": [
+        16,
+        17
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Invite",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own invite",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see an invite when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see an invite when its owner is them."
+      ],
+      "tests": [
+        22,
+        23
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Invite",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's invite",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own invite",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can create an invite when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can create an invite when its owner is them."
+      ],
+      "tests": [
+        28,
+        29
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Invite",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete invites directly. Only custom code can change them: expire_invites."
+      ],
+      "rules": [],
+      "tests": [
+        24,
+        25
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Invite",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete invites directly. Only custom code can change them: expire_invites."
+      ],
+      "rules": [],
+      "tests": [
+        26,
+        27
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Invite",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see invites any other way."
+      ],
+      "rules": [
+        "Signed-in people can see an invite when its owner is them."
+      ],
+      "tests": [
+        32,
+        33
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Invite",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's invite",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's invite",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create an invite when its owner is them."
+      ],
+      "tests": [
+        38,
+        39
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Invite",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete invites directly. Only custom code can change them: expire_invites."
+      ],
+      "rules": [],
+      "tests": [
+        34,
+        35
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Invite",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invite",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invite",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete invites directly. Only custom code can change them: expire_invites."
+      ],
+      "rules": [],
+      "tests": [
+        36,
+        37
+      ]
+    }
+  ],
+  "holes": [
+    {
+      "name": "expire_invites",
+      "lines": [
+        "runs by itself every day at 03:00 (UTC). Nobody can run it from the app.",
+        "can read: invites. Can change: invites."
+      ],
+      "callers": [],
+      "kind": "schedule",
+      "starts": "runs by itself every day at 03:00 (UTC). Nobody can run it from the app."
+    }
+  ],
+  "signing_in": [
+    "People sign in with email (a password or an emailed link).",
+    "Anyone can create an account.",
+    "People confirm their email address before they can sign in.",
+    "Passwords need at least 10 characters."
+  ],
+  "before_going_live": [
+    "Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.",
+    "Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in.",
+    "Code that runs by itself on a schedule needs Supabase's pg_cron extension. The update turns it on; if your project refuses, switch it on under Database, Extensions in the Supabase dashboard."
+  ]
+}

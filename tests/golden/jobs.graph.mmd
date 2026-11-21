@@ -1,0 +1,8 @@
+flowchart LR
+  person(("👤 Signed-in person"))
+  e_Invite["Invite<br/>owner: user!<br/>email: text!<br/>status: enum<br/>expires_at: timestamp!"]
+  h_expire_invites(["⚙️ expire_invites"])
+  e_Invite -- owner --> person
+  person -. "sees, creates" .-> e_Invite
+  h_expire_invites -. reads .-> e_Invite
+  h_expire_invites == changes ==> e_Invite

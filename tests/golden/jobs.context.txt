@@ -1,0 +1,6 @@
+Invites (svetra 0.1)
+auth email; signup open; confirm email; password 10
+Invite: id uuid pk; owner user!; email text!; status enum(pending|accepted|expired)=pending; expires_at timestamp!
+policy owner_reads_own: Invite select authenticated when owner == auth.user
+policy owner_invites: Invite insert authenticated when owner == auth.user
+hole expire_invites: schedule "0 3 * * *"; reads Invite; writes Invite
