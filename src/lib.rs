@@ -3,6 +3,7 @@ pub mod check;
 pub mod compile;
 pub mod diag;
 pub mod expr;
+pub mod infer;
 pub mod inspect;
 pub mod load;
 pub mod mcp;
