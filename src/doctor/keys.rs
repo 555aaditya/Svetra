@@ -7,6 +7,7 @@
 use super::files::{File, Git};
 use super::jwt::{self, Role};
 use super::{Finding, Severity};
+use crate::project;
 use std::collections::HashSet;
 
 /// What one line holds.
@@ -169,6 +170,13 @@ pub fn check(files: &[File], git: Option<&Git>) -> Vec<Finding> {
                 }
             }
         }
+        if file.path == project::CONFIG {
+            for (i, line) in file.text.lines().enumerate() {
+                if let Some(key) = config_secret_key(line) {
+                    out.push(config_secret(&file.path, i + 1, &key, tracked));
+                }
+            }
+        }
         if let Some(git) = git.filter(|_| is_env_file(&file.path)) {
             if git.tracked(&file.path) {
                 let critical = out[first..]
@@ -184,6 +192,49 @@ pub fn check(files: &[File], git: Option<&Git>) -> Vec<Finding> {
         }
     }
     out
+}
+
+/// The key on a `supabase/config.toml` line that is named like a secret and holds a literal
+/// string instead of `env(NAME)`. `jwt_secret` is `jwt_secret_exposed`'s.
+fn config_secret_key(line: &str) -> Option<String> {
+    let (key, value) = line.split_once('=')?;
+    let key = key.trim().to_ascii_lowercase();
+    if key.starts_with('#') || key.starts_with('[') || key == "jwt_secret" {
+        return None;
+    }
+    let named_like_a_secret = key.contains("secret")
+        || key == "pass"
+        || key == "password"
+        || key.ends_with("_password")
+        || key.contains("api_key")
+        || key.contains("auth_token");
+    let value = value.trim().strip_prefix('"')?.split('"').next()?;
+    (named_like_a_secret && !is_placeholder(value)).then_some(key)
+}
+
+fn config_secret(path: &str, line: usize, key: &str, tracked: bool) -> Finding {
+    Finding {
+        kind: "config_secret",
+        severity: if tracked {
+            Severity::Critical
+        } else {
+            Severity::Warning
+        },
+        area: "keys",
+        message: format!(
+            "The key `{key}` holds a secret in plain text{}.",
+            if tracked {
+                ", in a file that is committed (or that doctor can't tell isn't)"
+            } else {
+                ""
+            }
+        ),
+        fix: format!(
+            "use `env(NAME)` instead, for example `{key} = \"env(SUPABASE_AUTH_SECRET)\"`, and keep the value in a .env file that isn't committed. If it was ever committed, rotate it."
+        ),
+        file: path.to_string(),
+        line: Some(line),
+    }
 }
 
 /// A dotenv file: `.env`, `.env.local`, `.env.production` and so on, but not the examples that
