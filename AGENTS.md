@@ -13,11 +13,11 @@ Svetra is a deterministic compiler for `svetra.yaml`, a small typed system graph
 
 ## Layout
 
-Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` → `check` → `report` → `inspect` → `infer` → `main`.
+Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` → `check` → `report` → `inspect` → `infer` → `verify` → `main`.
 
 | Path | Owns |
 |---|---|
-| `src/migrations.rs`, `src/standin/` | `svetra check --migrations`: builds migrations in a throwaway database (Docker, or `--scratch`). `standin/` is the Supabase stand-in (base and extra SQL), compiled in and shared with `scripts/` and `eval/` |
+| `src/migrations.rs`, `src/standin/` | `svetra check --migrations`: builds migrations in a throwaway database (Docker, or `--scratch`); also the throwaway Supabase copy (`Copy`, with pgTAP) for `infer --check-draft`. `standin/` is the Supabase stand-in (base and extra SQL), compiled in and shared with `scripts/` and `eval/` |
 | `src/yaml.rs` | The YAML tree with line and column positions. The only module that touches `saphyr` |
 | `src/model.rs` | The typed model of the format. Plain data, no logic |
 | `src/diag.rs` | `Code`: every diagnostic's id, severity, category and remediation action, in one table |
@@ -30,6 +30,7 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 | `src/change.rs` | `svetra diff` and `plan`: compares two designs and classifies every change, with access compared through `svetra view`'s model (docs/change.md) |
 | `src/inspect.rs` | `svetra check`: the read-only catalog query and the findings on an existing database (docs/check.md) |
 | `src/infer.rs` | `svetra infer`: a catalog snapshot to a draft `svetra.yaml`: names, the type mapping, defaults, check constraints (docs/infer.md). Its query is `inspect::infer_query` |
+| `src/verify.rs` | `svetra infer --check-draft`: reads a draft and the output of its generated access tests run on a copy of the original database (`migrations::Copy`), and reports each disagreement by entity (docs/infer.md) |
 | `src/main.rs` | The CLI |
 | `schema/svetra.schema.json` | The JSON Schema for editors. Hand-written; `tests/schema.rs` fails if it drifts from the loader |
 | `tests/` | Integration tests. `tests/fixtures/` holds example `svetra.yaml` files (and real hole bodies in `tests/fixtures/holes/<fixture>/`), and `tests/golden/` holds their expected compiler output, compared byte for byte |
