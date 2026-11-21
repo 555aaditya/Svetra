@@ -228,3 +228,36 @@ fn a_user_primary_key_gets_four_different_people() {
     assert_eq!(result("alice can\'\'t create Profile c"), "'denied'");
     assert_eq!(result("carol can\'\'t create Profile d"), "'denied'");
 }
+
+/// Changing the key of a user-keyed row to one nobody holds: a person without a row takes it over,
+/// anyone gives it to the fourth person, and the expected result comes from the update rule.
+#[test]
+fn a_user_primary_key_can_be_taken_over_or_given_away() {
+    let src = include_str!("fixtures/profiles.yaml");
+    let own = generate(src);
+    let open = generate(&src.replace(
+        "profiles_update_own:   { on: Profile, allow: [update], when: \"id == auth.user\" }",
+        "profiles_update_own:   { on: Profile, allow: [update], when: \"true\" }",
+    ));
+    assert_ne!(own, open);
+    let result = |t: &str, name: &str| {
+        let line = t
+            .lines()
+            .find(|l| l.contains(&format!("'{name}');")))
+            .unwrap_or_else(|| panic!("no check {name}"));
+        ["'allowed'", "'denied'"]
+            .into_iter()
+            .find(|r| line.contains(&format!("{r}, '")))
+            .expect("a result")
+    };
+    let take = "set the id of Profile a to themselves";
+    let give = "set the id of Profile a to a person who has no row";
+    assert_eq!(result(&own, &format!("carol can\'\'t {take}")), "'denied'");
+    assert_eq!(result(&own, &format!("alice can\'\'t {give}")), "'denied'");
+    assert_eq!(result(&open, &format!("carol can {take}")), "'allowed'");
+    assert_eq!(result(&open, &format!("alice can {give}")), "'allowed'");
+    // alice holds a row, so taking one over would only fail on the key: she gets no such check.
+    assert!(!own.contains("alice can''t set the id of Profile b to themselves"));
+    // Two stored rows, two targets for each of the persons without a row, one for the others.
+    assert!(own.contains("select plan(127);"));
+}
