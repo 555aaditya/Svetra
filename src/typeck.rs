@@ -100,6 +100,7 @@ pub fn hole_entity(h: &Hole, entities: &HashMap<&str, &Entity>) -> Entity {
                 unique: false,
                 default: None,
                 auto_now: false,
+                on_delete: OnDelete::Restrict,
                 was: None,
             })
         })
