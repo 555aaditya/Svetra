@@ -1,9 +1,9 @@
 # Drafted by `svetra infer` from a database snapshot. Review before adopting.
 # An entity is `private: true` only when none of its policies translated; the draft is never
 # wider than the database (docs/infer.md, Policies).
-# Policies: 0 of 14 translated.
+# Policies: 10 of 14 translated.
 # 5 entities from 5 tables. Skipped: 0 views, 4 functions.
-# 22 things left as UNTRANSLATED (search for UNTRANSLATED).
+# 11 things left as UNTRANSLATED (search for UNTRANSLATED).
 #
 # svetra check found 0 critical, 3 warnings and 1 note:
 #   warning   public.authorize(requested_permission app_permission): Anyone on the internet can call public.authorize(requested_permission app_permission), which runs with its owner's rights. Check it validates the caller.
@@ -16,32 +16,23 @@ system: App   # rename
 
 entities:
   Channels:
-    # policies: none of 4 translated. The database lets some people in; this draft keeps everyone out (private) until you port a policy.
-    private: true
+    # policies: 3 of 4 translated. The draft is NARROWER than the database: whatever an UNTRANSLATED policy below lets in, this draft keeps out, until you port it.
     fields:
       id:          { type: int, primary: true }   # UNTRANSLATED identity (by default): Svetra has no auto-increment, inserts must give a value
       inserted_at: { type: timestamp, required: true }   # UNTRANSLATED default: timezone('utc'::text, now())
       slug:        { type: text, required: true, unique: true }
-      created_by:  { type: ref, entity: Users, required: true }
-    # UNTRANSLATED policy Allow authorized delete access: CREATE POLICY Allow authorized delete access ON public.channels AS PERMISSIVE FOR DELETE TO public USING (authorize('channels.delete'::app_permission)) -- a condition that isn't an owner check or `true`
-    # UNTRANSLATED policy Allow individual delete access: CREATE POLICY Allow individual delete access ON public.channels AS PERMISSIVE FOR DELETE TO public USING ((auth.uid() = created_by)) -- a condition that isn't an owner check or `true`
-    # UNTRANSLATED policy Allow individual insert access: CREATE POLICY Allow individual insert access ON public.channels AS PERMISSIVE FOR INSERT TO public WITH CHECK ((auth.uid() = created_by)) -- a condition that isn't an owner check or `true`
-    # UNTRANSLATED policy Allow logged-in read access: CREATE POLICY Allow logged-in read access ON public.channels AS PERMISSIVE FOR SELECT TO public USING ((auth.role() = 'authenticated'::text)) -- a condition that isn't an owner check or `true`
+      created_by:  { type: user, required: true }   # lossy: was a foreign key to public.users (id), now one to auth.users: it accepts a person with no row in users
+    # UNTRANSLATED policy Allow authorized delete access: CREATE POLICY Allow authorized delete access ON public.channels AS PERMISSIVE FOR DELETE TO public USING (authorize('channels.delete'::app_permission)) -- calls the function authorize(); infer doesn't read function bodies
   Messages:
-    # policies: none of 5 translated. The database lets some people in; this draft keeps everyone out (private) until you port a policy.
-    private: true
+    # policies: 4 of 5 translated. The draft is NARROWER than the database: whatever an UNTRANSLATED policy below lets in, this draft keeps out, until you port it.
     fields:
       id:          { type: int, primary: true }   # UNTRANSLATED identity (by default): Svetra has no auto-increment, inserts must give a value
       inserted_at: { type: timestamp, required: true }   # UNTRANSLATED default: timezone('utc'::text, now())
       message:     { type: text }
-      user_id:     { type: ref, entity: Users, required: true }
+      user_id:     { type: user, required: true }   # lossy: was a foreign key to public.users (id), now one to auth.users: it accepts a person with no row in users
       channel_id:  { type: int, required: true }
     # UNTRANSLATED foreign key messages_channel_id_fkey: FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
-    # UNTRANSLATED policy Allow authorized delete access: CREATE POLICY Allow authorized delete access ON public.messages AS PERMISSIVE FOR DELETE TO public USING (authorize('messages.delete'::app_permission)) -- a condition that isn't an owner check or `true`
-    # UNTRANSLATED policy Allow individual delete access: CREATE POLICY Allow individual delete access ON public.messages AS PERMISSIVE FOR DELETE TO public USING ((auth.uid() = user_id)) -- a condition that isn't an owner check or `true`
-    # UNTRANSLATED policy Allow individual insert access: CREATE POLICY Allow individual insert access ON public.messages AS PERMISSIVE FOR INSERT TO public WITH CHECK ((auth.uid() = user_id)) -- a condition that isn't an owner check or `true`
-    # UNTRANSLATED policy Allow individual update access: CREATE POLICY Allow individual update access ON public.messages AS PERMISSIVE FOR UPDATE TO public USING ((auth.uid() = user_id)) -- a condition that isn't an owner check or `true`
-    # UNTRANSLATED policy Allow logged-in read access: CREATE POLICY Allow logged-in read access ON public.messages AS PERMISSIVE FOR SELECT TO public USING ((auth.role() = 'authenticated'::text)) -- a condition that isn't an owner check or `true`
+    # UNTRANSLATED policy Allow authorized delete access: CREATE POLICY Allow authorized delete access ON public.messages AS PERMISSIVE FOR DELETE TO public USING (authorize('messages.delete'::app_permission)) -- calls the function authorize(); infer doesn't read function bodies
   RolePermissions:
     # check: info, no_policy: Nobody can reach public.role_permissions through the API: row-level security is on with no policies. Intended?
     private: true
@@ -56,20 +47,66 @@ entities:
     private: true
     fields:
       id:      { type: int, primary: true }   # UNTRANSLATED identity (by default): Svetra has no auto-increment, inserts must give a value
-      user_id: { type: ref, entity: Users, required: true }   # lossy: the foreign key had ON DELETE CASCADE, Svetra writes none
+      user_id: { type: user, required: true }   # lossy: was a foreign key to public.users (id), now one to auth.users: it accepts a person with no row in users; the foreign key had ON DELETE CASCADE, a user field has none
       role:    { type: enum, values: [admin, moderator], required: true }   # lossy: was enum type app_role, compiles to text with a check
     unique:
       - [user_id, role]
     # UNTRANSLATED policy Allow auth admin to read user roles: CREATE POLICY Allow auth admin to read user roles ON public.user_roles AS PERMISSIVE FOR SELECT TO supabase_auth_admin USING (true) -- roles supabase_auth_admin
-    # UNTRANSLATED policy Allow individual read access: CREATE POLICY Allow individual read access ON public.user_roles AS PERMISSIVE FOR SELECT TO public USING ((auth.uid() = user_id)) -- a condition that isn't an owner check or `true`
+    # UNTRANSLATED policy Allow individual read access: CREATE POLICY Allow individual read access ON public.user_roles AS PERMISSIVE FOR SELECT TO public USING ((auth.uid() = user_id)) -- the database withholds the table privilege from this role
   Users:
-    # policies: none of 3 translated. The database lets some people in; this draft keeps everyone out (private) until you port a policy.
-    private: true
     fields:
-      id:       { type: uuid, primary: true }
+      id:       { type: user, primary: true }
       username: { type: text }
       status:   { type: enum, values: [ONLINE, OFFLINE], default: OFFLINE }   # lossy: was enum type user_status, compiles to text with a check
-    # UNTRANSLATED foreign key users_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id)
-    # UNTRANSLATED policy Allow individual insert access: CREATE POLICY Allow individual insert access ON public.users AS PERMISSIVE FOR INSERT TO public WITH CHECK ((auth.uid() = id)) -- a condition that isn't an owner check or `true`
-    # UNTRANSLATED policy Allow individual update access: CREATE POLICY Allow individual update access ON public.users AS PERMISSIVE FOR UPDATE TO public USING ((auth.uid() = id)) -- a condition that isn't an owner check or `true`
-    # UNTRANSLATED policy Allow logged-in read access: CREATE POLICY Allow logged-in read access ON public.users AS PERMISSIVE FOR SELECT TO public USING ((auth.role() = 'authenticated'::text)) -- a condition that isn't an owner check or `true`
+
+policies:
+  channels_policy:
+    on: Channels
+    as: anyone
+    allow: [delete]
+    when: "created_by == auth.user"
+  channels_policy_2:
+    on: Channels
+    as: anyone
+    allow: [insert]
+    when: "created_by == auth.user"
+  channels_policy_3:
+    on: Channels
+    as: authenticated
+    allow: [select]
+    when: "true"
+  messages_policy:
+    on: Messages
+    as: anyone
+    allow: [delete]
+    when: "user_id == auth.user"
+  messages_policy_2:
+    on: Messages
+    as: anyone
+    allow: [insert]
+    when: "user_id == auth.user"
+  messages_policy_3:
+    on: Messages
+    as: anyone
+    allow: [update]
+    when: "user_id == auth.user"
+  messages_policy_4:
+    on: Messages
+    as: authenticated
+    allow: [select]
+    when: "true"
+  users_policy:
+    on: Users
+    as: anyone
+    allow: [insert]
+    when: "id == auth.user"
+  users_policy_2:
+    on: Users
+    as: anyone
+    allow: [update]
+    when: "id == auth.user"
+  users_policy_3:
+    on: Users
+    as: authenticated
+    allow: [select]
+    when: "true"
