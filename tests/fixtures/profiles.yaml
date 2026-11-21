@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+#
+# A profile table keyed by the signed-in person, as Supabase's own examples have it: the primary key
+# is the auth user's id, so a person has at most one profile. Each person's own row is the only one
+# they may add, change or delete; an admin may delete any.
+svetra: "0.1"
+system: Profiles
+
+auth:
+  sign_in: [email]
+
+roles:
+  admin: { description: "May delete any profile" }
+
+entities:
+  Profile:
+    fields:
+      id:       { type: user, primary: true }
+      username: { type: text, required: true }
+      status:   { type: enum, values: [ONLINE, OFFLINE], default: OFFLINE }
+  Note:
+    fields:
+      id:      { type: uuid, primary: true }
+      author:  { type: user, required: true }
+      body:    { type: text }
+
+policies:
+  profiles_read:         { on: Profile, allow: [select], when: "true" }
+  profiles_insert_own:   { on: Profile, allow: [insert], when: "id == auth.user" }
+  profiles_update_own:   { on: Profile, allow: [update], when: "id == auth.user" }
+  profiles_delete_own:   { on: Profile, allow: [delete], when: "id == auth.user" }
+  profiles_delete_admin: { on: Profile, allow: [delete], when: "has_role('admin')" }
+  notes_own:             { on: Note, allow: [select, insert, update, delete], when: "author == auth.user" }

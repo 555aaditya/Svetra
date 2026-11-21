@@ -37,6 +37,10 @@ fn access_tests_match_golden_files() {
             include_str!("fixtures/forum.yaml"),
             include_str!("golden/forum.test.sql"),
         ),
+        (
+            include_str!("fixtures/profiles.yaml"),
+            include_str!("golden/profiles.test.sql"),
+        ),
     ] {
         assert_eq!(generate(src), golden);
     }
@@ -179,4 +183,48 @@ fn deletes_expect_what_on_delete_says() {
     // A person the rules refuse is `denied`, whatever points at the row.
     assert_eq!(result("bob can\'\'t delete Board a"), "'denied'");
     assert_eq!(result("anon can\'\'t delete Thread a"), "'denied'");
+}
+
+/// An entity keyed by a `user` field: the candidate rows can't reuse alice and bob, whose rows the
+/// tests have already stored, so `c` is carol's and `d` is a fourth person's.
+#[test]
+fn a_user_primary_key_gets_four_different_people() {
+    let t = generate(include_str!("fixtures/profiles.yaml"));
+    let insert = |c: char| {
+        t.lines()
+            .find(|l| {
+                l.contains("insert into \"public\".\"profile\"")
+                    && l.contains(&format!("'svetra {c}'"))
+                    && l.contains("'anon can")
+            })
+            .unwrap_or_else(|| panic!("no insert of Profile {c}"))
+            .to_string()
+    };
+    let key = |c: char, id: &str| {
+        let line = insert(c);
+        assert!(
+            line.contains(&format!(
+                "values ('5e7a0000-0000-4000-8000-{id}', 'svetra {c}'"
+            )),
+            "{line}"
+        );
+    };
+    key('c', "000000000003");
+    key('d', "000000000fff");
+    // The stored rows are alice's and bob's, and the fourth person exists to be a key.
+    assert!(t.contains("'5e7a0000-0000-4000-8000-000000000fff', 'fourth@svetra.test'"));
+    let result = |name: &str| {
+        let line = t
+            .lines()
+            .find(|l| l.contains(&format!("'{name}');")))
+            .unwrap_or_else(|| panic!("no check {name}"));
+        ["'allowed'", "'denied'"]
+            .into_iter()
+            .find(|r| line.contains(&format!("{r}, '")))
+            .expect("a result")
+    };
+    // Only carol may add her own row; nobody may add `d`, and alice may not add carol's.
+    assert_eq!(result("carol can create Profile c"), "'allowed'");
+    assert_eq!(result("alice can\'\'t create Profile c"), "'denied'");
+    assert_eq!(result("carol can\'\'t create Profile d"), "'denied'");
 }

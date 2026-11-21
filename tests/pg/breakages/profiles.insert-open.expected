@@ -1,0 +1,10 @@
+not ok 22 - alice can't create Profile c
+not ok 23 - alice can't create Profile d
+not ok 30 - bob can't create Profile c
+not ok 31 - bob can't create Profile d
+not ok 39 - carol can't create Profile d
+not ok 46 - admin can't create Profile c
+not ok 47 - admin can't create Profile d
+not ok 54 - alice who is also admin can't create Profile c
+not ok 55 - alice who is also admin can't create Profile d
+# Looks like you failed 9 tests of 113

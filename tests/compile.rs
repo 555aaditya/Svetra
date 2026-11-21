@@ -191,3 +191,10 @@ fn on_delete_becomes_the_foreign_keys_action() {
         "\"post_owner_fkey\" foreign key (\"owner\") references \"auth\".\"users\" (\"id\");"
     ));
 }
+
+/// A table keyed by the auth user: the key is a uuid with a foreign key to `auth.users`.
+#[test]
+fn profiles_sql_matches_golden_file() {
+    let got = compile(include_str!("fixtures/profiles.yaml"));
+    assert_eq!(got, include_str!("golden/profiles.sql"));
+}

@@ -58,7 +58,7 @@ Each entity has exactly one field with `primary: true` (`SVT022`).
 |---|---|---|
 | `type` | all | Required. One of the types below (`SVT023` if unknown) |
 | `required` | all | `true` makes the column `not null`. Default `false` |
-| `primary` | all | Marks the primary key. Implies `required` |
+| `primary` | all | Marks the primary key. Implies `required`. A `user` primary key (a profile keyed by the auth user's id) gives each person at most one row |
 | `unique` | all | Shorthand for a single-column unique constraint |
 | `default` | all except `ref`, `user` | A literal default value, checked against the type |
 | `auto` | `timestamp`, `date` | `now`: filled in by the database on insert |

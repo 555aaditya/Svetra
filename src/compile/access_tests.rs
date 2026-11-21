@@ -44,6 +44,10 @@ struct World<'a> {
     bob: String,
     /// How many of `entities` are the design's own (the rest are hole inputs).
     tables: usize,
+    carol: String,
+    /// A person with no checks, who exists only to key the fourth test row of an entity whose
+    /// primary key is a `user` field (docs/compiler.md, The test rows).
+    fourth: String,
     /// Roles with `mfa: true`: they count only in an `aal2` session.
     mfa: Vec<&'a str>,
 }
@@ -165,6 +169,11 @@ impl<'a> World<'a> {
             }
             FieldType::Enum(values) => text(values[k % values.len()].clone()),
             FieldType::Json => text(format!("{{\"svetra\": \"{r}\"}}")),
+            // A `user` primary key is one row per person, so the four rows have four different keys:
+            // c and d can't repeat the people of a and b, whose rows are already stored.
+            FieldType::User if field.primary => {
+                text([&self.alice, &self.bob, &self.carol, &self.fourth][k].clone())
+            }
             // The first `user` field is alice on rows a and c and bob on b and d; a second one flips,
             // so a rule that compares two people (an author and a reviewer) sees two different ones.
             FieldType::User => {
@@ -172,7 +181,7 @@ impl<'a> World<'a> {
                     .fields
                     .iter()
                     .take_while(|x| x.name != field.name)
-                    .filter(|x| x.ty == FieldType::User)
+                    .filter(|x| x.ty == FieldType::User && !x.primary)
                     .count();
                 text(
                     if k.is_multiple_of(2) == nth.is_multiple_of(2) {
@@ -1148,6 +1157,8 @@ pub fn analyse(doc: &Document) -> Analysis {
         tables,
         alice: person_id(1),
         bob: person_id(2),
+        carol: person_id(3),
+        fourth: person_id(0xfff),
         mfa: doc
             .roles
             .iter()
@@ -1233,13 +1244,20 @@ pub fn analyse(doc: &Document) -> Analysis {
     }
 
     let mut setup = Vec::new();
-    let users: Vec<String> = people
+    let mut users: Vec<String> = people
         .iter()
         .filter_map(|p| {
             p.id.as_ref()
                 .map(|id| format!("('{id}', '{}@svetra.test')", p.name.replace(' ', ".")))
         })
         .collect();
+    if doc
+        .entities
+        .iter()
+        .any(|e| primary(e).ty == FieldType::User)
+    {
+        users.push(format!("('{}', 'fourth@svetra.test')", world.fourth));
+    }
     setup.push(lives(
         &format!(
             "insert into auth.users (id, email) values {}",

@@ -19,7 +19,7 @@ access_tests() {
 }
 
 # FIXTURES narrows the run; the rename check at the end needs `teams` to come last.
-for name in ${FIXTURES:-finledger posts bookings clinic approvals forum teams}; do
+for name in ${FIXTURES:-finledger posts bookings clinic approvals forum profiles teams}; do
   docker rm -f svetra-pg-check >/dev/null 2>&1 || true
   docker run -d --name svetra-pg-check -e POSTGRES_PASSWORD=pw "$image" >/dev/null
   # The image runs a temporary server while it initialises, then restarts. Wait for the real one,
