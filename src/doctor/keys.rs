@@ -14,6 +14,114 @@ use std::collections::HashSet;
 enum Hit {
     ServiceKey,
     UnrecognizedJwt,
+    /// An index into `VENDORS`.
+    Secret(usize),
+}
+
+/// How the part of a token after its prefix must look.
+enum Tail {
+    /// Letters and digits, at least this many.
+    Alnum(usize),
+    /// Letters, digits and underscores, at least this many.
+    Word(usize),
+    /// Exactly this many hex digits.
+    Hex(usize),
+    /// Exactly this many capital letters and digits.
+    Upper(usize),
+    /// Not a prefix: the line holds a PEM private key header.
+    Pem,
+}
+
+/// Other secrets: formats specific enough to give almost no false alarms. UNVERIFIED: the exact
+/// lengths and prefixes, to be checked against each vendor's documentation. Adding a vendor is a
+/// row here and a test. The private key is last: `scan_line` finds it by its header.
+struct Vendor {
+    prefix: &'static str,
+    label: &'static str,
+    risk: &'static str,
+    severity: Severity,
+    tail: Tail,
+}
+
+const VENDORS: [Vendor; 9] = [
+    Vendor {
+        prefix: "sk_live_",
+        label: "a Stripe live secret key",
+        risk: "Anyone who can read this file can charge and refund your customers.",
+        severity: Severity::Critical,
+        tail: Tail::Alnum(20),
+    },
+    Vendor {
+        prefix: "rk_live_",
+        label: "a Stripe live restricted key",
+        risk: "Anyone who can read this file can do whatever the key was allowed to with your customers' money.",
+        severity: Severity::Critical,
+        tail: Tail::Alnum(20),
+    },
+    Vendor {
+        prefix: "whsec_",
+        label: "a Stripe webhook signing secret",
+        risk: "Anyone who can read this file can forge payment events your app would trust.",
+        severity: Severity::Critical,
+        tail: Tail::Alnum(20),
+    },
+    Vendor {
+        prefix: "sk_test_",
+        label: "a Stripe test secret key",
+        risk: "It can't move real money, but it gives full access to your Stripe test data.",
+        severity: Severity::Warning,
+        tail: Tail::Alnum(20),
+    },
+    Vendor {
+        prefix: "AKIA",
+        label: "an AWS access key id",
+        risk: "With its secret it gives access to your AWS account.",
+        severity: Severity::Critical,
+        tail: Tail::Upper(16),
+    },
+    Vendor {
+        prefix: "ghp_",
+        label: "a GitHub personal access token",
+        risk: "Anyone who can read this file can act as you on GitHub.",
+        severity: Severity::Critical,
+        tail: Tail::Alnum(30),
+    },
+    Vendor {
+        prefix: "github_pat_",
+        label: "a GitHub personal access token",
+        risk: "Anyone who can read this file can act as you on GitHub.",
+        severity: Severity::Critical,
+        tail: Tail::Word(22),
+    },
+    Vendor {
+        prefix: "sbp_",
+        label: "a Supabase personal access token",
+        risk: "Anyone who can read this file can manage your Supabase projects, including their data.",
+        severity: Severity::Critical,
+        tail: Tail::Hex(40),
+    },
+    Vendor {
+        prefix: "",
+        label: "a private key",
+        risk: "Anyone who can read this file can pass as whoever or whatever it identifies.",
+        severity: Severity::Critical,
+        tail: Tail::Pem,
+    },
+];
+
+impl Tail {
+    fn matches(&self, tail: &str) -> bool {
+        let all = |f: fn(char) -> bool| tail.chars().all(f);
+        match self {
+            Tail::Alnum(n) => tail.len() >= *n && all(|c| c.is_ascii_alphanumeric()),
+            Tail::Word(n) => tail.len() >= *n && all(|c| c.is_ascii_alphanumeric() || c == '_'),
+            Tail::Hex(n) => tail.len() == *n && all(|c| c.is_ascii_hexdigit()),
+            Tail::Upper(n) => {
+                tail.len() == *n && all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+            }
+            Tail::Pem => false,
+        }
+    }
 }
 
 /// Environment variable name prefixes whose values frameworks put into the browser bundle.
@@ -44,6 +152,9 @@ pub fn check(files: &[File], git: Option<&Git>) -> Vec<Finding> {
                 }
                 match hit {
                     Hit::ServiceKey => out.push(service_key(&file.path, line_no, front_file)),
+                    Hit::Secret(v) => {
+                        out.push(secret(&file.path, line_no, &VENDORS[v], front_file));
+                    }
                     Hit::UnrecognizedJwt => {
                         if !unrecognized && !is_test_path(&file.path) {
                             unrecognized = true;
@@ -59,11 +170,24 @@ pub fn check(files: &[File], git: Option<&Git>) -> Vec<Finding> {
 
 fn scan_line(line: &str) -> Vec<Hit> {
     let mut hits = Vec::new();
+    // The two halves of a PEM header, apart so that this file doesn't match itself.
+    const BEGIN: &str = "-----BEGIN ";
+    const END: &str = "PRIVATE KEY-----";
+    if line.contains(BEGIN) && line.contains(END) {
+        hits.push(Hit::Secret(VENDORS.len() - 1));
+    }
     for token in tokens(line) {
         if let Some(tail) = token.strip_prefix("sb_secret_") {
             if tail.len() >= 16 && !is_placeholder(tail) {
                 hits.push(Hit::ServiceKey);
             }
+        } else if let Some(v) = VENDORS.iter().position(|v| {
+            !v.prefix.is_empty()
+                && token
+                    .strip_prefix(v.prefix)
+                    .is_some_and(|t| v.tail.matches(t) && !is_placeholder(t))
+        }) {
+            hits.push(Hit::Secret(v));
         } else if token.starts_with("eyJ") {
             match jwt::role(token) {
                 Some(Role::Service) => hits.push(Hit::ServiceKey),
@@ -148,6 +272,18 @@ fn service_key(path: &str, line: usize, front_end: bool) -> Finding {
         severity: Severity::Critical,
         area: "keys",
         message: "This line holds your Supabase service role key. It skips every row-level security rule, and anyone who can read this file can read, change and delete every row.".to_string(),
+        fix: rotate_fix(front_end),
+        file: path.to_string(),
+        line: Some(line),
+    }
+}
+
+fn secret(path: &str, line: usize, vendor: &Vendor, front_end: bool) -> Finding {
+    Finding {
+        kind: "secret_exposed",
+        severity: vendor.severity,
+        area: "keys",
+        message: format!("This line holds {}. {}", vendor.label, vendor.risk),
         fix: rotate_fix(front_end),
         file: path.to_string(),
         line: Some(line),
