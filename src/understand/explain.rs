@@ -92,9 +92,10 @@ pub fn explain(doc: &Document, diags: &[Diagnostic]) -> String {
             out += &format!("  - {n}\n");
         }
     }
-    if let Some(a) = &doc.auth {
+    let live = before_live(doc);
+    if !live.is_empty() {
         out += "\nBefore going live\n";
-        for line in before_live(a) {
+        for line in live {
             out += &format!("  - {line}\n");
         }
     }
@@ -140,6 +141,11 @@ pub mod parts {
         super::access(e, doc, &entities(doc))
     }
 
+    /// What starts a scheduled hole, in words.
+    pub fn starts(h: &Hole) -> Option<String> {
+        super::starts(h)
+    }
+
     pub fn hole(doc: &Document, h: &Hole) -> Vec<String> {
         super::hole(h, &entities(doc))
     }
@@ -151,7 +157,7 @@ pub mod parts {
     }
 
     pub fn before_going_live(doc: &Document) -> Vec<String> {
-        doc.auth.as_ref().map_or(vec![], super::before_live)
+        super::before_live(doc)
     }
 }
 
@@ -205,7 +211,10 @@ fn signing_in(a: &Auth, roles: &[RoleDef]) -> Vec<String> {
     out
 }
 
-fn before_live(a: &Auth) -> Vec<String> {
+fn before_live(doc: &Document) -> Vec<String> {
+    let Some(a) = &doc.auth else {
+        return schedule_live(doc);
+    };
     let mut out: Vec<String> = a
         .sign_in
         .iter()
@@ -222,7 +231,17 @@ fn before_live(a: &Auth) -> Vec<String> {
         out.push("Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.".into());
     }
     out.push("Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in.".into());
+    out.extend(schedule_live(doc));
     out
+}
+
+/// Once, when any code runs by itself on a schedule.
+fn schedule_live(doc: &Document) -> Vec<String> {
+    if doc.holes.iter().any(|h| starts(h).is_some()) {
+        vec!["Code that runs by itself on a schedule needs Supabase's pg_cron extension. The update turns it on; if your project refuses, switch it on under Database, Extensions in the Supabase dashboard.".into()]
+    } else {
+        vec![]
+    }
 }
 
 /// How a field's type reads in English.
@@ -625,8 +644,26 @@ fn param_words(t: &ParamType, entities: &HashMap<&str, &Entity>) -> String {
     }
 }
 
+/// What starts a scheduled hole, in words: `None` for a hole a person calls.
+fn starts(h: &Hole) -> Option<String> {
+    let HoleKind::Schedule(s) = &h.kind else {
+        return None;
+    };
+    let when = match crate::cron::words(&s.cron) {
+        Some(w) => format!("{w} (UTC)"),
+        None => format!("on the schedule \"{}\" (UTC)", s.cron),
+    };
+    Some(format!(
+        "runs by itself {when}. Nobody can run it from the app."
+    ))
+}
+
 fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
     let mut out = Vec::new();
+    let scheduled = starts(h);
+    if let Some(s) = &scheduled {
+        out.push(s.clone());
+    }
     if !h.input.is_empty() {
         let params: Vec<String> = h
             .input
@@ -635,12 +672,14 @@ fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
             .collect();
         out.push(format!("takes: {}", params.join(", ")));
     }
-    out.push(format!(
-        "returns: {}",
-        h.output
-            .as_ref()
-            .map_or("nothing".into(), |t| param_words(t, entities))
-    ));
+    if scheduled.is_none() {
+        out.push(format!(
+            "returns: {}",
+            h.output
+                .as_ref()
+                .map_or("nothing".into(), |t| param_words(t, entities))
+        ));
+    }
     let names = |rs: &[NameRef]| {
         rs.iter()
             .map(|r| plural(&r.name))
@@ -652,13 +691,15 @@ fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
         Role::Anon => "people who aren't signed in",
         Role::Anyone => "anyone, signed in or not",
     };
-    out.push(match h.when.as_deref().and_then(|w| expr::parse(w).ok()) {
-        Some(e) => format!(
-            "who can call it: {who}, only when {}",
-            english(&e, Style::Hole)
-        ),
-        None => format!("who can call it: {who}"),
-    });
+    if scheduled.is_none() {
+        out.push(match h.when.as_deref().and_then(|w| expr::parse(w).ok()) {
+            Some(e) => format!(
+                "who can call it: {who}, only when {}",
+                english(&e, Style::Hole)
+            ),
+            None => format!("who can call it: {who}"),
+        });
+    }
     out.push(match (h.reads.is_empty(), h.writes.is_empty()) {
         (true, true) => "can't read or change any data".into(),
         (false, true) => format!("can read: {}. Can't change any data.", names(&h.reads)),
@@ -671,14 +712,18 @@ fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
     });
     if !h.grants.is_empty() {
         let roles: Vec<&str> = h.grants.iter().map(|g| g.name.as_str()).collect();
-        out.push(if let [only] = roles.as_slice() {
+        let mut line = if let [only] = roles.as_slice() {
             format!("can give people the {only} role, or take it away, and no other role.")
         } else {
             format!(
                 "can give people the {} roles, or take them away, and no other role.",
                 roles.join(" or ")
             )
-        });
+        };
+        if scheduled.is_some() {
+            line += " Nobody is asked first: it happens by itself.";
+        }
+        out.push(line);
     }
     if h.audit {
         out.push(
@@ -717,6 +762,12 @@ fn note(d: &Diagnostic, doc: &Document) -> String {
             let what = target.map_or_else(String::new, |p| plural(&p.on.name));
             format!(
                 "People who aren't signed in can reach some {what} that signed-in people may not be able to. Signing in could take access away; if {what} should be public, make them public for everyone."
+            )
+        }
+        Code::Svt040 => {
+            let name = d.path.split('.').nth(1).unwrap_or_default();
+            format!(
+                "{name} runs by itself and gives or takes away roles, so nobody is asked first."
             )
         }
         _ => d.message.clone(),
