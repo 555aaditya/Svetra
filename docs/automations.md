@@ -99,15 +99,16 @@ All of it goes in the `-- Holes` section of the SQL schema.
 
 1. **The role** `svetra_hole_<name>` and its grants, exactly as for a `function` hole.
 2. **The body function** `svetra_holes.<name>(p_caller uuid)`, with the usual attributes and no guard. `p_caller` is always `null`; it stays in the signature so a body can move between kinds.
-3. **A job**, scheduled in the same migration:
+3. **A job**, scheduled in the same migration, and the extension it needs, switched on first:
    ```sql
-   create extension if not exists pg_cron;   -- UNVERIFIED: schema and spelling on Supabase
+   do $$ begin if to_regnamespace('cron') is null then create extension pg_cron; end if; end $$;
    select cron.schedule('svetra_expire_invites', '0 3 * * *',
-     $job$select svetra_holes.expire_invites(null)$job$);
+     $job$select "svetra_holes"."expire_invites"(null)
+       where pg_try_advisory_xact_lock(hashtext('svetra_expire_invites'))$job$);
    ```
-   The job runs as the migration's role (`postgres` on Supabase), the only role allowed to execute the body function. The body still runs as `svetra_hole_<name>`, so the job gives it no extra access.
-4. **A single-run guard.** The job takes `pg_try_advisory_xact_lock` on the hole's name and returns at once if the last run hasn't finished. Two overlapping runs of a cleanup are a usual way a nightly job corrupts data.
-5. **Cleanup of removed jobs.** Every job Svetra creates is named `svetra_<name>`. The schema ends with a statement that unschedules each `svetra_%` job that the design doesn't declare. Jobs you made by hand under other names are never touched.
+   The extension is created when the `cron` schema isn't there yet. That is the same as `create extension if not exists pg_cron` on Supabase, and it lets the plain-PostgreSQL stand-in, which has a stub `cron` schema instead of the extension, run the same file. The job runs as the migration's role (`postgres` on Supabase, confirmed), the only role allowed to execute the body function. The body still runs as `svetra_hole_<name>`, so the job gives it no extra access.
+4. **A single-run guard.** The job's `where` takes `pg_try_advisory_xact_lock` on the hole's name and does nothing if another run holds it. pg_cron already never overlaps a job with itself (confirmed), so the lock covers a second job someone made by hand for the same body, and costs one function call per run.
+5. **Cleanup of removed jobs.** Every job Svetra creates is named `svetra_<name>`. When the design has a scheduled hole, the schedule ends with a statement that unschedules each job named `svetra\_%` (the underscore escaped, because `_` is a wildcard in `like`) that the design doesn't declare. Jobs you made by hand under other names are never touched. A design with no scheduled hole emits nothing about `cron`, so a project that doesn't use schedules never needs pg_cron; the cost is that removing the last scheduled hole leaves its job running until it is unscheduled by hand, and `svetra diff` says so.
 
 **There is no function in `public`,** so nothing in the API can call a scheduled hole, and `src/svetra.gen.ts` gets nothing for it.
 
@@ -301,6 +302,7 @@ The generated pgTAP tests already prove, for a `function` hole, its table privil
 | `schedule` | `anon`, `authenticated` and `service_role` can't execute `svetra_holes.<name>` | No API role can run a scheduled hole, or forge its caller |
 | `schedule` | No function named `<name>` exists in `public` | There is no `rpc` entry |
 | `schedule` | `cron.job` has exactly one job named `svetra_<name>`, with the declared schedule, calling `svetra_holes.<name>` | The clock runs the declared hole on the declared schedule |
+| `schedule` | pg_cron's `cron.timezone` is `UTC` or `GMT` (or absent, as on the stand-in) | "UTC" in the schedule means UTC |
 | `schedule` | No `svetra_%` job exists that the design doesn't declare | A removed hole's job is gone |
 | `trigger` | `pg_trigger` has one trigger per declared event on the declared table: `after`, `for each row`, enabled | It fires when, and only when, declared |
 | `trigger` | `pg_get_triggerdef` contains the compiled `when` | The condition is the one in the design |
@@ -331,7 +333,7 @@ Words follow [`understand.md`](understand.md): no "hole", "trigger" or "cron". T
 - **Cron in words.** Common forms are spelled out: "every day at 03:00", "every 15 minutes", "every Monday at 09:00", "on the 1st of each month at 00:00". Any other valid expression is shown as written, in quotes, never guessed at.
 - **Side effects where readers look.** For a trigger, the entity it fires on gets an extra line under "Who can see and change what": "Changing an order also runs `notify_paid`, which changes notifications." The "Only custom code can change them" line names these holes too.
 - **Grants.** "It can give people the member role" gets a second sentence for `schedule` and `trigger`: "Nobody is asked first: it happens by itself." This is the `SVT040` warning in words under "Worth knowing".
-- **Before going live** gets, per webhook, the secret's name with its `supabase secrets set` command and the deploy step; and, once for any schedule, "turn on the pg_cron extension in the Supabase dashboard". A `shared_secret` webhook is described as weaker than a signature, and every webhook says old calls can be replayed.
+- **Before going live** gets, per webhook, the secret's name with its `supabase secrets set` command and the deploy step; and, once for any schedule, a line that the update turns on the pg_cron extension and, if the project refuses, to switch it on under Database, Extensions in the Supabase dashboard (the migration enabling it is confirmed locally, not on hosted Supabase). A `shared_secret` webhook is described as weaker than a signature, and every webhook says old calls can be replayed.
 - **`context`** gets one line each, as today: `hole expire_invites: schedule "0 3 * * *"; reads Invite; writes Invite`, `hole notify_paid: trigger Order update when status == 'paid' and old.status != 'paid'; reads Order, Customer; writes Notification`, `hole payment_received: webhook secret PAYMENTS_WEBHOOK_SECRET (invoice Invoice.id, paid Invoice.amount, event_id text); reads Invoice; writes Invoice, Payment`.
 - **`graph`** draws them with the same rounded node, and a dotted line from the entity a trigger fires on into the hole, besides the usual `reads` and `changes` edges.
 - **`view`:** each Custom code card gets a first row, **Starts**, with the sentence above. The All, Some, No table of who can call it is replaced for these kinds by "Nobody can run this from the app", because there is no person to evaluate. The `--json` model gets `"kind"` and `"starts"` per hole, and `"secret"` (the name only) for a webhook. The page still makes no network requests.
@@ -369,7 +371,7 @@ Three build PRs, each shippable alone with its own golden files, `scripts/pg-che
    - access tests: the schedule rows of the table above, and a stub `cron` schema in the stand-in so `scripts/pg-check.sh` can run them;
    - `explain`, `context`, `graph` and `view` text for scheduled holes;
    - a fixture `jobs.yaml` with one hole and its body in `tests/fixtures/holes/jobs/`;
-   - first, it resolves the UNVERIFIED pg_cron rows on the pinned local Supabase. If pg_cron isn't in the local stack, the PR says so and the tests that need it skip with a message, never pass silently.
+   - first, it resolves the UNVERIFIED pg_cron rows on the pinned local Supabase (done: pg_cron is in the local stack, see the table above), so the tests that read `cron.job` run there for real.
 2. **Triggered holes:** the `old.` form in the expression language, `on` and `events`, `SVT038` and the loop graph, the trigger function and triggers, their tests, a breakage, and the `explain` and `view` text including the extra line under who can change.
 3. **Webhook holes:** the Edge Function generator, `config.toml` handling, `svetra.webhook_events`, `SVT039`, the `service_role`-only public function, their tests, and the "Before going live" lines.
 
