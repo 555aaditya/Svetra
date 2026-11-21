@@ -227,6 +227,15 @@
       "tests": [
         22,
         23
+      ],
+      "only": [
+        {
+          "fields": [
+            "status"
+          ],
+          "sentence": "They can change only its status.",
+          "rule": "Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected. They can change only its status."
+        }
       ]
     },
     {
@@ -337,6 +346,15 @@
       "tests": [
         41,
         42
+      ],
+      "only": [
+        {
+          "fields": [
+            "status"
+          ],
+          "sentence": "They can change only its status.",
+          "rule": "Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected. They can change only its status."
+        }
       ]
     },
     {
@@ -445,6 +463,15 @@
       "tests": [
         57,
         58
+      ],
+      "only": [
+        {
+          "fields": [
+            "status"
+          ],
+          "sentence": "They can change only its status.",
+          "rule": "Signed-in people can change a doc when its reviewer is them and its status is submitted. After the change, its reviewer is them and its status is approved or rejected. They can change only its status."
+        }
       ]
     },
     {
