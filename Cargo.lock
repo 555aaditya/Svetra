@@ -251,7 +251,7 @@ dependencies = [
 
 [[package]]
 name = "svetra"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "saphyr",
  "serde_json",
