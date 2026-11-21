@@ -535,7 +535,7 @@ fn foreign_keys(e: &Entity, entities: &HashMap<&str, &Entity>) -> Vec<String> {
     e.fields
         .iter()
         .filter_map(|f| {
-            let target = match &f.ty {
+            let (target, action) = match &f.ty {
                 FieldType::Ref(r) => {
                     let target = entities.get(r.name.as_str()).expect("validated reference");
                     let pk = target
@@ -543,14 +543,19 @@ fn foreign_keys(e: &Entity, entities: &HashMap<&str, &Entity>) -> Vec<String> {
                         .iter()
                         .find(|x| x.primary)
                         .expect("validated primary key");
-                    format!("{} ({})", table(&target.name), q(&pk.name))
+                    let action = match f.on_delete {
+                        OnDelete::Restrict => "",
+                        OnDelete::Cascade => " on delete cascade",
+                        OnDelete::SetNull => " on delete set null",
+                    };
+                    (format!("{} ({})", table(&target.name), q(&pk.name)), action)
                 }
-                FieldType::User => "\"auth\".\"users\" (\"id\")".into(),
+                FieldType::User => ("\"auth\".\"users\" (\"id\")".into(), ""),
                 _ => return None,
             };
             let name = q(&format!("{t}_{}_fkey", f.name));
             Some(format!(
-                "alter table {} add constraint {name} foreign key ({}) references {target};",
+                "alter table {} add constraint {name} foreign key ({}) references {target}{action};",
                 table(&e.name),
                 q(&f.name)
             ))

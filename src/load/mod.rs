@@ -37,6 +37,7 @@ pub const FIELD_KEYS: &[&str] = &[
     "precision",
     "scale",
     "entity",
+    "on_delete",
     "was",
 ];
 pub const POLICY_KEYS: &[&str] = &["on", "allow", "when", "check", "only", "restrictive", "as"];

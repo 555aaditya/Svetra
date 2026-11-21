@@ -2,7 +2,7 @@
 -- service key, and the whole file rolls back. People: anon, alice, bob, carol, admin, admin without a second factor.
 begin;
 create extension if not exists pgtap;
--- Run one statement as one person, then undo it. Returns allowed, denied or the error.
+-- Run one statement as one person, then undo it. Returns allowed, denied, blocked or the error.
 -- p_before, if given, is run first as the database owner (to give a person an extra role).
 create schema svetra_test;
 create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1', p_before text default null) returns text
@@ -23,6 +23,9 @@ begin
       return case when n > 0 then 'allowed' else 'denied' end;
     elsif sqlstate = '42501' then
       return 'denied';
+    -- A delete that a foreign key refuses: the row was visible and deletable, but another still points at it.
+    elsif sqlstate = '23503' and sqlerrm like 'update or delete on table%' then
+      return 'blocked';
     end if;
     return 'error ' || sqlstate || ': ' || sqlerrm;
   end;

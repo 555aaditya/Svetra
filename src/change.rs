@@ -403,6 +403,26 @@ fn entity(
                 format!("{}.{} becomes optional", n.name, f.name),
             ));
         }
+        if of.on_delete != f.on_delete {
+            let (data, what) = match f.on_delete {
+                OnDelete::Cascade => (Data::Breaking, "now deletes this row too"),
+                OnDelete::SetNull => (Data::Safe, "now clears this field"),
+                OnDelete::Restrict => (Data::Safe, "is now refused while this row points at it"),
+            };
+            let mut c = change(
+                "change_on_delete",
+                fpath.clone(),
+                data,
+                format!(
+                    "{}.{}: deleting the row it points at {what}",
+                    n.name, f.name
+                ),
+            );
+            if f.on_delete == OnDelete::Cascade {
+                c.hint = Some("Check that losing these rows with their parent is intended.".into());
+            }
+            changes.push(c);
+        }
         if !of.unique && f.unique {
             changes.push(hint(
                 change(

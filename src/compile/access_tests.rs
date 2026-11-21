@@ -42,6 +42,8 @@ struct World<'a> {
     by_name: HashMap<&'a str, usize>,
     alice: String,
     bob: String,
+    /// How many of `entities` are the design's own (the rest are hole inputs).
+    tables: usize,
     /// Roles with `mfa: true`: they count only in an `aal2` session.
     mfa: Vec<&'a str>,
 }
@@ -76,6 +78,49 @@ impl<'a> World<'a> {
             .filter(|x| target(x).as_deref() == Some(t.as_str()))
             .count();
         (k % 2) ^ (nth % 2)
+    }
+
+    /// The stored rows (`a` and `b` of each of the design's entities) that point at row `tk` of
+    /// entity `ti`, with the `on_delete` of the field that does.
+    fn pointing_at(&self, ti: usize, tk: usize) -> Vec<(usize, usize, OnDelete)> {
+        let mut out = Vec::new();
+        for (si, source) in self.entities.iter().enumerate().take(self.tables) {
+            for sk in 0..2 {
+                for f in &source.fields {
+                    if let FieldType::Ref(t) = &f.ty
+                        && t.name == self.entities[ti].name
+                        && self.ref_row(source, &f.name, sk) == tk
+                    {
+                        out.push((si, sk, f.on_delete));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Why deleting the stored row `k` of entity `ei` fails, if it does (docs/format.md, Deleting
+    /// a referenced row): the entity and letter of a stored row that still points, through a
+    /// `restrict` field, at a row the delete removes. The delete removes the row and, through
+    /// `cascade`, every row that points at a removed row; a row removed anyway (itself, or by
+    /// cascade) blocks nothing. This reads the `on_delete` options, never the generated keys.
+    fn delete_blocker(&self, ei: usize, k: usize) -> Option<(String, char)> {
+        let mut gone = vec![(ei, k)];
+        let mut next = 0;
+        while let Some(&(ti, tk)) = gone.get(next) {
+            next += 1;
+            for (si, sk, on) in self.pointing_at(ti, tk) {
+                if on == OnDelete::Cascade && !gone.contains(&(si, sk)) {
+                    gone.push((si, sk));
+                }
+            }
+        }
+        gone.iter().find_map(|&(ti, tk)| {
+            self.pointing_at(ti, tk)
+                .into_iter()
+                .find(|&(si, sk, on)| on == OnDelete::Restrict && !gone.contains(&(si, sk)))
+                .map(|(si, sk, _)| (self.entities[si].name.clone(), ROWS[sk]))
+        })
     }
 
     /// The SQL literal and rule value of `field` on row `k` of entity `ei`.
@@ -985,7 +1030,7 @@ fn insert_order(world: &World, tables: usize) -> Vec<usize> {
     done
 }
 
-const HELPER: &str = r#"-- Run one statement as one person, then undo it. Returns allowed, denied or the error.
+const HELPER: &str = r#"-- Run one statement as one person, then undo it. Returns allowed, denied, blocked or the error.
 -- p_before, if given, is run first as the database owner (to give a person an extra role).
 create schema svetra_test;
 create function svetra_test.try(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1', p_before text default null) returns text
@@ -1006,6 +1051,9 @@ begin
       return case when n > 0 then 'allowed' else 'denied' end;
     elsif sqlstate = '42501' then
       return 'denied';
+    -- A delete that a foreign key refuses: the row was visible and deletable, but another still points at it.
+    elsif sqlstate = '23503' and sqlerrm like 'update or delete on table%' then
+      return 'blocked';
     end if;
     return 'error ' || sqlstate || ': ' || sqlerrm;
   end;
@@ -1097,6 +1145,7 @@ pub fn analyse(doc: &Document) -> Analysis {
             .map(|(i, e)| (e.name.as_str(), i))
             .collect(),
         entities: all,
+        tables,
         alice: person_id(1),
         bob: person_id(2),
         mfa: doc
@@ -1341,6 +1390,11 @@ pub fn analyse(doc: &Document) -> Analysis {
                         "anon"
                     };
                     let user = p.id.as_ref().map_or("null".into(), |id| format!("'{id}'"));
+                    // A delete the rules allow still fails while a `restrict` reference points at it.
+                    let blocker = match (tag, ok) {
+                        (Some(("delete", k, _)), Some(true)) => world.delete_blocker(ei, k),
+                        _ => None,
+                    };
                     let aal = match (&p.before, p.aal2) {
                         (Some(b), a2) => format!(
                             ", '{}', $svetra${b}$svetra$",
@@ -1350,6 +1404,13 @@ pub fn analyse(doc: &Document) -> Analysis {
                         (None, false) => String::new(),
                     };
                     checks.push(match ok {
+                    Some(_) if blocker.is_some() => {
+                        let (by, r) = blocker.expect("checked");
+                        format!(
+                            "select is(svetra_test.try('{role}', {user}, $svetra${sql}$svetra${aal}), 'blocked', {});",
+                            lit(&format!("{} can't {what}: {by} {r} still points at it", p.name))
+                        )
+                    }
                     Some(ok) => format!(
                         "select is(svetra_test.try('{role}', {user}, $svetra${sql}$svetra${aal}), '{}', {});",
                         if ok { "allowed" } else { "denied" },

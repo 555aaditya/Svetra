@@ -33,6 +33,10 @@ fn access_tests_match_golden_files() {
             include_str!("fixtures/approvals.yaml"),
             include_str!("golden/approvals.test.sql"),
         ),
+        (
+            include_str!("fixtures/forum.yaml"),
+            include_str!("golden/forum.test.sql"),
+        ),
     ] {
         assert_eq!(generate(src), golden);
     }
@@ -142,4 +146,37 @@ policies:
     assert!(t.contains(
         "select skip('alice create Event c: a rule compares a time with text that isn''t an ISO time', 1);"
     ));
+}
+
+/// A delete the rules allow is expected to be refused while a `restrict` reference points at the
+/// row, found through cascades; the expectation comes from `on_delete`, not from the keys.
+#[test]
+fn deletes_expect_what_on_delete_says() {
+    let t = generate(include_str!("fixtures/forum.yaml"));
+    let result = |name: &str| {
+        let line = t
+            .lines()
+            .find(|l| l.contains(&format!("'{name}'")))
+            .unwrap_or_else(|| panic!("no check named {name}"));
+        ["'allowed'", "'denied'", "'blocked'"]
+            .into_iter()
+            .find(|r| line.contains(&format!("{r}, '")))
+            .unwrap_or_else(|| panic!("no result in {line}"))
+    };
+    // Board a cascades to Thread a, which Post a still points at with a restrict key.
+    assert_eq!(
+        result("alice can\'\'t delete Board a: Post a still points at it"),
+        "'blocked'"
+    );
+    assert_eq!(
+        result("alice can\'\'t delete Thread a: Post a still points at it"),
+        "'blocked'"
+    );
+    // Rows nothing restricts: the cascade, the set_null and the self reference don't block.
+    assert_eq!(result("alice can delete Post a"), "'allowed'");
+    assert_eq!(result("alice can delete Reaction a"), "'allowed'");
+    assert_eq!(result("alice can delete Tag a"), "'allowed'");
+    // A person the rules refuse is `denied`, whatever points at the row.
+    assert_eq!(result("bob can\'\'t delete Board a"), "'denied'");
+    assert_eq!(result("anon can\'\'t delete Thread a"), "'denied'");
 }

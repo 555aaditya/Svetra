@@ -169,3 +169,25 @@ fn bookings_and_teams_sql_and_types_match_golden_files() {
     assert_eq!(compile(src), include_str!("golden/approvals.sql"));
     assert_eq!(types(src), include_str!("golden/approvals.ts"));
 }
+
+/// Every `on_delete` option, with a chain of cascades and a self reference. Checked on
+/// PostgreSQL 16 by `scripts/pg-check.sh`, with the delete checks it generates.
+#[test]
+fn forum_sql_matches_golden_file() {
+    let got = compile(include_str!("fixtures/forum.yaml"));
+    assert_eq!(got, include_str!("golden/forum.sql"));
+}
+
+#[test]
+fn on_delete_becomes_the_foreign_keys_action() {
+    let sql = compile(include_str!("fixtures/forum.yaml"));
+    // The default writes nothing, and a `user` key never cascades.
+    assert!(sql.contains(
+        "\"post_thread_fkey\" foreign key (\"thread\") references \"public\".\"thread\" (\"id\");"
+    ));
+    assert!(sql.contains("\"thread_board_fkey\" foreign key (\"board\") references \"public\".\"board\" (\"id\") on delete cascade;"));
+    assert!(sql.contains("\"post_reply_to_fkey\" foreign key (\"reply_to\") references \"public\".\"post\" (\"id\") on delete set null;"));
+    assert!(sql.contains(
+        "\"post_owner_fkey\" foreign key (\"owner\") references \"auth\".\"users\" (\"id\");"
+    ));
+}

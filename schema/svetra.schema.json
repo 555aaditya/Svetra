@@ -258,6 +258,14 @@
           "type": "string",
           "pattern": "^[A-Z][A-Za-z0-9]*$"
         },
+        "on_delete": {
+          "description": "What deleting the referenced row does to this one. Ref only. Default restrict; set_null needs a field that is not required.",
+          "enum": [
+            "restrict",
+            "cascade",
+            "set_null"
+          ]
+        },
         "was": {
           "description": "Its name in the design the database has: declares a rename, so `svetra plan` keeps the data.",
           "type": "string",

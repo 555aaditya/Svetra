@@ -65,6 +65,7 @@ Each entity has exactly one field with `primary: true` (`SVT022`).
 | `values` | `enum` | Required for `enum`. Non-empty list of distinct strings |
 | `precision`, `scale` | `decimal`, `money` | Required. `0 < precision <= 38`, `0 <= scale <= precision` |
 | `entity` | `ref` | Required for `ref`. The referenced entity |
+| `on_delete` | `ref` | What deleting the referenced row does to this one: `restrict` (default), `cascade` or `set_null`. See [Deleting a referenced row](#deleting-a-referenced-row) |
 | `was` | all | What this field was called in the design the database has: declares a rename, so `svetra plan` keeps its values ([change.md](change.md)) |
 
 ## Types
@@ -82,8 +83,29 @@ Each entity has exactly one field with `primary: true` (`SVT022`).
 | `money` | `numeric(p, s)` | `string` | decimal string validator | Same as `decimal`, but marks the field as money for rule checks |
 | `enum` | `text` with a `check` on the values | union of string literals | `z.enum([...])` | |
 | `json` | `jsonb` | `unknown` | `z.unknown()` | Escape hatch. Not checked |
-| `ref` | `uuid` with `references` | `string` | `z.string().uuid()` | Foreign key to the referenced entity's primary field, which must be a `uuid` |
+| `ref` | `uuid` with `references` | `string` | `z.string().uuid()` | Foreign key to the referenced entity's primary field, which must be a `uuid`. `on_delete` says what deleting the referenced row does |
 | `user` | `uuid references auth.users (id)` | `string` | `z.string().uuid()` | The authenticated user who owns or touches the row |
+
+### Deleting a referenced row
+
+A `ref` is a foreign key, so deleting a row that other rows still point at has to do something. `on_delete`, written on the `ref` field, says what:
+
+| `on_delete` | Deleting the referenced row... | PostgreSQL |
+|---|---|---|
+| `restrict` (default) | is refused while any row points at it (SQLSTATE `23503`) | `no action` |
+| `cascade` | deletes every row that points at it, and the rows that point at those | `on delete cascade` |
+| `set_null` | clears the field on every row that points at it. The field must not be `required` (`SVT023`) | `on delete set null` |
+
+```yaml
+Message:
+  fields:
+    channel: { type: ref, entity: Channel, required: true, on_delete: cascade }
+```
+
+- **Only `ref` fields take it** (`SVT023` on any other type). A `user` field's foreign key to `auth.users` stays `restrict`: Svetra never deletes people.
+- **The database does the cascade, not the person.** A cascade or a `set_null` runs as the table's owner, so it ignores the policies of the rows it deletes or changes: a person who may delete a `Channel` also deletes its `Message`s, whether or not a delete policy on `Message` would have let them. Row-level security applies only to the row named in the `delete`.
+- **A refusal is not an access rule.** `restrict` refuses after the policies have allowed the delete, so a person who may not delete the row is still told "no rows", and one who may is told `23503` while a row still points at it. The generated access tests expect each outcome from this option and the policies ([compiler.md](compiler.md#access-tests)).
+- **A row that points at itself** doesn't block its own deletion.
 
 ## Expressions
 
@@ -310,7 +332,7 @@ holes:
 | `SVT020` | error | Unknown key | `remove_key` |
 | `SVT021` | error | Name breaks its naming pattern | `rename` |
 | `SVT022` | error | Entity has no primary field, or more than one | `set_primary` |
-| `SVT023` | error | Unknown type, or a missing or invalid type option | `fix_type` |
+| `SVT023` | error | Unknown type, or a missing or invalid type option, including `on_delete` on a field that isn't a `ref`, an unknown value, or `set_null` on a required field | `fix_type` |
 | `SVT024` | error | Duplicate name | `rename` |
 | `SVT025` | error | Unsupported format version | `set_version` |
 | `SVT026` | error | `unique` or `indexes` names a field the entity doesn't have | `fix_field` |

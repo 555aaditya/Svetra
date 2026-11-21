@@ -107,12 +107,12 @@ grant execute on function "svetra"."has_role"(text, uuid) to anon, authenticated
 | `default: x` | `default <literal>` |
 | `auto: now` | `default now()` |
 | `enum` | `text`, plus `constraint "<table>_<field>_values" check ("<field>" in ('a', 'b'))` |
-| `ref` | `uuid`, plus a foreign key to the referenced entity's primary field |
+| `ref` | `uuid`, plus a foreign key to the referenced entity's primary field, with the field's `on_delete` |
 | `user` | `uuid`, plus a foreign key to `"auth"."users" ("id")` |
 
 The other type mappings are in [`format.md`](format.md#types).
 
-Foreign keys use PostgreSQL's default `on delete no action`, so a referenced row can't be deleted while something still points at it. Cascading deletes come later, as an explicit option.
+Foreign keys on `ref` fields follow the field's `on_delete` ([format.md](format.md#deleting-a-referenced-row)): `restrict`, the default, writes nothing and gets PostgreSQL's `on delete no action`, so a referenced row can't be deleted while something still points at it; `cascade` appends ` on delete cascade` and `set_null` appends ` on delete set null`. A `user` field's key to `auth.users` always has the default.
 
 ### Expressions in SQL
 
@@ -331,7 +331,7 @@ For every reachable entity and every person:
 |---|---|---|
 | see `a`, see `b` | `select` the row by primary key | Some `select` rule for the person's role holds on the row |
 | change `a`, change `b` | `update` the row, setting its primary key to itself | Some `select` rule **and** some `update` rule hold on the row. Postgres applies `select` rules to an update that finds rows with `where` |
-| delete `a`, delete `b` | `delete` the row by primary key | Some `select` rule **and** some `delete` rule hold on the row |
+| delete `a`, delete `b` | `delete` the row by primary key | Some `select` rule **and** some `delete` rule hold on the row, and no `restrict` reference blocks it (see below). When the rules allow it but a reference blocks it, the expected result is `blocked` |
 | create `c`, create `d` | `insert` the candidate row | Some `insert` rule holds on the new row |
 | change who owns `a` or `b`, or what it belongs to | `update` one `user` or `ref` field of the row: a `user` field to the person themselves (or, on their own row, to the other owner), a `ref` to the target's other row. Signed-in people only | The row can be changed (as above), **and** some `update` rule and some `select` rule hold on the row as the update leaves it. This is how a person could take a row over, give it away, or move it out of their scope |
 
@@ -339,12 +339,13 @@ For every reachable entity and every person:
 
 - **Rules combine as PostgreSQL combines them.** Some permissive policy must hold, and every restrictive policy must hold too; null counts as not holding. For an update, the old row is read against the update policies' `when`, and the new row against their `check` (`when` when there is none) and against the select policies. The two sides combine **independently across policies**: the old row may pass one policy and the new row another (checked on PostgreSQL 16, docs/update-check.md). `svetra validate` warns (`SVT034`) when a check in the tests exposes such a combination.
 - **Rules that apply to a person:** `anon` gets rules with `as: anon` or `as: anyone`. Everyone signed in gets `as: authenticated` (the default) or `as: anyone`.
+- **Deleting a referenced row** (`on_delete`, [format.md](format.md#deleting-a-referenced-row)): the stored rows point at each other as the test rows say (the `a` row at the target's `a` row, the `b` row at its `b` row). A delete the rules allow is expected to be `blocked` when some stored row still points at the deleted one through a `restrict` field, found through every `cascade` on the way: deleting the row also deletes the rows that cascade from it, and those rows' own `restrict` references count too, except those from rows the same delete removes anyway (a row pointing at itself, or a row the cascade deletes). `set_null` never blocks. Whether it blocks comes from the `on_delete` options in `svetra.yaml`, never from the generated foreign keys, so a key that was changed by hand shows up as a disagreement. A delete the rules deny stays `denied` whatever points at the row, because row-level security hides the row before any key is looked at. The checks don't look at the rows a cascade removes or a `set_null` clears: they are undone with the check.
 - **Private entities** get two checks for `anon` and for `alice`: see `a` and create `c`. Both must be denied, because the API has no grants on them.
 - **Fields a declared constraint names,** and a field alone in a `unique` rule when the new value is another row's, get no change-who-owns check, because the database could reject the value for that reason instead.
 - **Owner and reference changed together:** each signed-in person, for each stored row, also gets one update that changes a `user` field and a `ref` field at once (take the row over and point it somewhere else). Each alone can be refused while the pair is allowed, because the new row can be seen through one policy while another policy's `check` lets the update through; only the pair shows a loosened `check`.
 - **Roles:** when there are roles, `alice can't give herself the <role> role` inserts a grant for herself into `svetra.role_grants`, which must be denied.
 - **Holes:** besides their table privileges and who gets past `when`, `anon` and signed-in people must be able to run the hole's public function exactly as its `as` says, and must never be able to run the function inside `svetra_holes` directly, because that one takes the caller's id as an argument.
-- **Results** are `allowed` when the statement touches the row, and `denied` when it touches nothing or is refused by row-level security (SQLSTATE `42501`). Anything else, such as a constraint error, is reported as `error <sqlstate>: <message>`, which never matches an expected result.
+- **Results** are `allowed` when the statement touches the row, and `denied` when it touches nothing or is refused by row-level security (SQLSTATE `42501`). `blocked` is a delete refused by a foreign key (SQLSTATE `23503`, "update or delete on table ... violates foreign key constraint"). Anything else, such as a constraint error, is reported as `error <sqlstate>: <message>`, which never matches an expected result.
 
 **Test names** read as sentences: `ok 12 - bob can't see Booking a`, `ok 31 - staff at Location a can change Booking a`, `staff at Location a can't point the location of Booking a at Location b`.
 
@@ -366,4 +367,4 @@ For the bookings app (two entities, two roles), people are `anon`, `alice`, `bob
 - Other hole kinds (scheduled jobs, triggers, webhooks) and holes that call external services: planned for M4b, as Supabase Edge Functions.
 - Configurable output paths.
 - Migrations: Supabase generates them from the declarative schema with `supabase db diff`.
-- Cascading deletes, and other foreign-key options.
+- Foreign-key options other than `on_delete` (`on update`, deferrable keys), and `on_delete` on a `user` field.
