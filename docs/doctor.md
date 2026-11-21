@@ -64,7 +64,7 @@ Every finding has a stable `kind`, a severity (`critical`, `warning` or `info`, 
 | `auth` | `email_unconfirmed`, `weak_password`, `anonymous_sign_ins`, `open_signup`, `admin_no_mfa`, `mfa_off`, `redirect_open` | warning or info |
 | `storage` | `public_bucket` | warning |
 | `generated` | `stale_generated`, `design_invalid` | warning |
-| `backups` | none: reminders, not findings | none |
+| `backups` | `schema_not_in_git`, plus reminders, which aren't findings | warning |
 
 **Data exposure** is `check`'s output, unchanged, with the area `data`. Nothing else in this document applies to it.
 
@@ -168,3 +168,29 @@ critical  src/lib/supabase.ts:4
           fix: remove it from the code and rotate it now (Supabase dashboard, Settings, API).
                Do the work that needs it in a server function; the front end only needs the anon key.
 ```
+
+## Auth settings
+
+Doctor reads how people sign in from two places, and nothing else:
+
+- **`supabase/config.toml`**, the Supabase CLI's file. It describes the local project, and `supabase config push` sends it to a hosted one. **Doctor reads the file, not your hosted project.** If you changed a setting in the dashboard and never pushed it, doctor doesn't see it, and says so in each auth finding's fix ("and check the same setting in the dashboard, under Authentication").
+- **`svetra.yaml`'s `auth:` section and `roles:`**, where present ([format.md](format.md#authentication)). When `config.toml` exists, its value wins, because it's what runs. When it doesn't exist, the `auth:` values are used, so a design is checked before `compile` has written anything.
+
+A key missing from `config.toml` has Supabase's default, which doctor applies: sign-ups open, passwords of 6 characters, no email confirmation, anonymous sign-ins off. Doctor never needs a `config.toml`: with none and no `auth:` section, auth checks are listed under "Not checked" and doctor says to run `supabase init`.
+
+**Keys.** VERIFIED means the key is one `svetra compile` already writes ([compiler.md](compiler.md#sign-in-settings)). UNVERIFIED means it's from memory of the Supabase CLI's `config.toml` and must be checked against a `config.toml` made by `supabase init` before the build. No Supabase CLI config was available while writing this spec.
+
+| Kind | Severity | Reads | When | Message and fix |
+|---|---|---|---|---|
+| `email_unconfirmed` | warning | `[auth.email] enable_confirmations` (VERIFIED), or `confirm_email` | Email sign-in is on and confirmations are off (the default) | "People can sign up with an email address they don't own, so anyone can claim anyone's address. fix: set `enable_confirmations = true` (or `confirm_email: true` in svetra.yaml)." |
+| `weak_password` | warning | `[auth] minimum_password_length` (VERIFIED), `password_requirements` (VERIFIED) | Length under 8 (Supabase's default is 6) | "Passwords can be as short as N characters. fix: set `minimum_password_length = 10` and `password_requirements = \"lower_upper_letters_digits\"`." A length of 8 or 9 with no requirements is not flagged: it's a choice, not a mistake |
+| `anonymous_sign_ins` | warning | `[auth] enable_anonymous_sign_ins` (VERIFIED) | `true`. Supabase gives anonymous people the `authenticated` role, so every "signed-in people" rule applies to them | "Anyone can get a signed-in account without giving an email. Every rule that allows signed-in people now allows them. fix: set it to `false` unless your app needs guests." |
+| `open_signup` | info | `[auth] enable_signup` (VERIFIED), or `signup` | `true` (the default) | "Anyone on the internet can create an account. Fine for a public app; for a private one, set `enable_signup = false` and invite people." Always info: it's the default for public apps |
+| `admin_no_mfa` | warning | `svetra.yaml` `roles:` | A role named `admin`, `owner`, `superadmin` or `root` without `mfa: true`. Only with a `svetra.yaml` | "The admin role works with a password alone. If a password leaks, so does everything admins can reach. fix: add `mfa: true` to the role and compile." Without `svetra.yaml`, doctor can't know who your admins are: that's a reminder, "Turn on a second factor for admin accounts" |
+| `mfa_off` | warning | `[auth.mfa.totp] enroll_enabled`, `verify_enabled` (VERIFIED) | A role has `mfa: true` but either key is `false`: nobody can enroll an authenticator app, so nobody can ever hold the role | "The role admin needs a second factor, but authenticator apps are switched off, so nobody can reach it. fix: run `svetra compile`." |
+| `redirect_open` | warning | `[auth] site_url`, `additional_redirect_urls` (UNVERIFIED) | A redirect URL with a wildcard host (`https://*`), `http://` for a non-local host, or `localhost` while `site_url` is a real domain | "Sign-in links may send people to addresses you don't control. fix: list only your own production addresses." UNVERIFIED: the key names and whether wildcard paths such as `https://app.example.com/**` are a safe, normal form (they are expected to be; they're not flagged) |
+
+**Not read, because the exact keys are UNVERIFIED or the setting is hosted:** OTP and email-link expiry, rate limits, CAPTCHA, SMTP settings, and refresh-token rotation. They are listed under "Not in this version".
+
+**Roles and MFA.** `mfa: true` only protects what an `aal2` session is required for. Doctor doesn't re-check that: `svetra compile --check` and the generated access tests do ([compiler.md](compiler.md#second-factors-in-sql)).
+
