@@ -384,3 +384,51 @@ pub fn dump(url: &str, schemas: &[String]) -> Result<String, crate::migrations::
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tap_lines_keep_what_the_database_gave() {
+        let out = "1..3\nok 1 - test data: people\nnot ok 2 - anon can see Products a\n# Failed test 2: \"anon can see Products a\"\n#         have: 'denied'\n#         want: 'allowed'\nnot ok 3 - test data: Profiles a\n#     died: 23503: insert or update on table \"profiles\" violates foreign key\n#     died: second\n";
+        let taps = parse_tap(out);
+        assert_eq!(taps.len(), 3);
+        assert!(taps[0].ok);
+        assert_eq!(taps[1].have.as_deref(), Some("denied"));
+        assert_eq!(taps[1].want.as_deref(), Some("allowed"));
+        assert_eq!(
+            taps[2].died.as_deref(),
+            Some("insert or update on table \"profiles\" violates foreign key")
+        );
+    }
+
+    #[test]
+    fn a_draft_is_narrower_where_its_block_says_so() {
+        let yaml = "# UNTRANSLATED policy outside: not in an entity\nsystem: App\n\nentities:\n  Orders:\n    # policies: 5 of 6 translated. The draft is NARROWER\n    fields:\n      id: { type: uuid, primary: true }\n  Items:\n    # row-level security is off here, so no rule\n    private: true\n  Products:\n    fields:\n      id: { type: uuid, primary: true }\n    # UNTRANSLATED index x: CREATE INDEX\n  Notes:\n    # UNTRANSLATED policy p: CREATE POLICY\npolicies:\n  p:\n    # UNTRANSLATED policy q: later\n";
+        let n = narrower(yaml);
+        let names: Vec<&str> = n.keys().map(String::as_str).collect();
+        assert_eq!(names, ["Items", "Notes", "Orders"]);
+    }
+
+    #[test]
+    fn entity_names_match_whole_words_only() {
+        assert_eq!(word_at("alice can see Orders a", "Orders"), Some(14));
+        assert_eq!(word_at("alice can see BigOrders a", "Orders"), None);
+        assert_eq!(word_at("x Orders_old, Orders a", "Orders"), Some(14));
+    }
+
+    #[test]
+    fn a_blocked_delete_names_the_entity_that_blocks_it() {
+        let t = Tap {
+            number: 9,
+            ok: false,
+            description: "alice can't delete Orders a: OrderItems a still points at it".into(),
+            have: None,
+            want: None,
+            died: None,
+        };
+        assert_eq!(blocker(&["Orders", "OrderItems"], &t), Some("OrderItems"));
+        assert_eq!(blocker(&["Orders"], &t), None);
+    }
+}
