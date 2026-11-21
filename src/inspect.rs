@@ -87,11 +87,11 @@ from pg_proc p join pg_namespace n on n.oid = p.pronamespace where p.prokind = '
     )
 }
 
-fn s<'a>(v: &'a Value, k: &str) -> &'a str {
+pub(crate) fn s<'a>(v: &'a Value, k: &str) -> &'a str {
     v[k].as_str().unwrap_or_default()
 }
 
-fn b(v: &Value, k: &str) -> bool {
+pub(crate) fn b(v: &Value, k: &str) -> bool {
     v[k].as_bool().unwrap_or(false)
 }
 
@@ -577,4 +577,34 @@ pub fn run(source: &Source, schemas: &[String]) -> Result<Report, CheckError> {
         migrations,
         source: label,
     })
+}
+
+/// `check`'s query plus the keys `svetra infer` needs (docs/infer.md, What it reads): columns,
+/// constraints, indexes and enums. The existing keys are unchanged.
+pub fn infer_query(schemas: &[String]) -> String {
+    let list: Vec<String> = schemas.iter().map(|s| lit(s)).collect();
+    let list = list.join(", ");
+    let extra = r#"
+'columns', (select coalesce(json_agg(json_build_object('schema', n.nspname, 'table', c.relname, 'name', a.attname, 'type', format_type(a.atttypid, a.atttypmod), 'type_schema', tn.nspname, 'type_name', t.typname, 'kind', t.typtype::text, 'not_null', a.attnotnull, 'default', pg_get_expr(d.adbin, d.adrelid), 'identity', case a.attidentity when 'a' then 'always' when 'd' then 'by default' end, 'generated', a.attgenerated <> '') order by n.nspname, c.relname, a.attnum), '[]')
+from pg_attribute a join pg_class c on c.oid = a.attrelid join pg_namespace n on n.oid = c.relnamespace join pg_type t on t.oid = a.atttypid join pg_namespace tn on tn.oid = t.typnamespace left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+where a.attnum > 0 and not a.attisdropped and c.relkind in ('r', 'p') and not c.relispartition and n.nspname in (LIST)),
+'constraints', (select coalesce(json_agg(json_build_object('schema', n.nspname, 'table', c.relname, 'name', k.conname, 'kind', k.contype::text,
+'columns', (select coalesce(json_agg(a.attname order by u.ord), '[]') from unnest(k.conkey) with ordinality u(num, ord) join pg_attribute a on a.attrelid = k.conrelid and a.attnum = u.num),
+'definition', pg_get_constraintdef(k.oid), 'ref_schema', rn.nspname, 'ref_table', rc.relname,
+'ref_columns', (select coalesce(json_agg(a.attname order by u.ord), '[]') from unnest(k.confkey) with ordinality u(num, ord) join pg_attribute a on a.attrelid = k.confrelid and a.attnum = u.num)) order by n.nspname, c.relname, k.conname), '[]')
+from pg_constraint k join pg_class c on c.oid = k.conrelid join pg_namespace n on n.oid = c.relnamespace left join pg_class rc on rc.oid = k.confrelid left join pg_namespace rn on rn.oid = rc.relnamespace
+where k.contype in ('p', 'f', 'u', 'c') and c.relkind in ('r', 'p') and not c.relispartition and n.nspname in (LIST)),
+'indexes', (select coalesce(json_agg(json_build_object('schema', n.nspname, 'table', c.relname, 'name', ic.relname, 'unique', i.indisunique, 'method', am.amname,
+'columns', (select json_agg(case when u.num = 0 then null else (select a.attname from pg_attribute a where a.attrelid = i.indrelid and a.attnum = u.num) end order by u.ord) from unnest(i.indkey::int2[]) with ordinality u(num, ord) where u.ord <= i.indnkeyatts),
+'partial', i.indpred is not null, 'definition', pg_get_indexdef(i.indexrelid)) order by n.nspname, c.relname, ic.relname), '[]')
+from pg_index i join pg_class ic on ic.oid = i.indexrelid join pg_class c on c.oid = i.indrelid join pg_namespace n on n.oid = c.relnamespace join pg_am am on am.oid = ic.relam
+where c.relkind in ('r', 'p') and not c.relispartition and n.nspname in (LIST) and not exists (select 1 from pg_constraint k where k.conindid = i.indexrelid and k.contype in ('p', 'u', 'x'))),
+'enums', (select coalesce(json_agg(json_build_object('schema', n.nspname, 'name', t.typname, 'values', (select coalesce(json_agg(e.enumlabel order by e.enumsortorder), '[]') from pg_enum e where e.enumtypid = t.oid)) order by n.nspname, t.typname), '[]')
+from pg_type t join pg_namespace n on n.oid = t.typnamespace where t.typtype = 'e' and n.nspname in (LIST))"#
+        .replace("LIST", &list);
+    format!(
+        "select json_build_object({}, {})",
+        keys(schemas),
+        extra.trim()
+    )
 }

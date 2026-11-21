@@ -8,7 +8,7 @@ use crate::typeck;
 use std::collections::{HashMap, HashSet};
 
 /// Words that mark a field as money for SVT005.
-const MONEY_WORDS: &[&str] = &["amount", "price", "balance", "cost", "total", "fee"];
+pub const MONEY_WORDS: &[&str] = &["amount", "price", "balance", "cost", "total", "fee"];
 
 /// Sign-in methods for `auth.sign_in`: email, and the OAuth providers that need only a
 /// client id and secret (docs/format.md, Authentication).
