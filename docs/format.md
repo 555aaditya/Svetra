@@ -48,6 +48,7 @@ Version 0.1 covers one target: Supabase (PostgreSQL with row-level security and 
 | `unique` | no | list of field lists | Each list becomes a named unique constraint |
 | `indexes` | no | list of field lists | Each list becomes an index, in the given column order |
 | `private` | no | bool, default `false` | A private entity is not exposed through the generated API |
+| `audit` | no | bool, default `false` | Every insert, update and delete of a row is recorded in the audit log, with who did it ([Audit](#audit)) |
 | `was` | no | name | What this entity was called in the design the database has: declares a rename, so `svetra plan` keeps its rows ([change.md](change.md)) |
 
 Each entity has exactly one field with `primary: true` (`SVT022`).
@@ -287,6 +288,7 @@ A hole is a place where custom code is allowed, usually written by the user's ag
 | `grants` | no | Roles the hole may give people and take away, such as `[member]`. No other role is reachable from it |
 | `as` | no | Who may call it: `authenticated` (default), `anyone` or `anon`, as for policies |
 | `when` | no | A condition on the inputs that must hold for the call to run, such as `source.owner == auth.user`. Default `true` |
+| `audit` | no | bool, default `false`. Every call that runs is recorded in the audit log, with who made it and the inputs ([Audit](#audit)) |
 
 A parameter or output type is one of three things:
 - `Entity.field`, which gives the same type as that field. This is preferred, because the two can't drift apart.
@@ -321,6 +323,26 @@ holes:
     writes: [Account, Transaction]
     when: "source.owner == auth.user"
 ```
+
+## Audit
+
+`audit: true` on an entity or a hole records what happened in one append-only table, `svetra.audit_log`. It answers "who changed this, and when" from the database itself, so it holds for every client, not only Svetra's.
+
+| Column | Meaning |
+|---|---|
+| `id` | Increasing number: the order of events |
+| `at` | When it happened (the transaction's time) |
+| `actor` | `auth.uid()`: who made the request. `null` for a logged-out visitor, and for work that doesn't come through the API, such as a migration or the service role |
+| `kind` | `row` for a change to an audited entity, `call` for a call of an audited hole |
+| `subject` | The table name (`ledger_entry`) or the hole name (`transfer`) |
+| `action` | `insert`, `update` or `delete` for a row, `call` for a hole |
+| `old`, `new` | The row before and after as `jsonb` (`old` is null on insert, `new` on delete). For a call, `new` holds the inputs by name and `old` is null |
+
+- **An audited entity** logs every change, whoever makes it: the API, a hole body, or SQL run by hand. The whole row is logged, so don't audit an entity that holds secrets.
+- **An audited hole** logs the call after the `when` guard passes and before the body runs. A refused call raises, which rolls back the whole transaction, so refusals can't be logged in the database; the call is recorded only if it runs. If the body then fails, the call's record is rolled back with it. Writes the body makes to audited entities are logged as rows, with the caller as `actor`.
+- **Nobody reaches the log from the app.** It has row-level security with no policy and no grants for `anon` or `authenticated`, and the `svetra` schema isn't exposed. Hole code gets no access to it either: the hole's role has no grant, and the record is written by the generated wrapper, not the body.
+- **Append-only.** A trigger refuses `update`, `delete` and `truncate` on the table for every role, including its owner. It is tamper-evident, not tamper-proof: a superuser can drop the trigger. Retention, export and pruning are not part of 0.1.
+- The log table exists only when something in the file has `audit: true`. Turning audit off stops new records and leaves the existing log in place.
 
 ## Diagnostics
 
@@ -457,4 +479,5 @@ These come later, if real use asks for them:
 - Migrations between graph revisions (planned for `svetra diff` and `patch`)
 - Multiple files and imports
 - Hole kinds other than `function`, such as webhook recipes
+- Audit retention and export, logging refused calls, and alerting
 - The sign-in methods listed under [Authentication](#authentication) as not in version 0.1
