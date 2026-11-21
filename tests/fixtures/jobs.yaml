@@ -1,0 +1,31 @@
+svetra: "0.1"
+system: Invites
+
+auth:
+  sign_in: [email]
+
+entities:
+  Invite:
+    fields:
+      id: { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      email: { type: text, required: true }
+      status: { type: enum, values: [pending, accepted, expired], default: pending }
+      expires_at: { type: timestamp, required: true }
+
+policies:
+  owner_reads_own:
+    on: Invite
+    allow: [select]
+    when: "owner == auth.user"
+  owner_invites:
+    on: Invite
+    allow: [insert]
+    when: "owner == auth.user"
+
+holes:
+  expire_invites:
+    kind: schedule
+    schedule: "0 3 * * *"
+    reads: [Invite]
+    writes: [Invite]
