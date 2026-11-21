@@ -45,7 +45,7 @@ jobs:
 | `file` | `svetra.yaml` | The design, relative to the repository root |
 | `base` | the PR's base branch | The git ref the database's design is read from. Needs history: `fetch-depth: 0`, or fetch that ref |
 | `accept` | none | Kinds a person has agreed to, as in `plan --accept`: `wider_access,remove_entity` |
-| `version` | the Action's own version | The Svetra release to install |
+| `version` | `latest` | The Svetra release to install, such as `v0.9.0`. It must have `--from-git`, so 0.9.0 or later. Pin it, so a PR can't change what runs between two pushes |
 | `comment` | `true` | Post the comment. When `false`, or when the token can't write (a PR from a fork), the plan goes to the job summary instead |
 | `token` | `github.token` | Used only to post the comment |
 
@@ -59,7 +59,7 @@ jobs:
 1. **Installs Svetra** with `install.sh` at `version`, which checks the release's SHA-256 before use.
 2. **Skips quietly** when `file` is not at `base` (a new design has nothing to compare with) or is unchanged: it says so in the summary, posts nothing, and passes.
 3. **Runs** `svetra plan <file> --from-git <base> --no-write --markdown`, with `--accept` for the `accept` input. Exit `1` from `plan` (something needs a yes) fails the job; exit `2` (a usage error or an invalid design) fails it too, with the message in the log.
-4. **Posts one comment per PR.** The comment starts with a hidden marker, `<!-- svetra-plan -->`. If the PR already has a comment with the marker from the token's own user, it is edited, not added to. Nothing else on the PR is touched.
+4. **Posts one comment per PR.** The comment starts with a hidden marker, `<!-- svetra-plan -->`. If the PR already has a comment with the marker, it is edited, not added to; if the token isn't allowed to edit it, a new one is added. Nothing else on the PR is touched.
 5. **Writes the same text to the job summary,** so a PR from a fork, where the token can't comment, still shows it.
 
 ## Comment
@@ -96,4 +96,4 @@ jobs:
 ## Tests
 
 - **CLI, on a throwaway git repository:** `--from-git` against a base branch gives the same plan as `--from` with that file; a missing ref and a file missing at the ref each exit `2` and say which; `--no-write` writes nothing and lists the migration; `--markdown` matches a golden file for a plan with a rename, a destructive change and a wider-access change; `--from` with `--from-git` is a usage error.
-- **The Action itself:** `actionlint` on `action.yml` and the example workflow; a workflow in this repository runs the Action on its own `tests/fixtures` pair against a throwaway base.
+- **The Action itself:** `tests/action.rs` checks that `action.yml` declares the documented inputs and outputs, and that no `${{ }}` expression sits inside a `run:` script (inputs reach scripts through `env`, so a branch name or input can't inject shell). The script was also run by hand against a throwaway repository with and without `accept`. Its first end-to-end run on GitHub needs a release that has the new flags.
