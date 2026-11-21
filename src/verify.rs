@@ -375,7 +375,7 @@ pub fn dump(url: &str, schemas: &[String]) -> Result<String, crate::migrations::
     match cmd.output() {
         Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout).to_string()),
         Ok(o) => Err(Fail(format!(
-            "pg_dump refused: {}",
+            "pg_dump refused (it must be at least as new as the server): {}",
             String::from_utf8_lossy(&o.stderr).trim()
         ))),
         Err(_) => Err(Fail(

@@ -376,6 +376,8 @@ impl Copy {
         let errors: Vec<String> = String::from_utf8_lossy(&out.stderr)
             .lines()
             .filter_map(|l| l.split_once("ERROR:").map(|(_, r)| r.trim().to_string()))
+            // The dump creates `public`, which the image already has.
+            .filter(|e| e != "schema \"public\" already exists")
             .collect();
         let mut notes = Vec::new();
         if let Some(first) = errors.first() {
