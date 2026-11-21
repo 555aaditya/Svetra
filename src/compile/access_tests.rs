@@ -736,6 +736,11 @@ pub struct Check {
     pub number: usize,
     /// The rules that allow it.
     pub because: Vec<String>,
+    /// For a `change` check: the update policies with an `only` (docs/column-rules.md) that
+    /// cover this person's database role, whatever the row. The test rows can't show every
+    /// person such a policy applies to (a reviewer needs a submitted document), so this is not
+    /// decided per row.
+    pub column_rules: Vec<String>,
 }
 
 /// The people the tests run as, in order, with what they hold.
@@ -1318,6 +1323,16 @@ pub fn analyse(doc: &Document) -> Analysis {
                             } else {
                                 allowing(doc, &world, p, ei, k, a)
                             },
+                            column_rules: if a == Action::Update {
+                                doc.policies
+                                    .iter()
+                                    .filter(|x| !x.restrictive && x.only.is_some())
+                                    .filter(|x| covers(x, p, &e.name, Action::Update))
+                                    .map(|x| x.name.clone())
+                                    .collect()
+                            } else {
+                                vec![]
+                            },
                         });
                     }
                     let role = if p.id.is_some() {
@@ -1749,6 +1764,7 @@ pub fn analyse(doc: &Document) -> Analysis {
                     expected: ok,
                     number: checks.len(),
                     because: vec![],
+                    column_rules: vec![],
                 });
                 checks.push(match ok {
                     Some(ok) => format!(
