@@ -36,7 +36,7 @@ fn the_draft_loads_and_validates() {
     let yaml = draft();
     let (doc, diags) = svetra::load::load(&yaml);
     assert!(diags.is_empty(), "{diags:?}");
-    assert_eq!(doc.entities.len(), 4);
+    assert_eq!(doc.entities.len(), 5);
     let all = svetra::report::validate(&yaml);
     assert!(!svetra::report::has_errors(&all), "{all:?}");
     let mut codes: Vec<String> = all.iter().map(|d| format!("{:?}", d.code)).collect();
@@ -69,14 +69,13 @@ fn everything_it_cannot_say_is_a_comment_with_the_original_sql() {
         "# UNTRANSLATED check order_items_qty_check: CHECK (((qty > 0) AND (qty < LEAST(10, 100))))",
         "# UNTRANSLATED index orders_note_idx: CREATE INDEX orders_note_idx ON public.orders USING btree (lower(note))",
         "# UNTRANSLATED index products_tags_idx: CREATE INDEX products_tags_idx ON public.products USING gin (tags)",
-        "# UNTRANSLATED foreign key profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id)",
         "# UNTRANSLATED table public.legacy_codes: no primary key",
         "# UNTRANSLATED table public.membership: an entity needs one primary field",
         "# UNTRANSLATED identity (always)",
     ] {
         assert!(yaml.contains(needle), "missing: {needle}");
     }
-    assert!(yaml.contains("# 13 things left as UNTRANSLATED"), "{yaml}");
+    assert!(yaml.contains("# 12 things left as UNTRANSLATED"), "{yaml}");
     assert!(
         !yaml.contains("product_names") || yaml.contains("public.product_names: "),
         "views are only in the findings"
@@ -89,7 +88,7 @@ fn check_findings_are_comments_and_never_change_the_exit_code() {
     assert!(yaml.contains("# svetra check found 3 critical, 2 warnings and 0 notes:"));
     assert!(yaml.contains("#   critical  public.order_items: "));
     assert!(yaml.contains("    # check: critical, rls_off: "));
-    assert!(yaml.contains("# 4 entities from 6 tables. Skipped: 1 view, 0 functions."));
+    assert!(yaml.contains("# 5 entities from 7 tables. Skipped: 1 view, 0 functions."));
     // Same snapshot, same findings from `check`.
     let check = svetra(&["check", "--snapshot", SNAPSHOT]);
     assert_eq!(check.status.code(), Some(1));
@@ -106,7 +105,7 @@ fn it_writes_the_file_and_says_what_it_did() {
     assert_eq!(
         String::from_utf8_lossy(&out.stdout),
         format!(
-            "wrote {f}: 4 entities, 22 fields, 13 things left as UNTRANSLATED, 3 critical findings in comments\nNext: review the draft, then `svetra validate`, then `svetra compile`.\n"
+            "wrote {f}: 5 entities, 27 fields, 12 things left as UNTRANSLATED, 3 critical findings in comments\nNext: review the draft, then `svetra validate`, then `svetra compile`.\n"
         )
     );
     assert_eq!(std::fs::read_to_string(&file).unwrap(), draft());
@@ -227,7 +226,7 @@ fn names_and_foreign_keys_it_cannot_express_stay_explicit() {
     assert!(y.contains("# UNTRANSLATED foreign key items_order_fkey: FOREIGN KEY (\"order\") REFERENCES \"Order\"(id)"));
     assert!(y.contains("# UNTRANSLATED column \"Weird\" text: its name isn't snake_case"));
     assert!(y.contains(
-        "who: { type: user }   # lossy: the foreign key had ON DELETE SET NULL, Svetra writes none"
+        "who: { type: user }   # lossy: the foreign key had ON DELETE SET NULL, a user field has none"
     ));
     assert!(
         y.contains(
@@ -288,7 +287,7 @@ fn policy_row<'a>(snap: &'a mut Value, name: &str) -> &'a mut Value {
 #[test]
 fn owner_and_true_policies_translate() {
     let yaml = draft();
-    assert!(yaml.contains("# Policies: 6 of 9 translated."));
+    assert!(yaml.contains("# Policies: 12 of 15 translated."));
     for block in [
         "  orders_select_own:\n    on: Orders\n    as: authenticated\n    allow: [select]\n    when: \"customer == auth.user\"\n",
         "  orders_insert_own:\n    on: Orders\n    as: authenticated\n    allow: [insert]\n    when: \"customer == auth.user\"\n",
@@ -335,9 +334,19 @@ fn no_policy_is_invented_or_drafted_where_rls_is_off() {
 
 #[test]
 fn a_table_where_nothing_translated_stays_private() {
-    let yaml = draft();
+    let (yaml, policies) = changed(|snap| {
+        for name in ["profiles_own", "profiles_insert_own"] {
+            let p = policy_row(snap, name);
+            for key in ["using", "check"] {
+                if p[key].is_string() {
+                    p[key] = Value::String("is_admin()".into());
+                }
+            }
+        }
+    });
+    assert!(policies.iter().all(|(_, on)| on != "Profiles"));
     let profiles = yaml.split("  Profiles:").nth(1).unwrap();
-    assert!(profiles.contains("# policies: none of 1 translated."));
+    assert!(profiles.contains("# policies: none of 2 translated."));
     assert!(profiles.contains("private: true"));
 }
 
@@ -423,4 +432,156 @@ fn the_translated_policies_compile() {
     assert!(sql.contains("(select auth.uid())"));
     assert!(sql.contains("anon, authenticated"));
     assert!(!sql.contains("order_items_via_order"));
+}
+
+fn entity_block<'a>(yaml: &'a str, name: &str) -> &'a str {
+    let at = yaml.find(&format!("\n  {name}:\n")).unwrap() + 1;
+    let rest = &yaml[at..];
+    let end = rest
+        .match_indices('\n')
+        .map(|(i, _)| i + 1)
+        .find(|&i| !rest[i..].starts_with("   "))
+        .unwrap_or(rest.len());
+    &rest[..end]
+}
+
+/// A table keyed by the auth user's id is a `user` key, so its own `id = auth.uid()` is an owner
+/// check, and a column that points at it holds the same person's id.
+#[test]
+fn a_profile_table_and_ownership_through_it() {
+    let yaml = draft();
+    let profiles = entity_block(&yaml, "Profiles");
+    assert!(
+        profiles.contains("id:           { type: user, primary: true }"),
+        "{profiles}"
+    );
+    assert!(!profiles.contains("UNTRANSLATED foreign key"), "{profiles}");
+    assert!(!profiles.contains("private: true"), "{profiles}");
+    for block in [
+        "  profiles_own:\n    on: Profiles\n    as: authenticated\n    allow: [select]\n    when: \"id == auth.user\"\n",
+        "  profiles_insert_own:\n    on: Profiles\n    as: authenticated\n    allow: [insert]\n    when: \"id == auth.user\"\n",
+        "  reviews_insert_own:\n    on: Reviews\n    as: authenticated\n    allow: [insert]\n    when: \"author == auth.user\"\n",
+        "  reviews_delete_own:\n    on: Reviews\n    as: authenticated\n    allow: [delete]\n    when: \"author == auth.user\"\n",
+    ] {
+        assert!(yaml.contains(block), "missing: {block}");
+    }
+    // The column that pointed at the profile table is a `user` field, and says what that lost.
+    assert!(
+        yaml.contains("author:     { type: user, required: true }   # lossy: was a foreign key to public.profiles (id), now one to auth.users: it accepts a person with no row in profiles; the foreign key had ON DELETE CASCADE, a user field has none"),
+        "{yaml}"
+    );
+}
+
+#[test]
+fn only_one_hop_through_a_profile_table_is_followed() {
+    // Drop the profile key's link to auth.users: `author` is then an ordinary reference.
+    let (yaml, policies) = changed(|snap| {
+        let cons = snap["constraints"].as_array_mut().unwrap();
+        cons.retain(|c| c["name"] != "profiles_id_fkey");
+    });
+    let profiles = entity_block(&yaml, "Profiles");
+    assert!(
+        profiles.contains("id:           { type: uuid, primary: true }"),
+        "{profiles}"
+    );
+    assert!(
+        yaml.contains(
+            "author:     { type: ref, entity: Profiles, on_delete: cascade, required: true }"
+        ),
+        "{yaml}"
+    );
+    assert!(!policies.iter().any(|(n, _)| n == "reviews_insert_own"));
+    assert!(
+        yaml.contains("`author` is a reference to Profiles, not a user field"),
+        "{yaml}"
+    );
+    assert!(
+        yaml.contains(
+            "`id` is a plain uuid column, not a user field (it has no foreign key to auth.users)"
+        ),
+        "{yaml}"
+    );
+}
+
+#[test]
+fn a_cascading_key_becomes_on_delete() {
+    let yaml = draft();
+    assert!(
+        yaml.contains(
+            "product_id: { type: ref, entity: Products, on_delete: cascade, required: true }"
+        ),
+        "{yaml}"
+    );
+    assert!(
+        yaml.contains("parent_id:  { type: ref, entity: Reviews, on_delete: set_null }"),
+        "{yaml}"
+    );
+    // The default action writes nothing, and one Svetra can't write is a note.
+    assert!(
+        yaml.contains("order_id:   { type: ref, entity: Orders, required: true }"),
+        "{yaml}"
+    );
+    let (yaml, _) = changed(|snap| {
+        for c in snap["constraints"].as_array_mut().unwrap() {
+            if c["name"] == "reviews_parent_id_fkey" {
+                c["definition"] = Value::String(
+                    "FOREIGN KEY (parent_id) REFERENCES reviews(id) ON UPDATE CASCADE ON DELETE SET DEFAULT".into(),
+                );
+            }
+        }
+    });
+    assert!(
+        yaml.contains("parent_id:  { type: ref, entity: Reviews }   # lossy: the foreign key had ON DELETE SET DEFAULT, which Svetra can't write; lossy: the foreign key had ON UPDATE CASCADE, Svetra writes none"),
+        "{yaml}"
+    );
+}
+
+#[test]
+fn auth_role_reads_say_who_they_are_for() {
+    let yaml = draft();
+    assert!(
+        yaml.contains("  reviews_read:\n    on: Reviews\n    as: authenticated\n    allow: [select]\n    when: \"true\"\n"),
+        "{yaml}"
+    );
+    // `auth.role() = 'authenticated' and author = auth.uid()` is the owner check for that role.
+    assert!(
+        yaml.contains("  reviews_update_own:\n    on: Reviews\n    as: authenticated\n    allow: [update]\n    when: \"author == auth.user\"\n"),
+        "{yaml}"
+    );
+    // Same read for everyone who may call it: anonymous people are still kept out.
+    let (yaml, _) = changed(|snap| {
+        policy_row(snap, "reviews_read")["roles"] = json!(["public"]);
+    });
+    assert!(
+        yaml.contains("  reviews_read:\n    on: Reviews\n    as: authenticated\n"),
+        "{yaml}"
+    );
+    // The role it can never be true for: not drafted, with the reason.
+    let (yaml, policies) = changed(|snap| {
+        policy_row(snap, "reviews_read")["using"] =
+            Value::String("(auth.role() = 'service_role'::text)".into());
+    });
+    assert!(!policies.iter().any(|(n, _)| n == "reviews_read"));
+    assert!(
+        yaml.contains(
+            "-- auth.role() is compared with 'service_role', not 'anon' or 'authenticated'"
+        ),
+        "{yaml}"
+    );
+}
+
+#[test]
+fn each_untranslated_policy_says_why() {
+    let yaml = draft();
+    assert!(yaml.contains("-- reads a JWT claim (auth.jwt())"), "{yaml}");
+    assert!(yaml.contains("-- a subquery\n"), "{yaml}");
+    assert!(yaml.contains("-- row-level security is off, so the policy isn't enforced"));
+    assert!(!yaml.contains("isn't an owner check"));
+    let (yaml, _) = changed(|snap| {
+        policy_row(snap, "reviews_read")["using"] = Value::String("is_staff()".into());
+    });
+    assert!(
+        yaml.contains("-- calls the function is_staff(); infer doesn't read function bodies"),
+        "{yaml}"
+    );
 }
