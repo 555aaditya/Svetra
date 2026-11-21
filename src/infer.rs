@@ -431,6 +431,45 @@ fn drop_casts(toks: Vec<Tok>) -> Option<Vec<Tok>> {
     Some(out)
 }
 
+/// Remove brackets that change nothing: around one token, or around the whole expression.
+/// The database's deparsing wraps everything (`((price >= (0)::numeric))`).
+fn unparen(mut toks: Vec<Tok>) -> Vec<Tok> {
+    loop {
+        let single = (0..toks.len().saturating_sub(2)).find(|&i| {
+            toks[i] == Tok::Sym("(")
+                && toks[i + 2] == Tok::Sym(")")
+                && matches!(toks[i + 1], Tok::Id(_) | Tok::Num(_) | Tok::Str(_))
+                && !(i > 0 && matches!(toks[i - 1], Tok::Id(_)))
+        });
+        if let Some(i) = single {
+            toks.remove(i + 2);
+            toks.remove(i);
+            continue;
+        }
+        let wrapped =
+            toks.first() == Some(&Tok::Sym("(")) && toks.last() == Some(&Tok::Sym(")")) && {
+                let mut depth = 0;
+                toks.iter().enumerate().all(|(i, t)| {
+                    match t {
+                        Tok::Sym("(") => depth += 1,
+                        Tok::Sym(")") => depth -= 1,
+                        _ => {}
+                    }
+                    if i == toks.len() - 1 {
+                        depth == 0
+                    } else {
+                        depth > 0
+                    }
+                })
+            };
+        if !wrapped {
+            return toks;
+        }
+        toks.pop();
+        toks.remove(0);
+    }
+}
+
 /// Words that mean something in SQL that Svetra's language can't say.
 const NOT_TRANSLATABLE: [&str; 13] = [
     "like", "ilike", "similar", "between", "in", "case", "when", "then", "else", "end", "distinct",
@@ -544,7 +583,7 @@ pub fn translate_check(definition: &str, fields: &[String]) -> Option<String> {
     {
         d = x.trim();
     }
-    let text = rewrite(&drop_casts(lex(d)?)?)?;
+    let text = rewrite(&unparen(drop_casts(lex(d)?)?))?;
     let parsed = crate::expr::parse(&text).ok()?;
     reads_only(&parsed, fields).then_some(text)
 }
@@ -655,6 +694,121 @@ mod tests {
         assert_eq!(entity_name("t2_x").as_deref(), Some("T2X"));
         for bad in ["Order", "a__b", "_x", "2fa", "t_2x", "my-table", ""] {
             assert_eq!(entity_name(bad), None, "{bad}");
+        }
+    }
+}
+#[cfg(test)]
+mod sql_tests {
+    use super::*;
+
+    fn fields(names: &[&str]) -> Vec<String> {
+        names.iter().map(|n| n.to_string()).collect()
+    }
+
+    fn check(def: &str) -> Option<String> {
+        translate_check(
+            def,
+            &fields(&["price", "qty", "status", "shipped", "kind", "note"]),
+        )
+    }
+
+    #[test]
+    fn defaults_become_literals_or_auto() {
+        let d = |sql: &str, k: Kind| translate_default(sql, &k, false);
+        assert_eq!(d("'none'::text", Kind::Text), Default::Value("none".into()));
+        assert_eq!(d("''::text", Kind::Text), Default::Value("''".into()));
+        assert_eq!(
+            d("'it''s'::text", Kind::Text),
+            Default::Value("'it''s'".into())
+        );
+        assert_eq!(d("0", Kind::Int), Default::Value("0".into()));
+        assert_eq!(d("(-1)", Kind::Int), Default::Value("-1".into()));
+        assert_eq!(d("'5'::integer", Kind::Int), Default::Value("5".into()));
+        assert_eq!(d("1.50", Kind::Decimal), Default::Value("1.50".into()));
+        assert_eq!(d("false", Kind::Bool), Default::Value("false".into()));
+        let e = Kind::Enum(vec!["open".into(), "paid".into()]);
+        assert_eq!(
+            d("'open'::order_status", e.clone()),
+            Default::Value("open".into())
+        );
+        assert_eq!(d("'gone'::order_status", e), Default::Untranslated);
+        assert_eq!(d("now()", Kind::Timestamp), Default::Auto);
+        assert_eq!(d("CURRENT_TIMESTAMP", Kind::Timestamp), Default::Auto);
+        assert_eq!(d("CURRENT_DATE", Kind::Date), Default::Auto);
+    }
+
+    #[test]
+    fn defaults_with_logic_stay_explicit() {
+        let d = |sql: &str, k: Kind| translate_default(sql, &k, false);
+        assert_eq!(
+            d("nextval('t_id_seq'::regclass)", Kind::Int),
+            Default::Untranslated
+        );
+        assert_eq!(
+            d("timezone('utc'::text, now())", Kind::Timestamp),
+            Default::Untranslated
+        );
+        assert_eq!(d("now()", Kind::Text), Default::Untranslated);
+        assert_eq!(d("1.5", Kind::Int), Default::Untranslated);
+        assert_eq!(d("gen_random_uuid()", Kind::Uuid), Default::Untranslated);
+        assert_eq!(
+            translate_default("gen_random_uuid()", &Kind::Uuid, true),
+            Default::Implied
+        );
+        assert_eq!(
+            translate_default("uuid_generate_v4()", &Kind::Uuid, true),
+            Default::Implied
+        );
+    }
+
+    #[test]
+    fn simple_checks_translate() {
+        assert_eq!(
+            check("CHECK ((price >= (0)::numeric))").as_deref(),
+            Some("price >= 0")
+        );
+        assert_eq!(
+            check("CHECK (((qty > 0) AND (qty < 100)))").as_deref(),
+            Some("(qty > 0) and (qty < 100)")
+        );
+        assert_eq!(
+            check("CHECK (((status <> 'shipped'::text) OR shipped))").as_deref(),
+            Some("(status != 'shipped') or shipped")
+        );
+        assert_eq!(
+            check("CHECK ((status = ANY (ARRAY['a'::text, 'b'::text])))").as_deref(),
+            Some("status in ['a', 'b']")
+        );
+        assert_eq!(
+            check("CHECK ((note IS NOT NULL))").as_deref(),
+            Some("note != null")
+        );
+        assert_eq!(
+            check("CHECK ((note IS NULL))").as_deref(),
+            Some("note == null")
+        );
+        assert_eq!(
+            check("CHECK ((qty >= (- 1)))").as_deref(),
+            Some("qty >= (- 1)")
+        );
+    }
+
+    #[test]
+    fn checks_with_no_exact_equivalent_are_refused() {
+        for def in [
+            "CHECK ((qty < least(10, 100)))",
+            "CHECK ((note ~~ 'a%'::text))",
+            "CHECK ((note ~ '^a'::text))",
+            "CHECK (((note)::text <> ALL (ARRAY['a'::text])))",
+            "CHECK ((qty BETWEEN 1 AND 5))",
+            "CHECK ((length(note) > 3))",
+            "CHECK ((other > 1))",
+            "CHECK ((qty > (SELECT 1)))",
+            "CHECK ((note || 'x' = 'y'))",
+            "EXCLUDE USING gist (kind WITH =)",
+            "CHECK ((qty > 0)",
+        ] {
+            assert_eq!(check(def), None, "{def}");
         }
     }
 }
