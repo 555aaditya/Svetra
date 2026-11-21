@@ -195,6 +195,7 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 | Start fast | `svetra new` with templates ([spec](docs/new.md)) | **Done** |
 | Change safely | `svetra diff` and `svetra plan`: classify every change as safe, breaking or destructive, show whose access widens, and keep renamed data ([spec](docs/change.md)) | **Done** |
 | Existing apps | `svetra check` finds the leaks in an app you've already built ([spec](docs/check.md)); `svetra infer` drafts its `svetra.yaml` | `check` **Done**; `infer` planned |
+| Pre-launch checklist | `svetra doctor`: `check` plus leaked keys, auth settings, public buckets, backups and stale generated files, in one command ([spec](docs/doctor.md)) | Planned |
 | Feature packs | `svetra add teams`, `svetra remove stripe` | Planned |
 
 ## Contributing
