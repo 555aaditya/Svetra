@@ -1,6 +1,6 @@
 //! `svetra infer --check-draft` (docs/infer.md, Differential testing). The runs that start a
 //! throwaway database need Docker and Supabase's database image, and are skipped without them.
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 fn svetra(args: &[&str]) -> Output {
@@ -64,7 +64,7 @@ fn setup(name: &str, edit: impl Fn(&str) -> String) -> (PathBuf, PathBuf) {
     (migrations, file)
 }
 
-fn run(file: &PathBuf, migrations: &PathBuf) -> (Option<i32>, String, String) {
+fn run(file: &Path, migrations: &Path) -> (Option<i32>, String, String) {
     let out = svetra(&[
         "infer",
         "--check-draft",
