@@ -114,4 +114,88 @@ All of it goes in the `-- Holes` section of the SQL schema.
 - A failing body rolls back its own run. Svetra adds no retry: the next scheduled run is the retry.
 - Svetra can't know about a run missed while the database was down. A body should be safe to run twice and to run late. [`agents.md`](agents.md) says so.
 
+## Triggered holes
+
+A triggered hole runs after a row of one entity is inserted, updated or deleted.
+
+```yaml
+holes:
+  notify_paid:
+    kind: trigger
+    on: Order
+    events: [update]
+    when: "status == 'paid' and old.status != 'paid'"
+    reads: [Order, Customer]
+    writes: [Notification]
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `kind` | yes | `trigger` |
+| `on` | yes | The entity whose rows fire it. Must exist (`SVT002`) |
+| `events` | yes | A non-empty list of `insert`, `update`, `delete` (`SVT029` otherwise) |
+| `when` | no | A condition on the row that decides whether the body runs. Default: always |
+| `reads`, `writes`, `grants` | no | As for `function` |
+
+Not allowed: `input`, `output`, `as`. The row is the input.
+
+Timing is always **after** the row is written. A `before` trigger can change or cancel the write, which is a rule about data, so it belongs in a constraint or a policy, not a hole.
+
+### The row in the body
+
+| Variable | Insert | Update | Delete |
+|---|---|---|---|
+| `p_new` | the new row | the row after | `null` |
+| `p_old` | `null` | the row before | the deleted row |
+| `p_caller` | the person whose change fired it, from the session's `auth.uid()`; `null` for the service role, a job or a migration | same | same |
+
+Both rows are typed as the entity's row type. `p_caller` tells the body who started the change. It is information, never a permission check.
+
+### `when`
+
+`when` becomes the trigger's own `WHEN (...)` clause, so Postgres decides whether to fire before any function runs. That makes it checkable from the catalog (see [tests](#what-the-access-tests-prove)).
+
+- Fields are written bare, as in a policy, and mean the row after the change (the deleted row for `delete`).
+- `old.<field>` means the row before. It is allowed only when `events` is exactly `[update]`, because Postgres refuses `old` in an insert trigger's `WHEN` and `new` in a delete trigger's.
+- No other entity, no `auth.user`, no `has_role`: a `WHEN` clause can't run a subquery, and there may be no signed-in person. These are `SVT003`, as is a non-boolean result.
+- Svetra creates **one Postgres trigger per event**, so each can use the right row. `[insert, update]` is two triggers, `svetra_<name>_insert` and `svetra_<name>_update`.
+
+The expression parser knows the row after a change (`check`). `old.` is the one new form, so the build needs a change in `src/expr.rs` and `src/typeck.rs`.
+
+### What Svetra generates
+
+1. **The role** `svetra_hole_<name>` and its grants.
+2. **The body function** `svetra_holes.<name>(p_caller uuid, p_old "public"."order", p_new "public"."order")`, with the usual attributes and no guard: the `WHEN` clause did that.
+3. **A trigger function** `svetra_holes.<name>__fire()`, owned by `postgres` and `security definer`. It refuses when `pg_trigger_depth() > 3` (see [loops](#loops)), passes `auth.uid()` as `p_caller`, and calls the body function.
+4. **The triggers**, one per event:
+   ```sql
+   create trigger svetra_notify_paid_update
+     after update on "public"."order"
+     for each row
+     when (new."status" = 'paid' and old."status" is distinct from 'paid')
+     execute function svetra_holes.notify_paid__fire();
+   ```
+   Always `for each row`: a statement trigger has no single row to give the body.
+5. **Privileges.** Execute on both functions is revoked from `public`, `anon`, `authenticated` and `service_role` by name and granted to nobody who isn't the owner. In Postgres, the role that fires a trigger doesn't need execute on its function. **UNVERIFIED on Supabase:** the access tests must confirm it there.
+
+No function in `public`, nothing in `src/svetra.gen.ts`.
+
+### Who the code runs as
+
+The hole's own role, **not the person who made the change** and not `postgres`. It touches only what `reads`, `writes` and `grants` declare. That is deliberate: a trigger on orders often writes a notification that the person who placed the order may never see. `explain` says it in words: changing an order can make custom code change notifications, whoever made the change.
+
+### Loops
+
+A trigger hole that writes the entity it fires on, or an entity whose own trigger hole writes back, loops. Svetra stops it twice.
+
+1. **At validate time, `SVT038`.** Draw an edge from each trigger hole to every trigger hole whose `on` entity is in the first one's `writes` and whose `events` Svetra can't rule out. It can't read the body, so writing an entity counts as insert, update and delete. Any cycle, including a hole that writes its own `on` entity, is an error. The message names the cycle. The hint says to write to another entity, merge the two holes, or narrow `events`.
+2. **At run time, a depth limit.** The trigger function raises SQLSTATE `54001` when `pg_trigger_depth() > 3`, so a loop through a hand-made trigger, which Svetra can't see, ends in an error and not a hung database. It is a backstop. A design that depends on it is wrong.
+
+Holes of other kinds that write an entity do fire its trigger holes. That is an edge and not a cycle, because nothing fires them back, so only trigger-to-trigger edges are checked.
+
+### Failure and cost
+
+- The trigger runs **in the same transaction** as the change. If the body raises, the person's insert, update or delete is rolled back. That is right for "keep two things consistent" and wrong for "send an email". 0.2 has only this mode.
+- A slow body makes every write on the entity slow. Keep it short. Slow or external work is [not in this version](#not-in-this-version).
+
 <!-- next -->
