@@ -603,8 +603,12 @@ pub fn translate_check(definition: &str, fields: &[String]) -> Option<String> {
 #[derive(Debug, Clone, PartialEq)]
 enum Cond {
     True,
+    /// What a role makes of `auth.role() = 'x'` that isn't true for it. Never rendered.
+    False,
     /// `col = auth.uid()` for a `user` field `col`.
     Owner(String),
+    /// `auth.role() = 'x'`, true for exactly that role.
+    Role(String),
     And(Vec<Cond>),
     Or(Vec<Cond>),
 }
@@ -613,7 +617,9 @@ impl Cond {
     fn render(&self) -> String {
         match self {
             Cond::True => "true".into(),
+            Cond::False => "false".into(),
             Cond::Owner(c) => format!("{c} == auth.user"),
+            Cond::Role(r) => format!("auth.role() = '{r}'"),
             Cond::And(v) => v
                 .iter()
                 .map(|c| match c {
@@ -625,18 +631,74 @@ impl Cond {
             Cond::Or(v) => v.iter().map(Cond::render).collect::<Vec<_>>().join(" or "),
         }
     }
+
+    /// The condition for requests running as `role`: `auth.role() = 'x'` is true or false, and
+    /// what that makes of the rest is simplified.
+    fn for_role(&self, role: &str) -> Cond {
+        match self {
+            Cond::Role(r) if r == role => Cond::True,
+            Cond::Role(_) => Cond::False,
+            Cond::And(v) => {
+                let mut out = Vec::new();
+                for c in v {
+                    match c.for_role(role) {
+                        Cond::False => return Cond::False,
+                        Cond::True => {}
+                        c => out.push(c),
+                    }
+                }
+                match out.len() {
+                    0 => Cond::True,
+                    1 => out.remove(0),
+                    _ => Cond::And(out),
+                }
+            }
+            Cond::Or(v) => {
+                let mut out = Vec::new();
+                for c in v {
+                    match c.for_role(role) {
+                        Cond::True => return Cond::True,
+                        Cond::False => {}
+                        c => out.push(c),
+                    }
+                }
+                match out.len() {
+                    0 => Cond::False,
+                    1 => out.remove(0),
+                    _ => Cond::Or(out),
+                }
+            }
+            c => c.clone(),
+        }
+    }
 }
 
-/// One side of an `=`: the signed-in person's id, or a column, with the casts applied to it.
+/// What a table's translated fields are, to tell an owner column from the rest.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Fields<'a> {
+    /// `user` fields: a column compared with `auth.uid()` here is an owner check.
+    pub users: &'a [String],
+    /// `ref` fields and the entity each points at.
+    pub refs: &'a [(String, String)],
+    /// The other translated fields.
+    pub plain: &'a [String],
+}
+
+/// One side of an `=`: the signed-in person's id, their role, a string, or a column, with the
+/// casts applied to it.
 enum Side {
     Uid,
+    Role,
+    Lit(String),
     Col(String),
 }
 
 struct Cursor<'a> {
     toks: &'a [Tok],
     pos: usize,
-    users: &'a [String],
+    fields: Fields<'a>,
+    /// Why the first `col = auth.uid()` wasn't an owner check, if there was one.
+    why: Option<String>,
 }
 
 const RESERVED: [&str; 8] = ["select", "as", "and", "or", "true", "false", "null", "not"];
@@ -694,18 +756,31 @@ impl Cursor<'_> {
         None
     }
 
-    /// `col = auth.uid()` in either order. A cast to `uuid` changes nothing; a cast to `text`
-    /// compares the same values only when both sides have it.
+    /// `col = auth.uid()` or `auth.role() = 'x'`, in either order. A cast to `uuid` changes
+    /// nothing; a cast to `text` compares the same values only when both sides have it.
     fn eq(&mut self) -> Option<Cond> {
         let (a, ca) = self.side()?;
         self.eat("=")?;
         let (b, cb) = self.side()?;
-        let col = match (a, b) {
-            (Side::Uid, Side::Col(c)) | (Side::Col(c), Side::Uid) => c,
-            _ => return None,
-        };
-        let plain = ca.is_empty() || ca == ["text"];
-        (ca == cb && plain && self.users.contains(&col)).then_some(Cond::Owner(col))
+        match (a, b) {
+            (Side::Role, Side::Lit(r)) | (Side::Lit(r), Side::Role) => {
+                let text = |c: &[String]| c.iter().all(|x| x == "text");
+                // Only `authenticated`: `auth.role()` is null for a request with no JWT, which
+                // still runs as `anon`, so `as: anon` would let in a request the database refuses.
+                (r == "authenticated" && text(&ca) && text(&cb)).then_some(Cond::Role(r))
+            }
+            (Side::Uid, Side::Col(c)) | (Side::Col(c), Side::Uid) => {
+                let plain = ca.is_empty() || ca == ["text"];
+                if !self.fields.users.contains(&c) {
+                    self.why
+                        .get_or_insert_with(|| not_an_owner(&c, &self.fields));
+                    None
+                } else {
+                    (ca == cb && plain).then_some(Cond::Owner(c))
+                }
+            }
+            _ => None,
+        }
     }
 
     fn side(&mut self) -> Option<(Side, Vec<String>)> {
@@ -723,11 +798,20 @@ impl Cursor<'_> {
         } else if self.word("auth") {
             self.pos += 1;
             self.eat(".")?;
-            self.word("uid").then_some(())?;
+            let base = if self.word("uid") {
+                Side::Uid
+            } else if self.word("role") {
+                Side::Role
+            } else {
+                return None;
+            };
             self.pos += 1;
             self.eat("(")?;
             self.eat(")")?;
-            (Side::Uid, Vec::new())
+            (base, Vec::new())
+        } else if let Some(Tok::Str(text)) = self.toks.get(self.pos) {
+            self.pos += 1;
+            (Side::Lit(text.clone()), Vec::new())
         } else {
             let Some(Tok::Id(name)) = self.toks.get(self.pos) else {
                 return None;
@@ -754,25 +838,112 @@ impl Cursor<'_> {
     }
 }
 
-/// A policy condition as a Svetra expression, when it is `true`, an owner check on one of the
-/// `user` fields, or `and`/`or` of those. `None` for anything else.
-pub fn translate_condition(sql: &str, users: &[String]) -> Option<String> {
-    if sql.len() > 400 {
-        return None;
+/// Why `col = auth.uid()` isn't an owner check on this table.
+fn not_an_owner(col: &str, f: &Fields) -> String {
+    if let Some((_, target)) = f.refs.iter().find(|(n, _)| n == col) {
+        format!("`{col}` is a reference to {target}, not a user field")
+    } else if f.plain.iter().any(|n| n == col) {
+        format!(
+            "`{col}` is a plain uuid column, not a user field (it has no foreign key to auth.users)"
+        )
+    } else {
+        format!(
+            "`{col}` isn't a field of this entity (its column was left out, or it isn't a column)"
+        )
     }
-    let toks = lex_with(sql, true)?;
+}
+
+/// The first thing in a condition that stopped it translating, in plain words.
+fn why_not(toks: &[Tok], cursor_why: Option<String>) -> String {
+    let id = |i: usize| match toks.get(i) {
+        Some(Tok::Id(x)) => Some(x.to_ascii_lowercase()),
+        _ => None,
+    };
+    let sym = |i: usize, s: &str| matches!(toks.get(i), Some(Tok::Sym(x)) if *x == s);
+    for i in 0..toks.len() {
+        if id(i).as_deref() == Some("select") {
+            let mut j = i + 1;
+            while sym(j, "(") {
+                j += 1;
+            }
+            if id(j).as_deref() != Some("auth") {
+                return "a subquery".into();
+            }
+        }
+    }
+    for i in 0..toks.len() {
+        let Some(word) = id(i) else { continue };
+        if word == "auth" && sym(i + 1, ".") {
+            match id(i + 2).as_deref() {
+                Some("jwt") => return "reads a JWT claim (auth.jwt())".into(),
+                Some("uid") => {}
+                Some("role") => {
+                    let lit = toks[i..].iter().take(12).find_map(|t| match t {
+                        Tok::Str(x) => Some(x.clone()),
+                        _ => None,
+                    });
+                    if lit.as_deref() == Some("anon") {
+                        return "auth.role() = 'anon' is null, not true, for a request with no JWT, so as: anon would be wider".into();
+                    }
+                    if let Some(x) = lit.filter(|x| x != "authenticated") {
+                        return format!("auth.role() is compared with '{x}', not 'authenticated'");
+                    }
+                }
+                Some(f) => return format!("calls auth.{f}(), which infer doesn't translate"),
+                None => {}
+            }
+        }
+        let prev_dot = i > 0 && (sym(i - 1, ".") || sym(i - 1, "::"));
+        let word_is_reserved = [
+            "and", "or", "not", "in", "select", "as", "exists", "any", "is",
+        ];
+        if sym(i + 1, "(") && !prev_dot && !word_is_reserved.contains(&word.as_str()) {
+            return format!("calls the function {word}(); infer doesn't read function bodies");
+        }
+        if ["current_user", "session_user", "current_role"].contains(&word.as_str()) {
+            return "reads the database user".into();
+        }
+    }
+    if let Some(why) = cursor_why {
+        return why;
+    }
+    for t in toks {
+        match t {
+            Tok::Id(x) if ["not", "is", "false"].contains(&x.to_ascii_lowercase().as_str()) => {
+                return format!(
+                    "uses {}, which infer doesn't translate",
+                    x.to_ascii_uppercase()
+                );
+            }
+            Tok::Sym(x) if ["<>", "!=", "<", ">", "<=", ">="].contains(x) => {
+                return format!("uses {x}, which infer doesn't translate");
+            }
+            _ => {}
+        }
+    }
+    if toks.iter().any(|t| matches!(t, Tok::Str(_) | Tok::Num(_))) {
+        return "compares with a literal, which infer doesn't translate".into();
+    }
+    "a condition shape infer doesn't translate".into()
+}
+
+/// A policy condition: `true`, an owner check on one of the `user` fields, `auth.role() = 'x'`,
+/// or `and`/`or` of those. The reason, for anything else.
+fn parse_condition(sql: &str, fields: Fields) -> Result<Cond, String> {
+    if sql.len() > 400 {
+        return Err("a condition too long to read".into());
+    }
+    let toks = lex_with(sql, true).ok_or("a condition it can't read")?;
     let mut cur = Cursor {
         toks: &toks,
         pos: 0,
-        users,
+        fields,
+        why: None,
     };
-    let cond = cur.expr()?;
-    if cur.pos != toks.len() {
-        return None;
+    match cur.expr() {
+        Some(c) if cur.pos == toks.len() => Ok(c),
+        _ => Err(why_not(&toks, cur.why)),
     }
-    let text = cond.render();
-    crate::expr::parse(&text).ok()?;
-    Some(text)
 }
 
 /// A database policy that translates to one Svetra policy.
@@ -789,56 +960,91 @@ pub struct Translated {
 /// says whether the database gives that role the table privilege.
 pub fn translate_policy(
     p: &Value,
-    users: &[String],
+    fields: Fields,
     granted: &dyn Fn(&str, &str) -> bool,
 ) -> Result<Translated, String> {
     let roles = crate::inspect::roles(p);
-    let role = if roles.iter().any(|r| r == "public")
+    let covered: Vec<&str> = if roles.iter().any(|r| r == "public")
         || (roles.len() == 2 && roles.iter().all(|r| r == "anon" || r == "authenticated"))
     {
-        "anyone"
+        vec!["anon", "authenticated"]
     } else if roles == ["authenticated"] {
-        "authenticated"
+        vec!["authenticated"]
     } else if roles == ["anon"] {
-        "anon"
+        vec!["anon"]
     } else {
         return Err(format!("roles {}", roles.join(", ")));
     };
-    let cond = |key: &str| {
-        let sql = p[key].as_str()?;
-        Some(
-            translate_condition(sql, users)
-                .ok_or("a condition that isn't an owner check or `true`"),
-        )
-    };
+    let cond = |key: &str| p[key].as_str().map(|sql| parse_condition(sql, fields));
     let (using, check) = (cond("using"), cond("check"));
     let some_sql = |key: &str| p[key].as_str().is_some();
     let cmd = s(p, "cmd").to_ascii_uppercase();
-    let (mut actions, when, check): (Vec<&'static str>, String, Option<String>) = match cmd.as_str()
+    // The condition that decides who gets in, and the one on the new row, per command.
+    let (mut actions, primary, secondary): (Vec<&'static str>, Cond, Option<Cond>) = match cmd
+        .as_str()
     {
         "SELECT" | "DELETE" if !some_sql("check") => {
             let a = if cmd == "SELECT" { "select" } else { "delete" };
             (vec![a], using.ok_or("no using")??, None)
         }
         "INSERT" if !some_sql("using") => (vec!["insert"], check.ok_or("no with check")??, None),
-        "UPDATE" => {
-            let u = using.ok_or("an update policy with no using")??;
-            let k = check.transpose()?.filter(|k| *k != u);
-            (vec!["update"], u, k)
-        }
-        "ALL" => {
-            let u = using.ok_or("no using")??;
-            if check.transpose()?.is_some_and(|k| k != u) {
-                return Err("FOR ALL with a with check that differs from using".into());
-            }
-            (vec!["select", "insert", "update", "delete"], u, None)
-        }
+        "UPDATE" => (
+            vec!["update"],
+            using.ok_or("an update policy with no using")??,
+            check.transpose()?,
+        ),
+        "ALL" => (
+            vec!["select", "insert", "update", "delete"],
+            using.ok_or("no using")??,
+            check.transpose()?,
+        ),
         _ => return Err(format!("command {cmd}")),
     };
-    let covered: &[&str] = if role == "anyone" {
-        &["anon", "authenticated"]
-    } else {
-        &[role]
+    let restrictive = s(p, "permissive").eq_ignore_ascii_case("restrictive");
+    // `auth.role()` is what the role says it is, so each role gets its own reading of the
+    // condition, and a role it is `false` for was never let in: it drops out.
+    let mut kept: Vec<(&str, String, Option<String>)> = Vec::new();
+    for r in &covered {
+        let u = primary.for_role(r);
+        if u == Cond::False {
+            continue;
+        }
+        let k = match &secondary {
+            None => None,
+            Some(k) => match k.for_role(r) {
+                Cond::False => {
+                    return Err(format!(
+                        "the with check is never true for {r}, so no change would pass it"
+                    ));
+                }
+                k => Some(k.render()).filter(|k| *k != u.render()),
+            },
+        };
+        if cmd == "ALL" && k.is_some() {
+            return Err("FOR ALL with a with check that differs from using".into());
+        }
+        kept.push((*r, u.render(), k));
+    }
+    let Some((_, when, check)) = kept.first().cloned() else {
+        return Err(format!(
+            "auth.role() makes the condition false for {}, so it never lets anyone in",
+            covered.join(" and ")
+        ));
+    };
+    if kept.iter().any(|(_, w, k)| *w != when || *k != check) {
+        return Err("the condition differs between anon and authenticated".into());
+    }
+    if restrictive && kept.len() < covered.len() {
+        return Err(
+            "a restrictive policy that is false for a role it applies to: dropping that role would widen access"
+                .into(),
+        );
+    }
+    let covered: Vec<&str> = kept.iter().map(|(r, _, _)| *r).collect();
+    let role = match covered[..] {
+        ["anon", "authenticated"] => "anyone",
+        ["authenticated"] => "authenticated",
+        _ => "anon",
     };
     actions.retain(|a| covered.iter().all(|r| granted(r, a)));
     if actions.is_empty() {
@@ -847,7 +1053,7 @@ pub fn translate_policy(
     Ok(Translated {
         role,
         actions,
-        restrictive: s(p, "permissive").eq_ignore_ascii_case("restrictive"),
+        restrictive,
         when,
         check,
     })
@@ -902,6 +1108,8 @@ struct Plan {
     entity: String,
     pk: String,
     pk_uuid: bool,
+    /// The key is a person's id: a uuid with a foreign key to `auth.users (id)`.
+    pk_user: bool,
 }
 
 struct Counts {
@@ -1034,11 +1242,19 @@ fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Plac
             continue;
         }
         let uuid = map_type(col, &enums).is_ok_and(|m| m.kind == Kind::Uuid);
+        let pk_user = uuid
+            && on(&constraints, name).iter().any(|c| {
+                s(c, "kind") == "f"
+                    && names(&c["columns"]) == [pk_col.as_str()]
+                    && (s(c, "ref_schema"), s(c, "ref_table")) == ("auth", "users")
+                    && names(&c["ref_columns"]) == ["id"]
+            });
         plans.push(Plan {
             table: name.to_string(),
             entity,
             pk: pk_col.clone(),
             pk_uuid: uuid,
+            pk_user,
         });
     }
     if plans.is_empty() {
@@ -1146,12 +1362,55 @@ fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Plac
     ))
 }
 
-/// How a foreign key's `on delete` / `on update` shows in its definition.
-fn fk_actions(definition: &str) -> Option<String> {
-    let at = definition
-        .find(" ON DELETE")
-        .or_else(|| definition.find(" ON UPDATE"))?;
-    Some(one_line(&definition[at..]))
+/// The action after `key` (` ON DELETE `, ` ON UPDATE `) in a foreign key's definition.
+fn fk_action(definition: &str, key: &str) -> Option<String> {
+    let rest = &definition[definition.find(key)? + key.len()..];
+    let end = [
+        " ON ",
+        " DEFERRABLE",
+        " NOT DEFERRABLE",
+        " NOT VALID",
+        " MATCH",
+    ]
+    .iter()
+    .filter_map(|w| rest.find(w))
+    .min()
+    .unwrap_or(rest.len());
+    Some(one_line(rest[..end].trim()))
+}
+
+/// What a foreign key's `on delete` and `on update` become: for a `ref` an `on_delete` option,
+/// and for what Svetra can't say a `lossy` note (docs/infer.md, `on delete`).
+fn foreign_key_note(
+    definition: &str,
+    is_ref: bool,
+    required: bool,
+) -> (Option<String>, Vec<String>) {
+    let mut option = None;
+    let mut notes = Vec::new();
+    match fk_action(definition, " ON DELETE ").as_deref() {
+        None | Some("NO ACTION" | "RESTRICT") => {}
+        Some("CASCADE") if is_ref => option = Some("on_delete: cascade".to_string()),
+        Some("SET NULL") if is_ref && !required => option = Some("on_delete: set_null".to_string()),
+        Some(action) => notes.push(format!(
+            "lossy: the foreign key had ON DELETE {action}, {}",
+            if !is_ref {
+                "a user field has none"
+            } else if required {
+                "and on_delete: set_null isn't allowed on a required field, so the delete is refused"
+            } else {
+                "which Svetra can't write"
+            }
+        )),
+    }
+    if let Some(action) = fk_action(definition, " ON UPDATE ")
+        && !matches!(action.as_str(), "NO ACTION" | "RESTRICT")
+    {
+        notes.push(format!(
+            "lossy: the foreign key had ON UPDATE {action}, Svetra writes none"
+        ));
+    }
+    (option, notes)
 }
 
 /// The snapshot's table and policy rows, for the policies of each entity.
@@ -1194,7 +1453,7 @@ fn original_policy(table: &str, p: &Value) -> String {
 /// Translate a table's policies, never widening access (docs/infer.md, Policies).
 fn table_policies(
     plan: &Plan,
-    users: &[String],
+    fields: Fields,
     access: &Access,
     used: &mut Vec<String>,
     counts: &mut Counts,
@@ -1230,7 +1489,7 @@ fn table_policies(
         .iter()
         .map(|p| {
             let r = if rls {
-                translate_policy(p, users, &granted)
+                translate_policy(p, fields, &granted)
             } else {
                 Err("row-level security is off, so the policy isn't enforced".into())
             };
@@ -1349,6 +1608,8 @@ fn entity(
     let mut fields: Vec<String> = Vec::new();
     let mut consumed: Vec<String> = Vec::new();
     let mut users: Vec<String> = Vec::new();
+    let mut refs: Vec<(String, String)> = Vec::new();
+    let mut plain: Vec<String> = Vec::new();
     for col in &cols {
         let name = s(col, "name");
         let ty = s(col, "type");
@@ -1379,35 +1640,52 @@ fn entity(
         });
         let mut mapped = None;
         let mut note: Vec<String> = Vec::new();
-        if let (Some(fk), false) = (fk, is_pk) {
+        if let (Some(fk), "uuid") = (fk, ty) {
             let (rs, rt) = (s(fk, "ref_schema"), s(fk, "ref_table"));
             let rc = names(&fk["ref_columns"]).remove(0);
+            let def = s(fk, "definition");
+            let required = b(col, "not_null");
             let target = plans
                 .iter()
                 .find(|p| rs == "public" && p.table == rt && p.pk == rc && p.pk_uuid);
-            let kind = if ty == "uuid" { Some(()) } else { None };
-            if kind.is_some() && rs == "auth" && rt == "users" && rc == "id" {
-                mapped = Some(Mapped {
-                    ty: "user",
-                    opts: vec![],
-                    kind: Kind::Uuid,
-                    lossy: None,
-                });
-            } else if let (Some(_), Some(t)) = (kind, target) {
-                mapped = Some(Mapped {
-                    ty: "ref",
-                    opts: vec![format!("entity: {}", t.entity)],
-                    kind: Kind::Uuid,
-                    lossy: None,
-                });
+            let user = Mapped {
+                ty: "user",
+                opts: vec![],
+                kind: Kind::Uuid,
+                lossy: None,
+            };
+            if rs == "auth" && rt == "users" && rc == "id" {
+                mapped = Some(user);
+                note.extend(foreign_key_note(def, false, required).1);
+            } else if let (Some(t), false) = (target, is_pk) {
+                if t.pk_user {
+                    // A person's id held in a column that points at the profile table.
+                    mapped = Some(user);
+                    let mut why = vec![format!(
+                        "lossy: was a foreign key to {rs}.{rt} ({rc}), now one to auth.users: it accepts a person with no row in {rt}"
+                    )];
+                    why.extend(
+                        foreign_key_note(def, false, required)
+                            .1
+                            .iter()
+                            .map(|n| n.trim_start_matches("lossy: ").to_string()),
+                    );
+                    note.push(why.join("; "));
+                } else {
+                    let (opt, notes) = foreign_key_note(def, true, required);
+                    let mut opts = vec![format!("entity: {}", t.entity)];
+                    opts.extend(opt);
+                    mapped = Some(Mapped {
+                        ty: "ref",
+                        opts,
+                        kind: Kind::Uuid,
+                        lossy: None,
+                    });
+                    note.extend(notes);
+                }
             }
             if mapped.is_some() {
                 consumed.push(s(fk, "name").to_string());
-                if let Some(a) = fk_actions(s(fk, "definition")) {
-                    note.push(format!(
-                        "lossy: the foreign key had {a}, Svetra writes none"
-                    ));
-                }
             }
         }
         let is_link = mapped.is_some();
@@ -1473,8 +1751,13 @@ fn entity(
         }
         counts.fields += 1;
         fields.push(name.to_string());
-        if mapped.ty == "user" {
-            users.push(name.to_string());
+        match mapped.ty {
+            "user" => users.push(name.to_string()),
+            "ref" => {
+                let target = mapped.opts.iter().find_map(|o| o.strip_prefix("entity: "));
+                refs.push((name.to_string(), target.unwrap_or_default().to_string()));
+            }
+            _ => plain.push(name.to_string()),
         }
         lines.push((format!("{name}: {{ {} }}", spec.join(", ")), note));
     }
@@ -1547,7 +1830,12 @@ fn entity(
             None => notes.push(untranslated(counts, format!("index {name}: {def}"))),
         }
     }
-    let pol = table_policies(plan, &users, access, used_policies, counts);
+    let fields_by_kind = Fields {
+        users: &users,
+        refs: &refs,
+        plain: &plain,
+    };
+    let pol = table_policies(plan, fields_by_kind, access, used_policies, counts);
     notes.extend(pol.notes);
     // Render.
     let width = lines
@@ -1864,8 +2152,31 @@ mod policy_tests {
     use super::*;
     use serde_json::json;
 
+    fn users() -> Vec<String> {
+        vec!["owner".to_string(), "editor".to_string()]
+    }
+
+    fn refs() -> Vec<(String, String)> {
+        vec![("created_by".to_string(), "Users".to_string())]
+    }
+
+    fn plain() -> Vec<String> {
+        vec!["status".to_string(), "token".to_string()]
+    }
+
+    /// A condition with no `auth.role()`, as the Svetra expression, or why not.
+    fn why(sql: &str) -> Result<String, String> {
+        let (u, r, p) = (users(), refs(), plain());
+        let fields = Fields {
+            users: &u,
+            refs: &r,
+            plain: &p,
+        };
+        parse_condition(sql, fields).map(|c| c.render())
+    }
+
     fn cond(sql: &str) -> Option<String> {
-        translate_condition(sql, &["owner".to_string(), "editor".to_string()])
+        why(sql).ok()
     }
 
     fn all(_: &str, _: &str) -> bool {
@@ -1877,7 +2188,15 @@ mod policy_tests {
     }
 
     fn tr(p: &Value) -> Result<Translated, String> {
-        translate_policy(p, &["owner".to_string()], &all)
+        let u = ["owner".to_string()];
+        translate_policy(
+            p,
+            Fields {
+                users: &u,
+                ..Fields::default()
+            },
+            &all,
+        )
     }
 
     #[test]
@@ -1932,7 +2251,9 @@ mod policy_tests {
             "false",
             "(status = 'published'::text)",
             "((auth.jwt() ->> 'role'::text) = 'admin'::text)",
-            "(auth.role() = 'authenticated'::text)",
+            "(auth.role() = 'service_role'::text)",
+            "(auth.role() <> 'anon'::text)",
+            "(auth.role() = auth.role())",
             "is_admin()",
             "(owner = auth.uid() AND is_admin())",
             "(EXISTS ( SELECT 1 FROM membership m WHERE ((m.org = orders.org) AND (m.member = auth.uid()))))",
@@ -2034,12 +2355,293 @@ mod policy_tests {
     fn privileges_are_respected() {
         let p = policy("ALL", json!(["public"]), json!("true"), Value::Null);
         let no_delete = |_: &str, a: &str| a != "delete";
-        let t = translate_policy(&p, &[], &no_delete).unwrap();
+        let t = translate_policy(&p, Fields::default(), &no_delete).unwrap();
         assert_eq!(t.actions, ["select", "insert", "update"]);
         // `anyone` needs both roles to hold it.
         let only_anon = |r: &str, _: &str| r == "anon";
-        assert!(translate_policy(&p, &[], &only_anon).is_err());
+        assert!(translate_policy(&p, Fields::default(), &only_anon).is_err());
         let q = policy("SELECT", json!(["anon"]), json!("true"), Value::Null);
-        assert!(translate_policy(&q, &[], &only_anon).is_ok());
+        assert!(translate_policy(&q, Fields::default(), &only_anon).is_ok());
+    }
+
+    #[test]
+    fn a_reason_names_what_stopped_the_condition() {
+        for (sql, reason) in [
+            (
+                "(created_by = auth.uid())",
+                "`created_by` is a reference to Users, not a user field",
+            ),
+            (
+                "(auth.uid() = created_by)",
+                "`created_by` is a reference to Users, not a user field",
+            ),
+            (
+                "(token = auth.uid())",
+                "`token` is a plain uuid column, not a user field (it has no foreign key to auth.users)",
+            ),
+            (
+                "(ghost = auth.uid())",
+                "`ghost` isn't a field of this entity (its column was left out, or it isn't a column)",
+            ),
+            (
+                "authorize('channels.delete'::app_permission)",
+                "calls the function authorize(); infer doesn't read function bodies",
+            ),
+            (
+                "(owner = auth.uid() AND is_admin())",
+                "calls the function is_admin(); infer doesn't read function bodies",
+            ),
+            (
+                "((auth.jwt() ->> 'role'::text) = 'admin'::text)",
+                "reads a JWT claim (auth.jwt())",
+            ),
+            (
+                "(EXISTS ( SELECT 1 FROM membership m WHERE (m.member = auth.uid())))",
+                "a subquery",
+            ),
+            ("(owner IN ( SELECT user_id FROM team))", "a subquery"),
+            (
+                "(auth.role() = 'service_role'::text)",
+                "auth.role() is compared with 'service_role', not 'authenticated'",
+            ),
+            ("(current_user = 'admin')", "reads the database user"),
+            (
+                "(NOT (owner = auth.uid()))",
+                "uses NOT, which infer doesn't translate",
+            ),
+            (
+                "(owner IS NOT NULL)",
+                "uses IS, which infer doesn't translate",
+            ),
+            (
+                "(owner <> auth.uid())",
+                "uses <>, which infer doesn't translate",
+            ),
+            ("false", "uses FALSE, which infer doesn't translate"),
+            (
+                "(status = 'published'::text)",
+                "compares with a literal, which infer doesn't translate",
+            ),
+            (
+                "(owner = auth.uid()) AND",
+                "a condition shape infer doesn't translate",
+            ),
+        ] {
+            assert_eq!(why(sql).unwrap_err(), reason, "{sql}");
+        }
+    }
+
+    #[test]
+    fn a_policy_carries_the_reason() {
+        let p = policy(
+            "SELECT",
+            json!(["authenticated"]),
+            json!("(created_by = auth.uid())"),
+            Value::Null,
+        );
+        let (u, r) = (users(), refs());
+        let f = Fields {
+            users: &u,
+            refs: &r,
+            plain: &[],
+        };
+        let err = translate_policy(&p, f, &all).unwrap_err();
+        assert!(
+            err.contains("`created_by` is a reference to Users"),
+            "{err}"
+        );
+    }
+
+    fn role_policy(
+        cmd: &str,
+        roles: Value,
+        using: &str,
+        check: Value,
+    ) -> Result<Translated, String> {
+        tr(&policy(cmd, roles, json!(using), check))
+    }
+
+    #[test]
+    fn auth_role_becomes_as() {
+        let read = |roles: Value, sql: &str| role_policy("SELECT", roles, sql, Value::Null);
+        for sql in [
+            "(auth.role() = 'authenticated'::text)",
+            "('authenticated'::text = auth.role())",
+            "(( SELECT auth.role() AS role) = 'authenticated'::text)",
+            "((SELECT auth.role()) = 'authenticated')",
+            "(auth.role() = 'authenticated')",
+        ] {
+            let t = read(json!(["authenticated"]), sql).unwrap();
+            assert_eq!(
+                (t.role, t.when.as_str()),
+                ("authenticated", "true"),
+                "{sql}"
+            );
+        }
+        // `to public` with a role check says who it was for: the other role was never let in.
+        let t = read(json!(["public"]), "(auth.role() = 'authenticated'::text)").unwrap();
+        assert_eq!((t.role, t.when.as_str()), ("authenticated", "true"));
+        // `'anon'` is never translated: a request with no JWT runs as anon with a null
+        // `auth.role()`, so `as: anon` would let in a request the database refuses.
+        for (roles, sql) in [
+            (json!(["anon"]), "(auth.role() = 'anon'::text)"),
+            (json!(["public"]), "(auth.role() = 'anon'::text)"),
+            (
+                json!(["anon", "authenticated"]),
+                "((auth.role() = 'anon'::text) OR (auth.role() = 'authenticated'::text))",
+            ),
+        ] {
+            assert!(read(roles, sql).is_err(), "{sql}");
+        }
+    }
+
+    #[test]
+    fn auth_role_combines_with_the_rest_of_the_condition() {
+        let read = |roles: Value, sql: &str| role_policy("SELECT", roles, sql, Value::Null);
+        let t = read(
+            json!(["authenticated"]),
+            "((auth.role() = 'authenticated'::text) AND (owner = auth.uid()))",
+        )
+        .unwrap();
+        assert_eq!(
+            (t.role, t.when.as_str()),
+            ("authenticated", "owner == auth.user")
+        );
+        // Which half of an `or` holds depends on the role.
+        let t = read(
+            json!(["public"]),
+            "((auth.role() = 'authenticated'::text) AND (owner = auth.uid()))",
+        )
+        .unwrap();
+        assert_eq!(
+            (t.role, t.when.as_str()),
+            ("authenticated", "owner == auth.user")
+        );
+        // Any mention of `auth.role() = 'anon'` is left untranslated, even where it is false.
+        assert!(
+            read(
+                json!(["authenticated"]),
+                "((auth.role() = 'anon'::text) OR (owner = auth.uid()))",
+            )
+            .is_err()
+        );
+        let t = read(
+            json!(["authenticated"]),
+            "((auth.role() = 'authenticated'::text) OR (owner = auth.uid()))",
+        )
+        .unwrap();
+        assert_eq!(t.when, "true");
+        // An owner check that holds for both roles stays one policy.
+        let t = read(
+            json!(["public"]),
+            "((owner = auth.uid()) OR (auth.role() = 'anon'::text))",
+        );
+        assert!(
+            t.is_err(),
+            "anon gets everything, authenticated only their own"
+        );
+    }
+
+    #[test]
+    fn auth_role_it_cannot_say_stays_untranslated_with_a_reason() {
+        let read = |roles: Value, sql: &str| role_policy("SELECT", roles, sql, Value::Null);
+        // Never true for the role the policy is for: it lets nobody in.
+        let e = read(json!(["anon"]), "(auth.role() = 'authenticated'::text)").unwrap_err();
+        assert!(e.contains("never lets anyone in"), "{e}");
+        let e = read(
+            json!(["authenticated"]),
+            "(auth.role() = 'service_role'::text)",
+        )
+        .unwrap_err();
+        assert!(e.contains("'service_role'"), "{e}");
+    }
+
+    #[test]
+    fn auth_role_on_an_update_applies_to_using_and_check() {
+        let t = tr(&policy(
+            "UPDATE",
+            json!(["public"]),
+            json!("(auth.role() = 'authenticated'::text)"),
+            json!("((auth.role() = 'authenticated'::text) AND (owner = auth.uid()))"),
+        ))
+        .unwrap();
+        assert_eq!(
+            (t.role, t.when.as_str(), t.check.as_deref()),
+            ("authenticated", "true", Some("owner == auth.user"))
+        );
+    }
+
+    #[test]
+    fn a_restrictive_role_policy_never_drops_a_role() {
+        let mut p = policy(
+            "SELECT",
+            json!(["public"]),
+            json!("(auth.role() = 'authenticated'::text)"),
+            Value::Null,
+        );
+        p["permissive"] = json!("RESTRICTIVE");
+        // Dropping `anon` from a restrictive policy that is false for it would let `anon` past it.
+        let e = tr(&p).unwrap_err();
+        assert!(e.contains("widen"), "{e}");
+        p["roles"] = json!(["authenticated"]);
+        assert!(tr(&p).unwrap().restrictive);
+    }
+
+    fn fk(text: &str) -> String {
+        format!("FOREIGN KEY (c) REFERENCES t(id){text}")
+    }
+
+    #[test]
+    fn on_delete_becomes_the_ref_option() {
+        let note = |text: &str, is_ref, required| foreign_key_note(&fk(text), is_ref, required);
+        assert_eq!(
+            note(" ON DELETE CASCADE", true, true),
+            (Some("on_delete: cascade".into()), vec![])
+        );
+        assert_eq!(
+            note(" ON DELETE SET NULL", true, false),
+            (Some("on_delete: set_null".into()), vec![])
+        );
+        assert_eq!(
+            note(
+                " ON UPDATE NO ACTION ON DELETE CASCADE DEFERRABLE",
+                true,
+                false
+            )
+            .0,
+            Some("on_delete: cascade".into())
+        );
+        for text in [
+            "",
+            " ON DELETE NO ACTION",
+            " ON DELETE RESTRICT",
+            " NOT VALID",
+        ] {
+            assert_eq!(note(text, true, true), (None, vec![]), "{text}");
+        }
+    }
+
+    #[test]
+    fn an_action_svetra_cannot_write_is_a_lossy_note() {
+        let note = |text: &str, is_ref, required| foreign_key_note(&fk(text), is_ref, required);
+        let (opt, notes) = note(" ON DELETE SET DEFAULT", true, false);
+        assert_eq!(opt, None);
+        assert_eq!(
+            notes,
+            ["lossy: the foreign key had ON DELETE SET DEFAULT, which Svetra can't write"]
+        );
+        // `set null` on a required field would be `SVT023`.
+        let (opt, notes) = note(" ON DELETE SET NULL", true, true);
+        assert_eq!(opt, None);
+        assert!(
+            notes[0].contains("isn't allowed on a required field"),
+            "{notes:?}"
+        );
+        // A user field has no action at all, and no update action either.
+        let (opt, notes) = note(" ON UPDATE CASCADE ON DELETE CASCADE", false, true);
+        assert_eq!(opt, None);
+        assert_eq!(notes.len(), 2);
+        assert!(notes[0].contains("a user field has none"), "{notes:?}");
+        assert!(notes[1].contains("ON UPDATE CASCADE"), "{notes:?}");
     }
 }

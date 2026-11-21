@@ -75,14 +75,26 @@ Each row says what a column becomes and whether the draft means exactly what the
 | `numeric` without precision, or over 38 digits | not translated | `UNTRANSLATED` |
 | `real`, `double precision` | `float` | `real` is **widened** to 64 bits (note) |
 | an enum type | `{ type: enum, values: [...] }` | Values exact. The compiled column is `text` with a `check`, not the enum type (note) |
-| foreign key to a table that becomes an entity with a `uuid` primary key | `{ type: ref, entity: X }` | Exact, when the key is one column pointing at the target's primary key |
+| foreign key to a table that becomes an entity with a `uuid` primary key | `{ type: ref, entity: X }`, plus `on_delete` (below) | Exact, when the key is one column pointing at the target's primary key |
 | foreign key to `auth.users (id)` | `{ type: user }` | Exact |
-| any other foreign key, including one on the primary key itself | the column's own type, plus a comment | `UNTRANSLATED` foreign key with its SQL, at the end of the entity |
+| `uuid` primary key that is also a foreign key to `auth.users (id)` (a profile table) | `{ type: user, primary: true }` | Exact: one row per person, the key is the person's id (docs/format.md) |
+| `uuid` column with a foreign key to the primary key of such a profile table | `{ type: user }`, plus a `# lossy` note | **Changed**, see [Through a profile table](#through-a-profile-table) |
+| any other foreign key, including one on a primary key that doesn't reference `auth.users` | the column's own type, plus a comment | `UNTRANSLATED` foreign key with its SQL, at the end of the entity |
 | `real` or `double precision` on a column named like money | not translated | `UNTRANSLATED`: Svetra refuses float for money (`SVT005`), so the draft would not validate. Choose `numeric(p,s)` |
 | arrays, ranges, `bytea`, `inet`, `tsvector`, `interval`, domains, extension types (`vector`, `geometry`), generated columns | not translated | `UNTRANSLATED`, the column is left out of the entity |
 | identity column or `serial` (a `nextval` default) | the column's type, plus a comment | `UNTRANSLATED` identity or default: Svetra has no auto-increment, so inserts must give the value |
 
-The `ref`'s `on delete` and `on update` actions are not part of Svetra's foreign keys (it writes none). A foreign key that has one gets a `# lossy` note with the original.
+**`on delete`.** A foreign key that becomes a `ref` carries its `on delete` action into `on_delete` (docs/format.md, Deleting a referenced row):
+
+| Database | Svetra | Fidelity |
+|---|---|---|
+| `on delete cascade` | `on_delete: cascade` | Exact |
+| `on delete set null` | `on_delete: set_null` | Exact. Svetra refuses it on a `required` field, and PostgreSQL would refuse to clear a `not null` column anyway |
+| `on delete restrict`, `no action`, or none | nothing (the default) | Exact for what a delete does. `restrict` and `no action` differ only when the check runs late in a deferred transaction, which Svetra doesn't write; the compiled key is `no action` |
+| `on delete set default` | nothing, plus a `# lossy` note with the original | **Changed**: the compiled key refuses the delete instead of setting the default |
+| any `on update` action other than `no action` or `restrict` | a `# lossy` note with the original | **Changed**: Svetra writes none |
+
+A `user` field's foreign key has no action in Svetra, which never deletes people, so an `on delete` on a foreign key to `auth.users` (or to a profile table, below) is a `# lossy` note and is not written.
 
 **Modifiers**
 
@@ -101,6 +113,18 @@ The `ref`'s `on delete` and `on update` actions are not part of Svetra's foreign
 | composite primary key, or none | the table is left as a comment | `UNTRANSLATED` table: an entity needs exactly one primary field |
 
 **A column that can't be translated is left out of the entity, never dropped silently:** the entity's comment block lists it with the original type and SQL. Because it's left out, a `not null` column the app depends on would be missing from the compiled table. The comment says so, and the summary line counts it.
+
+### Through a profile table
+
+Supabase apps keep a `public.users` or `profiles` table whose primary key is the person's id: `id uuid primary key references auth.users (id)`. Other tables then point at **that** table (`created_by uuid references public.users (id)`), and policies compare the column with `auth.uid()`. The value in such a column is a person's id: every value in `profiles.id` is also in `auth.users.id`, so `created_by = auth.uid()` asks the same question as it would on a column that referenced `auth.users` directly.
+
+`infer` says this as follows, and calls it a change, not an exact translation:
+
+- **The profile table's key** is `{ type: user, primary: true }`. Its own policies `auth.uid() = id` are then owner checks.
+- **A `uuid` column with a single-column foreign key to that key** is `{ type: user }` and not a `ref`. `created_by == auth.user` then compiles to the very condition the database has. A `ref` would need `created_by.id == auth.user`, which compiles to a subquery on the profile table and is subject to **its** row-level security: someone who can't see their own profile row would be refused, so the draft would mean something different from the database.
+- **What is lost, and said in a `# lossy` note on the field:** the foreign key to the profile table. The compiled column references `auth.users`, so it accepts a person who has no profile row, which the database refuses (looser data integrity, not wider access: no policy reads it), and an `on delete` action of the original key is not written. The note names the table and the original action.
+- **The field type changes for every such column,** not only those a policy reads. A `ref` to the profile entity and a `user` field both hold the same uuid, and one rule for the whole draft is easier to review than a choice per column. A person who wants the `ref` back (for the foreign key, `on_delete` or a path like `created_by.username`) changes the one field and its policy by hand.
+- **Only one hop is followed.** A column that references a table that references a profile table stays a `ref`; so does a foreign key with more than one column, or to a column other than the primary key.
 
 ### Check constraints
 
@@ -213,13 +237,46 @@ Each `pg_policies` row becomes **at most one** Svetra policy, with the same name
 | Database | Svetra | Notes |
 |---|---|---|
 | `true` | `true` | Whoever the role is: with `to anon`, `to authenticated` or `to public`, the matching `as:` and `when: "true"` |
-| `col = auth.uid()`, `auth.uid() = col` | `col == auth.user` | `col` must be one of the entity's **`user` fields** (a `uuid` column with a foreign key to `auth.users (id)`). A plain `uuid` column, or a column that didn't translate, is not an owner |
+| `col = auth.uid()`, `auth.uid() = col` | `col == auth.user` | `col` must be one of the entity's **`user` fields**: a `uuid` column with a foreign key to `auth.users (id)`, a profile table's key, or a column that references that key ([Through a profile table](#through-a-profile-table)). A plain `uuid` column, a `ref`, or a column that didn't translate, is not an owner |
 | `col = (select auth.uid())`, `(select auth.uid()) = col`, and the form the database prints, `col = ( SELECT auth.uid() AS uid)` | `col == auth.user` | The wrapped form Supabase recommends, for speed. Same meaning |
 | `(col)::text = (auth.uid())::text`, either side first | `col == auth.user` | A cast to `text` on **both** sides compares the same values as the uuids, so it is exact. A cast on one side only, or any other cast, is not translated |
 | `(auth.uid())::uuid = col` | `col == auth.user` | A cast to `uuid` of a uuid is a no-op, so it is dropped |
+| `auth.role() = 'authenticated'`; either side first; `(select auth.role())`; the `::text` the database prints | the policy's `as`, and the rest of the condition | See [`auth.role()`](#authrole) below |
 | `a AND b`, `a OR b` | `a and b`, `a or b` | Only when each of `a` and `b` translates. Brackets are kept where they matter; null behaves as SQL in both |
 
-Everything else is **not translated**, with no attempt to be clever. That includes: a subquery (`exists (select ...)`, `col in (select ...)`, any `SELECT` that isn't `auth.uid()`), a membership table, `auth.jwt()` and its claims (`auth.jwt() ->> 'role'`, `app_metadata`), `auth.role()`, `current_user`, any function call (your own `is_admin()` helpers included), `NOT`, `IS NULL`, `<>`, comparisons with literals (`status = 'published'`), `col = auth.uid()` where `col` is not a `user` field, and `false`. Some of these have a Svetra equivalent a person could write by hand (`has_role`, a one-hop path); the draft doesn't guess which. `infer` doesn't read function bodies.
+Everything else is **not translated**, with no attempt to be clever. That includes: a subquery (`exists (select ...)`, `col in (select ...)`, any `SELECT` that isn't `auth.uid()` or `auth.role()`), a membership table, `auth.jwt()` and its claims (`auth.jwt() ->> 'role'`, `app_metadata`), `auth.role()` compared with anything but `'anon'` or `'authenticated'`, `current_user`, any function call (your own `is_admin()` helpers included), `NOT`, `IS NULL`, `<>`, comparisons with literals (`status = 'published'`), `col = auth.uid()` where `col` is not a `user` field, and `false`. Some of these have a Svetra equivalent a person could write by hand (`has_role`, a one-hop path); the draft doesn't guess which. `infer` doesn't read function bodies.
+
+#### `auth.role()`
+
+`auth.role()` is the role the request runs as, which is also what the policy's `to` clause selects. `auth.role() = 'authenticated'` is true exactly for the role `authenticated`, and it is said with `as`, not with a condition. `auth.role() = 'anon'` is **not translated**, because it is not true for every request that runs as `anon` (see the end of this section):
+
+- For each role the policy's `to` covers (`public`, or no `to`, covers `anon` and `authenticated`), `infer` replaces every `auth.role() = 'x'` by `true` or `false` for that role and simplifies (`false and p` is `false`, `true and p` is `p`, `false or p` is `p`, `true or p` is `true`).
+- A role for which the whole condition is `false` is dropped from the policy: the database never let that role in. The roles left must give the **same** condition, and become `as` (`authenticated`, or `anyone` when both roles are left, which `to anon` and `to public` policies without a role check still give). If they give different conditions, or none is left, the policy is not translated.
+- So `to authenticated using (auth.role() = 'authenticated')` is `as: authenticated`, `when: "true"`; `using (auth.role() = 'authenticated' and owner = auth.uid())` is `when: "owner == auth.user"`; `to public using (auth.role() = 'authenticated')` is `as: authenticated` (anonymous people were never let in); `to anon using (auth.role() = 'authenticated')` never lets anyone in and is not translated.
+- `auth.role() = 'anon'`, `auth.role() = 'service_role'` (or any other literal), `<>`, `in (...)`, and a cast other than `text` on both sides are not translated.
+
+The result is never wider: a dropped role was already refused by the database, and a kept role gets exactly the rest of the condition.
+
+Why `anon` is left out. A request that carries no JWT at all runs as the role `anon`, but `auth.role()` is then null, not `'anon'`, so `auth.role() = 'anon'` is not true for it. Writing `as: anon` would let that request in, and the draft would be wider than the database. The request only exists when it skips Supabase's API (which always sends the `anon` key as a JWT whose role is `anon`), for example a direct database connection as `anon`, but a draft that is wider for any request breaks the rule, so a policy that tests `auth.role() = 'anon'` stays an `UNTRANSLATED` comment with that reason. `authenticated` has no such gap, since a request can only run as it with a JWT.
+
+### Why a policy didn't translate
+
+The reason after `--` on an `UNTRANSLATED policy` comment names the first thing in the condition that stopped it, so a person knows what to do:
+
+| Cause | Reason |
+|---|---|
+| a column compared with `auth.uid()` that is a `ref` | `` `created_by` is a reference to Users, not a user field `` |
+| a plain `uuid` column | `` `owner` is a plain uuid column, not a user field (it has no foreign key to auth.users) `` |
+| a column that isn't a field of the entity | `` `owner` isn't a field of this entity (its column was left out, or it isn't a column) `` |
+| a function call | `` calls the function is_admin(); infer doesn't read function bodies `` |
+| `auth.jwt()` | `reads a JWT claim (auth.jwt())` |
+| a subquery | `a subquery` |
+| `auth.role() = 'anon'` | `` auth.role() = 'anon' is null, not true, for a request with no JWT, so as: anon would be wider `` |
+| `auth.role()` with another value | `` auth.role() is compared with 'service_role', not 'authenticated' `` |
+| `current_user`, `session_user` | `reads the database user` |
+| `not`, `is null`, `<>`, `<`, `>`, a literal comparison, `false` | `uses not` (and so on), which infer doesn't translate |
+| a role in `to` other than `anon`, `authenticated`, `public` | `roles service_role` |
+| anything else | `a condition shape infer doesn't translate` |
 
 ### What the entity says
 
@@ -239,7 +296,7 @@ An entity is `private: true` **only** when none of its policies translated.
 Untranslated policies are comments at the end of the entity, one per policy, with the original SQL rebuilt from the snapshot and the reason after `--`:
 
 ```yaml
-    # UNTRANSLATED policy staff_read: CREATE POLICY staff_read ON public.orders AS PERMISSIVE FOR SELECT TO authenticated USING (is_staff()) -- a condition that isn't an owner check or `true`
+    # UNTRANSLATED policy staff_read: CREATE POLICY staff_read ON public.orders AS PERMISSIVE FOR SELECT TO authenticated USING (is_staff()) -- calls the function is_staff(); infer doesn't read function bodies
 ```
 
 ### Example
