@@ -242,3 +242,35 @@ If `DIR/svetra.yaml` exists, doctor runs what `svetra compile --check` runs, and
 
 Doctor doesn't validate the design: `svetra validate` does, and doctor only says it couldn't check. Both are warnings, not critical, because they say the design and the files disagree, not that data is open. The data itself is what `check` reads, so the generated access tests and a stale policy file never hide an open table from doctor.
 
+## The first build PR
+
+Doctor ships in three pull requests, each one topic. The spec is this document.
+
+1. **The command and the folder checks.** `src/doctor/` (after `verify` in the dependency order of AGENTS.md; it calls `inspect`, `migrations` and `project::compile`) and the `doctor` arm in `src/main.rs`, with help text. It contains:
+   - argument parsing and the exit codes, the report, and `--json`;
+   - the data exposure part, by calling `check`'s code, not copying it;
+   - the project walk and `git ls-files` and `git check-ignore` through `std::process::Command`, and the leaked-key checks, with a base64url decoder and `serde_json` for the JWT payload (both already in the dependencies, so no new crate);
+   - the backups reminders and `schema_not_in_git`, and the generated-files checks;
+   - `docs/doctor.md` updated where the build differs, the `--help` text, a README roadmap row marked Done for these checks, and a `CHANGELOG.md` entry.
+2. **Auth settings and storage buckets.** A small `config.toml` reader (the compiler's `config.rs` already finds tables and keys line by line; share it rather than add a TOML crate), the auth checks, and the `buckets` key in doctor's query. Before it is written, the UNVERIFIED keys in this document are checked against a `config.toml` made by `supabase init`, and this document is corrected.
+3. **Agents.** A `doctor` tool in `svetra mcp` ([agents.md](agents.md)) with the same inputs and the same JSON plus a `summary`, and a line in the Svetra skill: run `doctor` before telling anyone an app is ready.
+
+**Tests in the first PR** (AGENTS.md: one test per finding kind, CLI tests run the real binary):
+- A fixture project built at test time, in a temporary folder with a real `git init`, so no secret-shaped string is committed to this repository. Tokens are assembled at run time from pieces (a JWT is built from `base64(header)`, `base64(payload)`, and a dummy signature), because a committed key-shaped string trips GitHub's push protection and every scanner.
+- One test per kind of `keys`, `backups` and `generated`: the planted service key in a `.tsx` file; the same key in an ignored `.env` (not reported); a tracked `.env` with and without a secret; a `config.toml` with a literal and with `env(...)`; a placeholder and an example file.
+- **The anon key is never flagged:** a test puts an anon JWT and an `sb_publishable_` key in a front-end file, a tracked `.env` and `config.toml`, and asserts no finding.
+- **No secret in any output:** a test runs every planted-secret case with `--json` and plain output, and asserts that neither contains the secret, any 8-character slice of it, or its length.
+- The data part: the leaky app's golden file (`tests/pg/check/leaky_app.sql`) through `doctor --migrations` gives the same findings as `check`'s, under `data`.
+- Exit codes: `0`, `1` (critical), `2` (not a folder, unreachable database, no Docker).
+- The last line: no source gives "Not a clearance", and only a full, clean run gives `ready: true`.
+
+## Not in version 0.1
+
+- **Anything on the network:** whether a found key is still live, a leaked-password check, DNS, HTTPS or CORS settings of the deployed site, and your hosted project's actual settings, backups and plan. Doctor reads files and one database.
+- **Hosted-project auth settings** that are not in `config.toml`: OTP expiry, rate limits, CAPTCHA, SMTP, refresh-token rotation, JWT expiry.
+- **Storage:** the policies on `storage.objects`, file-size and file-type limits of a bucket, and `[storage.buckets.*]` in `config.toml`.
+- **`--snapshot`:** a saved snapshot doesn't carry buckets. A `doctor --print-query` is a possible follow-up.
+- **Edge Functions' code** beyond the key checks, which already cover `supabase/functions` as server-side files; their `verify_jwt` settings; dependency vulnerabilities; and security-header checks.
+- **Git history:** doctor reads tracked files as they are now. A key that was committed and then deleted is invisible to it, which is why its fix always says to rotate.
+- **A suppressions file** to silence a finding on purpose. It waits for real false alarms to show what it needs; until then a false alarm is a bug in this document.
+- **Fixing anything.** Doctor reports. `svetra compile` writes, and the fixes it prints are for you or your agent.
