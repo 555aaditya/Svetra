@@ -1,10 +1,10 @@
-# `svetra infer`: draft a `svetra.yaml` from an existing database, version 0.1
+# `svetra infer`: draft a `svetra.yaml` from an existing database, version 0.2
 
 This document specifies `svetra infer`, which reads an existing Supabase (or plain PostgreSQL) database and writes a draft `svetra.yaml` for it. It's the step after [`svetra check`](check.md): `check` finds the leaks and leaves a list, and `infer` gives you a file a person can adopt, so the fixes become generated, tested rules. When the code and this document disagree, that's a bug in one of them.
 
-**Milestone 1 (this document) drafts the data model only:** entities, fields, constraints, unique constraints and indexes, plus `check`'s findings as comments. It writes no policies and no roles. Those are milestone 2 (see [Policies, later](#policies-later)).
+**Milestone 1 drafts the data model:** entities, fields, constraints, unique constraints and indexes, plus `check`'s findings as comments. **Milestone 2 adds policies,** starting with the owner column (see [Policies](#policies)); it writes no roles. Where this document says "milestone 2 (not built yet)", the code doesn't do it yet.
 
-**Done when:** `svetra infer --snapshot` on the sample app's snapshot writes a draft that loads and validates with no errors, keeps every field it can translate exactly, and lists every field, constraint or index it can't as an `UNTRANSLATED` comment with the original SQL.
+**Done when:** `svetra infer --snapshot` on the sample app's snapshot writes a draft that loads and validates with no errors, keeps every field it can translate exactly, and lists every field, constraint, index or policy it can't as an `UNTRANSLATED` comment with the original SQL. **For policies:** the draft is never wider than the database. Whatever it can't translate exactly is left out, and the draft says that it is narrower.
 
 ## Command
 
@@ -124,8 +124,8 @@ One file. It starts with a header comment, then the findings, then the YAML.
 
 ```yaml
 # Drafted by `svetra infer` from a database snapshot. Review before adopting.
-# Every entity is `private: true`: no policies are inferred yet, so nothing is exposed through
-# the API until you add policies and remove `private`. That differs from the live database.
+# Policies: 2 of 3 translated (see Policies in docs/infer.md). The draft is never wider than the
+# database; an entity is `private: true` only when none of its policies translated.
 # 14 entities from 14 tables. Skipped: 3 views, 6 functions.
 # 5 things left as UNTRANSLATED (search for UNTRANSLATED).
 #
@@ -154,7 +154,7 @@ entities:
 
 Exact rules:
 
-- **Every entity has `private: true`.** The draft has no policies, and `svetra validate` makes an exposed entity without a policy an error (`SVT001`). Private is the safe reading: nothing is exposed until you write a rule. This changes what an adopted draft does compared with the live database (the API stops reaching these tables), and the header says so.
+- **An entity is `private: true` exactly when none of its policies translated.** `svetra validate` makes an exposed entity without a policy an error (`SVT001`), and private is the safe reading: nothing is exposed until you write a rule. For such an entity the draft differs from the live database (the API stops reaching the table), and a comment on the entity says why. The header counts policies translated and not (`# Policies: N of M translated`).
 - **Entities are in table-name order,** fields in column order, so the output is deterministic and reviewable. No clocks, no hash order.
 - **Entity keys, in order:** finding comments, `private`, `fields`, `constraints`, `unique`, `indexes`, then the entity's `UNTRANSLATED` comments for checks, unique constraints, indexes and foreign keys. An untranslated column's comment sits in `fields` at its place; a default's or identity's note is at the end of that field's line.
 - **Comments:** `# UNTRANSLATED <what> <name>: <original SQL>` for anything left out, always with the original SQL on one line. `# lossy: ...` for a widened or changed translation. `# check: <severity>, <kind>: <message>` for a finding on that table, above `private`.
@@ -173,20 +173,106 @@ With nothing left out it says `0 things left as UNTRANSLATED`. The header counts
 
 ### What `validate` says about a draft
 
-A draft has no errors. `svetra validate` still reports `SVT004` (warning) on every entity, because nothing can write a table that has no policy, and `SVT009` (info), because there is no `auth` section; `SVT010` (info) appears for a reference with no index. All three go away as you add policies, `auth` and indexes.
+A draft has no errors. `svetra validate` still reports `SVT004` (warning) on every entity nothing can write (no translated insert or update policy), and `SVT009` (info), because there is no `auth` section; `SVT010` (info) appears for a reference with no index. All three go away as you add policies, `auth` and indexes.
 
-## Policies, later
+## Policies
 
-Milestone 1 writes no `policies:` and no `roles:`, because inferring them is the part where a wrong guess leaks or locks out data. The plan, so that the first milestone's layout doesn't get in its way:
+Policies are where a wrong guess leaks or locks out data, so the rule for this whole section is: **the draft is never wider than the database.** When a translation is exact, it's written. When it isn't, or when `infer` isn't sure, the policy stays an `UNTRANSLATED` comment, and the effect is that the draft lets fewer people in than the database does. Locking someone out is a bug you notice; letting someone in is a leak you don't.
 
-- **Owner-column policies.** A policy `using (auth.uid() = owner)` on a table with a `user` field `owner` becomes `when: "owner == auth.user"`, per action. Only conditions that translate exactly are written; anything else stays a `# UNTRANSLATED policy` comment with its SQL, as with constraints.
-- **Membership tables and roles.** A table with two references, one to a `user` and one to an entity, and policies that look it up, suggests a scoped role. Proposed as a comment first, never written silently.
-- **Differential testing.** Compile the draft, run its generated access tests against the original database, and report each person-and-row check where the draft and the live database disagree. That is how a person knows the draft means what the database does.
-- When policies arrive, `private: true` is dropped for entities the draft gives a policy.
+`infer` reads `policies` (`pg_policies`) and the `rls` flag and privileges in `tables`, all already in the snapshot. No new keys, so a snapshot that works for milestone 1 works for this.
 
-## Not in version 0.1
+### One database policy, one Svetra policy
 
-- Policies, roles, holes and `auth` settings.
+Each `pg_policies` row becomes **at most one** Svetra policy, with the same name when that name is snake_case and not already used (otherwise `<table>_<name>`, numbered if needed). `infer` does not merge policies that share a condition, and does not split one into several. The reasons: the database's own structure survives, so a person can compare the two files line by line; permissive and restrictive policies stay what they were; and merging is a guess about intent that gains nothing, because Svetra compiles each action to its own database policy anyway (docs/format.md, Policies). Policies are written in a top-level `policies:` section, in table-name order, then by database policy name.
+
+### Commands: `allow`, `when`, `check`
+
+| Database policy | Svetra | Notes |
+|---|---|---|
+| `FOR SELECT USING (c)` | `allow: [select], when: c'` | `with check` is always null |
+| `FOR INSERT WITH CHECK (c)` | `allow: [insert], when: c'` | `using` is always null. `when` is the check on the new row (docs/format.md) |
+| `FOR DELETE USING (c)` | `allow: [delete], when: c'` | |
+| `FOR UPDATE USING (u)` | `allow: [update], when: u'` | No `with check`: the database uses `u` for the new row too, and so does Svetra |
+| `FOR UPDATE USING (u) WITH CHECK (k)` | `allow: [update], when: u', check: k'` | The old row must pass `u`, the new row `k` (docs/update-check.md). `check` is left out when `k'` is `u'` |
+| `FOR ALL USING (u)` | `allow: [select, insert, update, delete], when: u'` | Also with `WITH CHECK (k)` when `k'` is `u'` |
+| `FOR ALL USING (u) WITH CHECK (k)` with different conditions | not translated | One Svetra policy can't say "insert on `k`, select and delete on `u`". Writing one policy per command is the person's call |
+
+`c'` is the condition translated as below. An update policy with no `using` (only `with check`) is not translated: how the database treats the old row there is subtle, so `infer` doesn't guess. A condition that doesn't translate makes the whole database policy untranslated; there is no half-translation inside one policy.
+
+**Roles become `as`.** `to authenticated` (what the Supabase dashboard writes) is `as: authenticated`, which is also Svetra's default, so it's written out for readability. `to anon` is `as: anon`. `to public` (the default when there is no `to`) and `to anon, authenticated` are `as: anyone`. Any other role (`service_role`, `postgres`, a custom role), alone or in a mix: not translated. `as: anon` still gets Svetra's own warning (`SVT007`) when signed-in people would get less.
+
+**Permissive and restrictive.** A `RESTRICTIVE` database policy becomes `restrictive: true`; a permissive one writes nothing (docs/update-check.md).
+
+**Privileges.** Row-level security is only one gate: the role also needs the table privilege. A translated policy lists an action only when the database grants that privilege (`tables[].anon` and `.authenticated`, table level) to every role the policy's `as` covers. An action the database withholds is dropped from `allow`, and a policy left with no action is not translated. This keeps the draft from allowing what a `revoke` blocked. (A database without the `anon` and `authenticated` roles reports every privilege as false, so on plain PostgreSQL nothing translates. Column-level grants aren't read: a column-level revoke narrows the database, so the draft can be wider there. Review them if you use them.)
+
+### Conditions
+
+`infer` reads a condition the way `pg_policies` prints it, and translates **only these shapes**, joined by `AND` and `OR` and nested in brackets:
+
+| Database | Svetra | Notes |
+|---|---|---|
+| `true` | `true` | Whoever the role is: with `to anon`, `to authenticated` or `to public`, the matching `as:` and `when: "true"` |
+| `col = auth.uid()`, `auth.uid() = col` | `col == auth.user` | `col` must be one of the entity's **`user` fields** (a `uuid` column with a foreign key to `auth.users (id)`). A plain `uuid` column, or a column that didn't translate, is not an owner |
+| `col = (select auth.uid())`, `(select auth.uid()) = col`, and the form the database prints, `col = ( SELECT auth.uid() AS uid)` | `col == auth.user` | The wrapped form Supabase recommends, for speed. Same meaning |
+| `(col)::text = (auth.uid())::text`, either side first | `col == auth.user` | A cast to `text` on **both** sides compares the same values as the uuids, so it is exact. A cast on one side only, or any other cast, is not translated |
+| `(auth.uid())::uuid = col` | `col == auth.user` | A cast to `uuid` of a uuid is a no-op, so it is dropped |
+| `a AND b`, `a OR b` | `a and b`, `a or b` | Only when each of `a` and `b` translates. Brackets are kept where they matter; null behaves as SQL in both |
+
+Everything else is **not translated**, with no attempt to be clever. That includes: a subquery (`exists (select ...)`, `col in (select ...)`, any `SELECT` that isn't `auth.uid()`), a membership table, `auth.jwt()` and its claims (`auth.jwt() ->> 'role'`, `app_metadata`), `auth.role()`, `current_user`, any function call (your own `is_admin()` helpers included), `NOT`, `IS NULL`, `<>`, comparisons with literals (`status = 'published'`), `col = auth.uid()` where `col` is not a `user` field, and `false`. Some of these have a Svetra equivalent a person could write by hand (`has_role`, a one-hop path); the draft doesn't guess which. `infer` doesn't read function bodies.
+
+### What the entity says
+
+Per table in `public` that became an entity:
+
+| Database | Entity in the draft |
+|---|---|
+| Row-level security **on**, at least one translated **permissive** policy | **No `private`.** The translated policies are in `policies:`. If some of the table's policies were not translated, a comment above `fields:` says: `# policies: 1 of 3 translated. The draft is NARROWER than the database: whatever an UNTRANSLATED policy below lets in, this draft keeps out, until you port it.` |
+| Row-level security **on**, no policy translated | `private: true`, with a comment saying none of the table's policies translated |
+| Row-level security **on**, no policies | `private: true`, as before. Row-level security on with no policy means nobody gets in through the API; private says the same |
+| Row-level security **off** | `private: true`, with a comment: `# row-level security is off here, so the database has no access rule (see the check finding). No policy is invented; add one deliberately.` Any policies the table has are listed as `UNTRANSLATED`, because they aren't enforced |
+
+An entity is `private: true` **only** when none of its policies translated.
+
+**A restrictive policy that doesn't translate removes every policy of its table.** Dropping a permissive policy only narrows access, but dropping a restrictive one **widens** it. If any restrictive policy on a table is not translated, none of the table's policies are written (the entity is `private: true`, and each policy is an `UNTRANSLATED` comment with the reason). The same applies when only restrictive policies translated: with no permissive one nobody gets in (`SVT001`), so they stay comments too.
+
+Untranslated policies are comments at the end of the entity, one per policy, with the original SQL rebuilt from the snapshot and the reason after `--`:
+
+```yaml
+    # UNTRANSLATED policy staff_read: CREATE POLICY staff_read ON public.orders AS PERMISSIVE FOR SELECT TO authenticated USING (is_staff()) -- a condition that isn't an owner check or `true`
+```
+
+### Example
+
+```yaml
+entities:
+  Orders:
+    # policies: 1 of 2 translated. The draft is NARROWER than the database: ...
+    fields:
+      customer: { type: user, required: true }
+      ...
+    # UNTRANSLATED policy staff_read: CREATE POLICY staff_read ON public.orders ... -- ...
+
+policies:
+  orders_own:
+    on: Orders
+    as: authenticated
+    allow: [select, update, delete]
+    when: "customer == auth.user"
+```
+
+### What this does not do
+
+- **Roles.** No `roles:`, no `has_role` and no scoped role is written. Membership tables and role helper functions stay `UNTRANSLATED`. A later milestone may propose them as comments (never write them silently).
+- **Holes, `auth` settings, column rules (`only`).** Not inferred. A database trigger that guards columns is not read.
+- **Views and functions,** apart from `check`'s findings.
+
+### Differential testing
+
+The check that a draft means what the database does is to compile it, run its generated access tests (docs/compiler.md) against the **original** database, and look at each person-and-row check where they disagree. For a table whose policies **all** translated, the original database must pass every check the draft's tests make; a failure is a translation bug. Where the draft is narrower on purpose (an untranslated policy), the original allows more than the draft and the tests may fail, which is the expected disagreement, so that table is not part of the check. This is a test in the project, not a user command.
+
+## Not in this version
+
+- Roles, holes and `auth` settings. Policies translate only for the shapes in [Policies](#policies).
 - Views, functions, triggers, sequences, comments on objects, extensions, grants and storage buckets.
 - Composite primary keys and foreign keys, domains, arrays, ranges, generated columns, and identity as a real auto-increment.
 - Singular entity names and renames (`was`).
