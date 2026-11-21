@@ -13,7 +13,7 @@ Svetra is a deterministic compiler for `svetra.yaml`, a small typed system graph
 
 ## Layout
 
-Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` → `check` → `report` → `main`.
+Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` → `check` → `report` → `inspect` → `infer` → `main`.
 
 | Path | Owns |
 |---|---|
@@ -29,6 +29,7 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 | `src/compile/` | `svetra compile`: names and quoting (`names.rs`), expressions to SQL (`expr.rs`), the SQL schema (`sql.rs`), TypeScript and Zod (`ts.rs`), access tests with their own rule evaluator (`access_tests.rs`), sign-in settings edited into `supabase/config.toml` (`config.rs`), plus the entry point with header and revision (`mod.rs`) |
 | `src/change.rs` | `svetra diff` and `plan`: compares two designs and classifies every change, with access compared through `svetra view`'s model (docs/change.md) |
 | `src/inspect.rs` | `svetra check`: the read-only catalog query and the findings on an existing database (docs/check.md) |
+| `src/infer.rs` | `svetra infer`: a catalog snapshot to a draft `svetra.yaml`: names, the type mapping, defaults, check constraints (docs/infer.md). Its query is `inspect::infer_query` |
 | `src/main.rs` | The CLI |
 | `schema/svetra.schema.json` | The JSON Schema for editors. Hand-written; `tests/schema.rs` fails if it drifts from the loader |
 | `tests/` | Integration tests. `tests/fixtures/` holds example `svetra.yaml` files (and real hole bodies in `tests/fixtures/holes/<fixture>/`), and `tests/golden/` holds their expected compiler output, compared byte for byte |
