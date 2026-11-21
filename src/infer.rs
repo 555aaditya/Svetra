@@ -225,6 +225,330 @@ pub fn map_type(column: &Value, enums: &[&Value]) -> Result<Mapped, String> {
     Ok(m)
 }
 
+/// What a column's default becomes (docs/infer.md, Modifiers).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Default {
+    /// `default: <value>`, already rendered as YAML.
+    Value(String),
+    /// `auto: now`.
+    Auto,
+    /// Svetra gives a uuid primary key `gen_random_uuid()` itself.
+    Implied,
+    /// Left as a comment with the original SQL.
+    Untranslated,
+}
+
+/// The part of a deparsed default after a string literal: nothing, or a `::type` cast.
+fn only_cast(rest: &str) -> bool {
+    let rest = rest.trim();
+    rest.is_empty()
+        || rest.strip_prefix("::").is_some_and(|t| {
+            !t.is_empty()
+                && t.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || " _.\"[]()".contains(c))
+        })
+}
+
+enum Lit {
+    Str(String),
+    Num(String),
+    Bool(bool),
+}
+
+fn literal(sql: &str) -> Option<Lit> {
+    let mut t = sql.trim();
+    while let Some(inner) = t.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
+        if inner.contains(['(', ')']) {
+            break;
+        }
+        t = inner.trim();
+    }
+    if let Some(body) = t.strip_prefix('\'') {
+        let mut out = String::new();
+        let mut chars = body.char_indices().peekable();
+        while let Some((i, c)) = chars.next() {
+            if c == '\'' {
+                if chars.peek().is_some_and(|(_, n)| *n == '\'') {
+                    out.push('\'');
+                    chars.next();
+                } else {
+                    return only_cast(&body[i + 1..]).then_some(Lit::Str(out));
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        return None;
+    }
+    match t.to_ascii_lowercase().as_str() {
+        "true" => return Some(Lit::Bool(true)),
+        "false" => return Some(Lit::Bool(false)),
+        _ => {}
+    }
+    is_number(t).then(|| Lit::Num(t.to_string()))
+}
+
+fn is_number(t: &str) -> bool {
+    let t = t.strip_prefix('-').unwrap_or(t);
+    let (int, frac) = t.split_once('.').unwrap_or((t, "0"));
+    !int.is_empty()
+        && int.chars().all(|c| c.is_ascii_digit())
+        && !frac.is_empty()
+        && frac.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Translate a column's deparsed default. `primary` is whether the column is the primary key.
+pub fn translate_default(sql: &str, kind: &Kind, primary: bool) -> Default {
+    let lower = sql.trim().to_ascii_lowercase();
+    match kind {
+        Kind::Uuid
+            if primary && matches!(lower.as_str(), "gen_random_uuid()" | "uuid_generate_v4()") =>
+        {
+            return Default::Implied;
+        }
+        Kind::Timestamp if matches!(lower.as_str(), "now()" | "current_timestamp") => {
+            return Default::Auto;
+        }
+        Kind::Date if matches!(lower.as_str(), "current_date" | "now()") => return Default::Auto,
+        _ => {}
+    }
+    let Some(lit) = literal(sql) else {
+        return Default::Untranslated;
+    };
+    let value = match (kind, lit) {
+        (Kind::Bool, Lit::Bool(b)) => b.to_string(),
+        (Kind::Int, Lit::Num(n)) if !n.contains('.') => n,
+        (Kind::Int, Lit::Str(n)) if is_number(&n) && !n.contains('.') => n,
+        (Kind::Float | Kind::Decimal, Lit::Num(n)) => n,
+        (Kind::Float | Kind::Decimal, Lit::Str(n)) if is_number(&n) => n,
+        (Kind::Text | Kind::Uuid | Kind::Date, Lit::Str(s)) => scalar(&s),
+        (Kind::Enum(values), Lit::Str(s)) if values.contains(&s) => scalar(&s),
+        _ => return Default::Untranslated,
+    };
+    Default::Value(value)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum Tok {
+    Id(String),
+    Str(String),
+    Num(String),
+    Sym(&'static str),
+}
+
+/// Split a deparsed SQL expression into tokens, or `None` on anything outside the small subset
+/// that has an equivalent in Svetra's expression language.
+fn lex(sql: &str) -> Option<Vec<Tok>> {
+    const SYMS: [&str; 17] = [
+        "::", "<>", "!=", "<=", ">=", "=", "<", ">", "+", "-", "*", "/", "(", ")", "[", "]", ",",
+    ];
+    let chars: Vec<char> = sql.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c.is_whitespace() {
+            i += 1;
+        } else if c == '\'' {
+            let mut s = String::new();
+            i += 1;
+            loop {
+                match chars.get(i)? {
+                    '\'' if chars.get(i + 1) == Some(&'\'') => {
+                        s.push('\'');
+                        i += 2;
+                    }
+                    '\'' => break,
+                    ch => {
+                        s.push(*ch);
+                        i += 1;
+                    }
+                }
+            }
+            i += 1;
+            out.push(Tok::Str(s));
+        } else if c == '"' {
+            let end = chars[i + 1..].iter().position(|&x| x == '"')? + i + 1;
+            out.push(Tok::Id(chars[i + 1..end].iter().collect()));
+            i = end + 1;
+        } else if c.is_ascii_digit() {
+            let start = i;
+            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
+                i += 1;
+            }
+            out.push(Tok::Num(chars[start..i].iter().collect()));
+        } else if c.is_ascii_alphabetic() || c == '_' {
+            let start = i;
+            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
+                i += 1;
+            }
+            out.push(Tok::Id(chars[start..i].iter().collect()));
+        } else {
+            let rest: String = chars[i..].iter().take(2).collect();
+            let sym = SYMS.iter().find(|s| rest.starts_with(**s))?;
+            i += sym.len();
+            out.push(Tok::Sym(sym));
+        }
+    }
+    Some(out)
+}
+
+/// Remove `::type` casts: Svetra's expressions have no casts, and the database's own deparsing
+/// adds them everywhere (`(0)::numeric`).
+fn drop_casts(toks: Vec<Tok>) -> Option<Vec<Tok>> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < toks.len() {
+        if toks[i] != Tok::Sym("::") {
+            out.push(toks[i].clone());
+            i += 1;
+            continue;
+        }
+        let Some(Tok::Id(ty)) = toks.get(i + 1) else {
+            return None;
+        };
+        i += 2;
+        if matches!(
+            ty.as_str(),
+            "double" | "character" | "timestamp" | "time" | "bit"
+        ) {
+            while matches!(toks.get(i), Some(Tok::Id(w))
+                if matches!(w.as_str(), "precision" | "varying" | "with" | "without" | "time" | "zone"))
+            {
+                i += 1;
+            }
+        }
+        if toks.get(i) == Some(&Tok::Sym("(")) {
+            while toks.get(i)? != &Tok::Sym(")") {
+                i += 1;
+            }
+            i += 1;
+        }
+        while toks.get(i) == Some(&Tok::Sym("[")) && toks.get(i + 1) == Some(&Tok::Sym("]")) {
+            i += 2;
+        }
+    }
+    Some(out)
+}
+
+/// Words that mean something in SQL that Svetra's language can't say.
+const NOT_TRANSLATABLE: [&str; 13] = [
+    "like", "ilike", "similar", "between", "in", "case", "when", "then", "else", "end", "distinct",
+    "all", "any",
+];
+
+fn is_id(t: Option<&Tok>, word: &str) -> bool {
+    matches!(t, Some(Tok::Id(w)) if w.eq_ignore_ascii_case(word))
+}
+
+/// Svetra's text for a deparsed check expression, or `None` when it has no exact equivalent.
+/// Only the fixed steps of docs/infer.md (Check constraints); the caller checks the fields.
+fn rewrite(toks: &[Tok]) -> Option<String> {
+    let mut out = String::new();
+    // A space before a word or an operator, but not after an opening bracket.
+    fn word(out: &mut String, s: &str) {
+        if !out.is_empty() && !out.ends_with(['(', '[']) {
+            out.push(' ');
+        }
+        out.push_str(s);
+    }
+    let mut i = 0;
+    while i < toks.len() {
+        match &toks[i] {
+            Tok::Str(s) => {
+                if s.contains('\'') {
+                    return None;
+                }
+                word(&mut out, &format!("'{s}'"));
+            }
+            Tok::Num(n) => word(&mut out, n),
+            Tok::Id(id) => {
+                let w = id.to_ascii_lowercase();
+                match w.as_str() {
+                    "and" | "or" | "not" | "true" | "false" | "null" => word(&mut out, &w),
+                    "is" => {
+                        if is_id(toks.get(i + 1), "not") && is_id(toks.get(i + 2), "null") {
+                            word(&mut out, "!= null");
+                            i += 2;
+                        } else if is_id(toks.get(i + 1), "null") {
+                            word(&mut out, "== null");
+                            i += 1;
+                        } else {
+                            return None;
+                        }
+                    }
+                    w if NOT_TRANSLATABLE.contains(&w) => return None,
+                    _ => {
+                        if toks.get(i + 1) == Some(&Tok::Sym("(")) {
+                            return None; // a function call
+                        }
+                        word(&mut out, id);
+                    }
+                }
+            }
+            Tok::Sym("=") => {
+                // `x = ANY (ARRAY[...])` is `x in [...]`.
+                let any = is_id(toks.get(i + 1), "any")
+                    && toks.get(i + 2) == Some(&Tok::Sym("("))
+                    && is_id(toks.get(i + 3), "array")
+                    && toks.get(i + 4) == Some(&Tok::Sym("["));
+                if any {
+                    let close = toks[i + 5..].iter().position(|t| *t == Tok::Sym("]"))? + i + 5;
+                    if toks.get(close + 1) != Some(&Tok::Sym(")")) {
+                        return None;
+                    }
+                    let mut items = Vec::new();
+                    for t in toks[i + 5..close].iter().filter(|t| **t != Tok::Sym(",")) {
+                        match t {
+                            Tok::Str(s) if !s.contains('\'') => items.push(format!("'{s}'")),
+                            Tok::Num(n) => items.push(n.clone()),
+                            _ => return None,
+                        }
+                    }
+                    word(&mut out, &format!("in [{}]", items.join(", ")));
+                    i = close + 1;
+                } else {
+                    word(&mut out, "==");
+                }
+            }
+            Tok::Sym("<>") => word(&mut out, "!="),
+            Tok::Sym(s @ (")" | "]" | ",")) => out.push_str(s),
+            Tok::Sym(s) => word(&mut out, s),
+        }
+        i += 1;
+    }
+    Some(out)
+}
+
+fn reads_only(e: &crate::expr::Expr, known: &[String]) -> bool {
+    use crate::expr::Expr;
+    match e {
+        Expr::Num(_) | Expr::Str(_) | Expr::Bool(_) | Expr::Null => true,
+        Expr::Path(p) => p.len() == 1 && known.contains(&p[0]),
+        Expr::Neg(x) | Expr::Not(x) => reads_only(x, known),
+        Expr::Bin(_, a, b) => reads_only(a, known) && reads_only(b, known),
+        Expr::In(x, items) => reads_only(x, known) && items.iter().all(|i| reads_only(i, known)),
+        Expr::Call(..) => false,
+    }
+}
+
+/// A check constraint's definition (`CHECK ((qty > 0))`) as a Svetra expression, when it
+/// translates exactly and every column it reads is one of `fields`.
+pub fn translate_check(definition: &str, fields: &[String]) -> Option<String> {
+    let mut d = definition.trim();
+    let head = d.get(..5).filter(|p| p.eq_ignore_ascii_case("check"))?;
+    d = d[head.len()..].trim();
+    while let Some(x) = [" NOT VALID", " NO INHERIT"]
+        .iter()
+        .find_map(|suffix| d.strip_suffix(suffix))
+    {
+        d = x.trim();
+    }
+    let text = rewrite(&drop_casts(lex(d)?)?)?;
+    let parsed = crate::expr::parse(&text).ok()?;
+    reads_only(&parsed, fields).then_some(text)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
