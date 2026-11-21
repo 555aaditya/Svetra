@@ -342,3 +342,15 @@ Words follow [`understand.md`](understand.md): no "hole", "trigger" or "cron". T
 - **A trigger is inside the write.** A body that raises stops the person's change. Only someone who can already write that row can cause it, and it is the documented behaviour.
 - **Loops end in an error,** at validate time (`SVT038`) or at run time (the depth limit).
 
+## Not in this version
+
+- **Provider-specific signature formats,** such as Stripe's `t=…,v1=…` header, and with them **timestamp tolerance against replay**. `dedupe` covers duplicate deliveries, not old ones.
+- **Outgoing calls** from a hole: sending an email, calling an API. A trigger that calls out belongs behind a queue, which is its own design (an outbox table, or a `job` kind). Not designed here.
+- **Asynchronous triggers.** Triggers run inside the write and roll it back on error.
+- **`before` triggers,** statement triggers and `truncate`.
+- **Schedules** per person, in a time zone other than UTC, or in `N seconds`.
+- **Retries and dead letters** beyond pg_cron's own run log.
+- **Run history** in `explain` or `view`. They describe the design, not what happened.
+- **Hand-written Edge Function code.** The only Edge Functions Svetra knows are the generated ones.
+- **`svetra check` for automations:** finding `cron.job` entries or triggers nobody declared on an existing database.
+
