@@ -231,3 +231,14 @@ Always a warning, never critical: public buckets are normal, and the content dec
 
 Without a database source, this is listed under "Not checked". Doctor does not read `[storage.buckets.*]` tables in `config.toml`: UNVERIFIED that the CLI has such tables, and they describe local buckets only.
 
+## Generated files
+
+If `DIR/svetra.yaml` exists, doctor runs what `svetra compile --check` runs, and reports what it finds. Without a `svetra.yaml` this check is skipped without comment: most projects don't have one.
+
+| Kind | Severity | When | Message and fix |
+|---|---|---|---|
+| `stale_generated` | warning | `compile --check` finds a generated file (`supabase/schemas/svetra.sql`, `src/svetra.gen.ts`, `supabase/tests/svetra.test.sql`) out of date, hand-edited or missing, or an owned key of `config.toml` that differs | "supabase/schemas/svetra.sql no longer matches svetra.yaml (it was hand-edited, or the design changed). The rules in your database may not be the rules you designed. fix: run `svetra compile`." One finding per file, with the message `compile --check` gives |
+| `design_invalid` | warning | `svetra.yaml` has validation errors, so `compile --check` can't run | "svetra.yaml has 3 errors, so doctor couldn't check that your generated files are current. fix: run `svetra validate` and fix them." |
+
+Doctor doesn't validate the design: `svetra validate` does, and doctor only says it couldn't check. Both are warnings, not critical, because they say the design and the files disagree, not that data is open. The data itself is what `check` reads, so the generated access tests and a stale policy file never hide an open table from doctor.
+
