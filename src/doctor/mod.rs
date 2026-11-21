@@ -206,6 +206,23 @@ fn yes(b: bool) -> &'static str {
     if b { "yes" } else { "no" }
 }
 
+/// Backups can't be read from the folder: they live in the hosted project. A reminder, not a
+/// finding, printed when the project looks hosted (docs/doctor.md, Backups and recovery).
+const REMINDERS: [(&str, &str); 3] = [
+    (
+        "backups",
+        "Backups: open Supabase, Project Settings, Database, Backups. Check that backups are on, how many days they are kept, and whether point-in-time recovery is enabled. Doctor can't see this.",
+    ),
+    (
+        "restore",
+        "Restore: a backup you have never restored is a hope. Restore one into a new project once.",
+    ),
+    (
+        "own_copy",
+        "Your own copy: a periodic `pg_dump`, kept somewhere that isn't your Supabase account, covers the case where the account itself is lost.",
+    ),
+];
+
 /// Reads the project folder `dir` and reports. Errors only when `dir` isn't a folder.
 pub fn run(dir: &Path) -> Result<Report, String> {
     if !dir.is_dir() {
@@ -242,12 +259,22 @@ pub fn run(dir: &Path) -> Result<Report, String> {
         (a.area, a.severity, &a.file, a.line, a.kind)
             .cmp(&(b.area, b.severity, &b.file, b.line, b.kind))
     });
+    if dir.join("supabase").is_dir() {
+        report.reminders = REMINDERS
+            .iter()
+            .map(|(id, m)| (*id, m.to_string()))
+            .collect();
+    }
     if git.is_none() {
         report.not_checked.push((
             "Git",
             "this folder isn't a git repository, so doctor can't tell which files are committed and treats every secret as if its file were".to_string(),
         ));
     }
+    report.not_checked.push((
+        "Auth settings",
+        "this version of doctor doesn't read supabase/config.toml's sign-in settings".to_string(),
+    ));
     report.not_checked.push((
         "Database",
         "no database was read: data exposure and storage buckets are not checked".to_string(),
