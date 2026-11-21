@@ -79,6 +79,21 @@ narrower: staff at a location can no longer change bookings (was: some).
 - A cell the evaluator can't decide is reported as "can't tell", never as unchanged.
 - Hole callers are compared the same way.
 
+#### Column rules (`only`)
+
+`only` (docs/column-rules.md) limits which fields an update may change. The view's cells say who may update a row, not which fields, so `only` is compared on its own, for each policy that exists in both designs on the same entity. Each change is one `wider_access` or `narrower_access` line naming the rule and the fields, and `plan` treats it like any other access change:
+
+| Change to a permissive policy | Access |
+|---|---|
+| gains `only` | narrower: fewer fields can change |
+| loses `only` | **wider**: every field can change again; needs `--accept wider_access` |
+| a field is added to `only` | **wider**: that field can change |
+| a field is removed from `only` | narrower |
+
+A restrictive policy follows the same table: its `only` locks every field outside it, so a shorter list, or gaining one, is narrower, and a longer list, or losing it, is wider.
+
+Fields are matched through `was`, so renaming a field that is in an `only` list is not a change to the list.
+
 ## Renames
 
 A rename must be declared, because two designs alone can't tell "renamed" from "removed one, added another":
