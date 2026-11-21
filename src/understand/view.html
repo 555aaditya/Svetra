@@ -178,6 +178,11 @@ function explainCell(c) {
     for (const s of c.because) ul.append(el("li", {}, s));
     panel.append(el("div", {}, "Why:"), ul);
   }
+  if (c.only) {
+    const ul = el("ul");
+    for (const o of c.only) ul.append(el("li", {}, o.sentence, el("span", { class: "muted" }, " (" + o.rule + ")")));
+    panel.append(el("div", {}, "Which fields a change can touch:"), ul);
+  }
   if (c.access === "none" && c.rules.length) {
     const ul = el("ul");
     for (const s of c.rules) ul.append(el("li", {}, s));
