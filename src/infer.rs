@@ -765,8 +765,9 @@ impl Cursor<'_> {
         match (a, b) {
             (Side::Role, Side::Lit(r)) | (Side::Lit(r), Side::Role) => {
                 let text = |c: &[String]| c.iter().all(|x| x == "text");
-                ((r == "anon" || r == "authenticated") && text(&ca) && text(&cb))
-                    .then_some(Cond::Role(r))
+                // Only `authenticated`: `auth.role()` is null for a request with no JWT, which
+                // still runs as `anon`, so `as: anon` would let in a request the database refuses.
+                (r == "authenticated" && text(&ca) && text(&cb)).then_some(Cond::Role(r))
             }
             (Side::Uid, Side::Col(c)) | (Side::Col(c), Side::Uid) => {
                 let plain = ca.is_empty() || ca == ["text"];
@@ -881,10 +882,11 @@ fn why_not(toks: &[Tok], cursor_why: Option<String>) -> String {
                         Tok::Str(x) => Some(x.clone()),
                         _ => None,
                     });
-                    if let Some(x) = lit.filter(|x| x != "anon" && x != "authenticated") {
-                        return format!(
-                            "auth.role() is compared with '{x}', not 'anon' or 'authenticated'"
-                        );
+                    if lit.as_deref() == Some("anon") {
+                        return "auth.role() = 'anon' is null, not true, for a request with no JWT, so as: anon would be wider".into();
+                    }
+                    if let Some(x) = lit.filter(|x| x != "authenticated") {
+                        return format!("auth.role() is compared with '{x}', not 'authenticated'");
                     }
                 }
                 Some(f) => return format!("calls auth.{f}(), which infer doesn't translate"),
@@ -2400,7 +2402,7 @@ mod policy_tests {
             ("(owner IN ( SELECT user_id FROM team))", "a subquery"),
             (
                 "(auth.role() = 'service_role'::text)",
-                "auth.role() is compared with 'service_role', not 'anon' or 'authenticated'",
+                "auth.role() is compared with 'service_role', not 'authenticated'",
             ),
             ("(current_user = 'admin')", "reads the database user"),
             (
@@ -2476,19 +2478,21 @@ mod policy_tests {
                 "{sql}"
             );
         }
-        let t = read(json!(["anon"]), "(auth.role() = 'anon'::text)").unwrap();
-        assert_eq!((t.role, t.when.as_str()), ("anon", "true"));
         // `to public` with a role check says who it was for: the other role was never let in.
         let t = read(json!(["public"]), "(auth.role() = 'authenticated'::text)").unwrap();
         assert_eq!((t.role, t.when.as_str()), ("authenticated", "true"));
-        let t = read(json!(["public"]), "(auth.role() = 'anon'::text)").unwrap();
-        assert_eq!(t.role, "anon");
-        let t = read(
-            json!(["anon", "authenticated"]),
-            "((auth.role() = 'anon'::text) OR (auth.role() = 'authenticated'::text))",
-        )
-        .unwrap();
-        assert_eq!((t.role, t.when.as_str()), ("anyone", "true"));
+        // `'anon'` is never translated: a request with no JWT runs as anon with a null
+        // `auth.role()`, so `as: anon` would let in a request the database refuses.
+        for (roles, sql) in [
+            (json!(["anon"]), "(auth.role() = 'anon'::text)"),
+            (json!(["public"]), "(auth.role() = 'anon'::text)"),
+            (
+                json!(["anon", "authenticated"]),
+                "((auth.role() = 'anon'::text) OR (auth.role() = 'authenticated'::text))",
+            ),
+        ] {
+            assert!(read(roles, sql).is_err(), "{sql}");
+        }
     }
 
     #[test]
@@ -2513,12 +2517,14 @@ mod policy_tests {
             (t.role, t.when.as_str()),
             ("authenticated", "owner == auth.user")
         );
-        let t = read(
-            json!(["authenticated"]),
-            "((auth.role() = 'anon'::text) OR (owner = auth.uid()))",
-        )
-        .unwrap();
-        assert_eq!(t.when, "owner == auth.user");
+        // Any mention of `auth.role() = 'anon'` is left untranslated, even where it is false.
+        assert!(
+            read(
+                json!(["authenticated"]),
+                "((auth.role() = 'anon'::text) OR (owner = auth.uid()))",
+            )
+            .is_err()
+        );
         let t = read(
             json!(["authenticated"]),
             "((auth.role() = 'authenticated'::text) OR (owner = auth.uid()))",

@@ -241,23 +241,23 @@ Each `pg_policies` row becomes **at most one** Svetra policy, with the same name
 | `col = (select auth.uid())`, `(select auth.uid()) = col`, and the form the database prints, `col = ( SELECT auth.uid() AS uid)` | `col == auth.user` | The wrapped form Supabase recommends, for speed. Same meaning |
 | `(col)::text = (auth.uid())::text`, either side first | `col == auth.user` | A cast to `text` on **both** sides compares the same values as the uuids, so it is exact. A cast on one side only, or any other cast, is not translated |
 | `(auth.uid())::uuid = col` | `col == auth.user` | A cast to `uuid` of a uuid is a no-op, so it is dropped |
-| `auth.role() = 'authenticated'` or `'anon'`; either side first; `(select auth.role())`; the `::text` the database prints | the policy's `as`, and the rest of the condition | See [`auth.role()`](#authrole) below |
+| `auth.role() = 'authenticated'`; either side first; `(select auth.role())`; the `::text` the database prints | the policy's `as`, and the rest of the condition | See [`auth.role()`](#authrole) below |
 | `a AND b`, `a OR b` | `a and b`, `a or b` | Only when each of `a` and `b` translates. Brackets are kept where they matter; null behaves as SQL in both |
 
 Everything else is **not translated**, with no attempt to be clever. That includes: a subquery (`exists (select ...)`, `col in (select ...)`, any `SELECT` that isn't `auth.uid()` or `auth.role()`), a membership table, `auth.jwt()` and its claims (`auth.jwt() ->> 'role'`, `app_metadata`), `auth.role()` compared with anything but `'anon'` or `'authenticated'`, `current_user`, any function call (your own `is_admin()` helpers included), `NOT`, `IS NULL`, `<>`, comparisons with literals (`status = 'published'`), `col = auth.uid()` where `col` is not a `user` field, and `false`. Some of these have a Svetra equivalent a person could write by hand (`has_role`, a one-hop path); the draft doesn't guess which. `infer` doesn't read function bodies.
 
 #### `auth.role()`
 
-`auth.role()` is the role the request runs as, `anon` or `authenticated`, which is also what the policy's `to` clause selects. So `auth.role() = 'authenticated'` is true exactly for the role `authenticated`, and it is said with `as`, not with a condition:
+`auth.role()` is the role the request runs as, which is also what the policy's `to` clause selects. `auth.role() = 'authenticated'` is true exactly for the role `authenticated`, and it is said with `as`, not with a condition. `auth.role() = 'anon'` is **not translated**, because it is not true for every request that runs as `anon` (see the end of this section):
 
 - For each role the policy's `to` covers (`public`, or no `to`, covers `anon` and `authenticated`), `infer` replaces every `auth.role() = 'x'` by `true` or `false` for that role and simplifies (`false and p` is `false`, `true and p` is `p`, `false or p` is `p`, `true or p` is `true`).
-- A role for which the whole condition is `false` is dropped from the policy: the database never let that role in. The roles left must give the **same** condition, and become `as` (`authenticated`, `anon`, or `anyone` when both are left). If they give different conditions, or none is left, the policy is not translated.
+- A role for which the whole condition is `false` is dropped from the policy: the database never let that role in. The roles left must give the **same** condition, and become `as` (`authenticated`, or `anyone` when both roles are left, which `to anon` and `to public` policies without a role check still give). If they give different conditions, or none is left, the policy is not translated.
 - So `to authenticated using (auth.role() = 'authenticated')` is `as: authenticated`, `when: "true"`; `using (auth.role() = 'authenticated' and owner = auth.uid())` is `when: "owner == auth.user"`; `to public using (auth.role() = 'authenticated')` is `as: authenticated` (anonymous people were never let in); `to anon using (auth.role() = 'authenticated')` never lets anyone in and is not translated.
-- `auth.role() = 'service_role'` (or any other literal), `<>`, `in (...)`, and a cast other than `text` on both sides are not translated.
+- `auth.role() = 'anon'`, `auth.role() = 'service_role'` (or any other literal), `<>`, `in (...)`, and a cast other than `text` on both sides are not translated.
 
 The result is never wider: a dropped role was already refused by the database, and a kept role gets exactly the rest of the condition.
 
-One caveat, about `anon`. A request that carries no JWT at all runs as the role `anon`, but `auth.role()` is then null, not `'anon'`, so `auth.role() = 'anon'` is not true for it. `infer` reads `auth.role()` as the role, so it says `as: anon` and lets that request in. This only matters for a request that skips Supabase's API (which always sends the `anon` key as a JWT whose role is `anon`), for example a direct database connection as `anon`. Review a policy that names `anon` this way. `authenticated` has no such gap, since a request can only run as it with a JWT.
+Why `anon` is left out. A request that carries no JWT at all runs as the role `anon`, but `auth.role()` is then null, not `'anon'`, so `auth.role() = 'anon'` is not true for it. Writing `as: anon` would let that request in, and the draft would be wider than the database. The request only exists when it skips Supabase's API (which always sends the `anon` key as a JWT whose role is `anon`), for example a direct database connection as `anon`, but a draft that is wider for any request breaks the rule, so a policy that tests `auth.role() = 'anon'` stays an `UNTRANSLATED` comment with that reason. `authenticated` has no such gap, since a request can only run as it with a JWT.
 
 ### Why a policy didn't translate
 
@@ -271,7 +271,8 @@ The reason after `--` on an `UNTRANSLATED policy` comment names the first thing 
 | a function call | `` calls the function is_admin(); infer doesn't read function bodies `` |
 | `auth.jwt()` | `reads a JWT claim (auth.jwt())` |
 | a subquery | `a subquery` |
-| `auth.role()` with another value | `` auth.role() is compared with 'service_role', not 'anon' or 'authenticated' `` |
+| `auth.role() = 'anon'` | `` auth.role() = 'anon' is null, not true, for a request with no JWT, so as: anon would be wider `` |
+| `auth.role()` with another value | `` auth.role() is compared with 'service_role', not 'authenticated' `` |
 | `current_user`, `session_user` | `reads the database user` |
 | `not`, `is null`, `<>`, `<`, `>`, a literal comparison, `false` | `uses not` (and so on), which infer doesn't translate |
 | a role in `to` other than `anon`, `authenticated`, `public` | `roles service_role` |

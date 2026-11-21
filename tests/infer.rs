@@ -563,9 +563,7 @@ fn auth_role_reads_say_who_they_are_for() {
     });
     assert!(!policies.iter().any(|(n, _)| n == "reviews_read"));
     assert!(
-        yaml.contains(
-            "-- auth.role() is compared with 'service_role', not 'anon' or 'authenticated'"
-        ),
+        yaml.contains("-- auth.role() is compared with 'service_role', not 'authenticated'"),
         "{yaml}"
     );
 }
