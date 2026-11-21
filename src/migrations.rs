@@ -117,6 +117,10 @@ impl Drop for Container {
 
 impl Container {
     fn psql(&self, extra: &[&str], input: &str) -> std::io::Result<Output> {
+        self.psql_as("postgres", extra, input)
+    }
+
+    fn psql_as(&self, user: &str, extra: &[&str], input: &str) -> std::io::Result<Output> {
         let mut args = strings(&[
             "exec",
             "-i",
@@ -125,7 +129,7 @@ impl Container {
             &self.0,
             "psql",
             "-U",
-            "postgres",
+            user,
             "-d",
             "postgres",
             "-X",
@@ -324,8 +328,9 @@ fn supabase_container() -> Result<Container, Fail> {
         )));
     }
     let container = start(SUPABASE_IMAGE, "2g")?;
+    // The image's `auth` schema belongs to its own admin role, not to `postgres`.
     let out = container
-        .psql(&["-v", "ON_ERROR_STOP=1"], JWT_TOP_UP)
+        .psql_as("supabase_admin", &["-v", "ON_ERROR_STOP=1"], JWT_TOP_UP)
         .map_err(|e| Fail(format!("lost the throwaway database: {e}")))?;
     if !out.status.success() {
         return Err(Fail(format!(

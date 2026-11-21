@@ -27,6 +27,10 @@ Usage:
                                     fields, constraints, indexes. Whatever it can't translate
                                     stays as an UNTRANSLATED comment; check's findings go in
                                     comments too. --print-query prints the read-only query
+  svetra infer --check-draft FILE (--migrations [DIR] | --db URL | --local) [--schema public,...]
+                                    Run the draft's access tests against a throwaway copy of
+                                    the original database (Docker) and list where they
+                                    disagree. Never touches the original
   svetra view [FILE] [--out PATH] [--no-open] [--json]
                                     Write one page showing who can see and change what
                                     (default .svetra/view.html) and open it; --json prints
@@ -368,6 +372,9 @@ fn page(args: &[String]) -> ExitCode {
 /// snapshot, `check` to find the leaks in it and `infer` to draft a `svetra.yaml` from it.
 fn inspect(command: &str, args: &[String]) -> ExitCode {
     let infer = command == "infer";
+    if infer && args.iter().any(|a| a == "--check-draft") {
+        return check_draft(args);
+    }
     let (mut db, mut snapshot, mut json, mut print) = (None, None, false, false);
     let (mut migrations, mut scratch, mut strict): (Option<String>, Option<String>, bool) =
         (None, None, false);
@@ -456,6 +463,97 @@ fn inspect(command: &str, args: &[String]) -> ExitCode {
         print!("{}", report.human(&schemas));
     }
     ExitCode::from(report.exit_code(strict))
+}
+
+/// `svetra infer --check-draft FILE` (docs/infer.md, Differential testing).
+fn check_draft(args: &[String]) -> ExitCode {
+    let (mut file, mut migrations, mut db) = (None, None, None);
+    let mut schemas = vec!["public".to_string()];
+    let mut it = args.iter().peekable();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--local" => {
+                db = Some("postgresql://postgres:postgres@127.0.0.1:54322/postgres".to_string())
+            }
+            "--migrations" => {
+                migrations = Some(match it.peek() {
+                    Some(v) if !v.starts_with("--") => it.next().cloned().unwrap_or_default(),
+                    _ => "supabase/migrations".to_string(),
+                })
+            }
+            "--check-draft" | "--db" | "--schema" => {
+                let Some(v) = it.next() else {
+                    return usage(&format!("{a} needs a value"));
+                };
+                match a.as_str() {
+                    "--check-draft" => file = Some(v.clone()),
+                    "--db" => db = Some(v.clone()),
+                    _ => {
+                        schemas = v
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect()
+                    }
+                }
+            }
+            other => {
+                return usage(&format!(
+                    "unknown argument '{other}' for infer --check-draft"
+                ));
+            }
+        }
+    }
+    let Some(file) = file else {
+        return usage("--check-draft needs a draft file");
+    };
+    if migrations.is_some() == db.is_some() {
+        return usage("--check-draft needs exactly one of --migrations [DIR], --db URL or --local");
+    }
+    let yaml = match read(&file) {
+        Ok(t) => t,
+        Err(e) => return usage(&e),
+    };
+    let (analysis, entities) = match svetra::verify::prepare(&yaml) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("svetra: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let (copy, source) = match (&migrations, &db) {
+        (Some(dir), _) => (
+            svetra::migrations::Copy::from_migrations(std::path::Path::new(dir)),
+            format!("built from {dir}"),
+        ),
+        (_, Some(url)) => (
+            svetra::verify::dump(url, &schemas)
+                .and_then(|sql| svetra::migrations::Copy::from_dump(&sql)),
+            format!("schema of {}", svetra::inspect::redact(url)),
+        ),
+        _ => return ExitCode::from(2),
+    };
+    let copy = match copy {
+        Ok(c) => c,
+        Err(svetra::migrations::Fail(m)) => {
+            eprintln!("svetra: {m}");
+            return ExitCode::from(2);
+        }
+    };
+    let ran = copy
+        .run_tests(&analysis.text)
+        .map_err(|svetra::migrations::Fail(m)| m)
+        .and_then(|out| svetra::verify::judge_run(&analysis, &entities, &yaml, &out));
+    match ran {
+        Ok(report) => {
+            print!("{}", report.human(&file, &source, &copy.notes));
+            ExitCode::from(u8::from(report.disagreements() > 0))
+        }
+        Err(m) => {
+            eprintln!("svetra: {m}");
+            ExitCode::from(2)
+        }
+    }
 }
 
 /// `svetra infer` (docs/infer.md): read the snapshot with the infer query, then write the draft.
