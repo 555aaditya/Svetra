@@ -468,12 +468,20 @@ fn reordering_only_or_renaming_a_listed_field_is_not_a_column_change() {
 #[test]
 fn turning_audit_on_or_off_is_listed_and_safe_for_data() {
     let on = BASE.replace("  Customer:\n", "  Customer:\n    audit: true\n");
-    assert!(has(&kinds(&on), "add_audit", Data::Safe), "{:?}", kinds(&on));
+    assert!(
+        has(&kinds(&on), "add_audit", Data::Safe),
+        "{:?}",
+        kinds(&on)
+    );
     // The other way round: from an audited design to the plain one.
     let (a, _) = load(&on);
     let (b, _) = load(BASE);
     let p = plan(&a, &on, &b, BASE);
-    let c = p.changes.iter().find(|c| c.kind == "remove_audit").expect("listed");
+    let c = p
+        .changes
+        .iter()
+        .find(|c| c.kind == "remove_audit")
+        .expect("listed");
     assert_eq!((c.data, c.path.as_str()), (Data::Safe, "entities.Customer"));
     assert!(c.hint.as_deref().unwrap_or("").contains("stay"));
 }
