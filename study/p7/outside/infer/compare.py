@@ -92,20 +92,21 @@ for line in draft_text.splitlines():
     m = re.match(r"\s*# UNTRANSLATED policy (.*?): CREATE POLICY .* ON public\.(\w+) .* -- (.*)$", line)
     if m:
         unt.setdefault((m.group(2), m.group(1)), []).append(m.group(3))
-print(f"UNTRANSLATED policy comments: {sum(len(v) for v in unt.values())}")
+print(f"UNTRANSLATED policy comments (the rest are translated): {sum(len(v) for v in unt.values())}")
 covered = 0
 for p in pols:
     key = (p["table"], p["cmd"], p["name"])
     covered += key in HAND_POLICY
-    why = unt.get((p["table"], p["name"]), ["MISSING"]).pop(0)
+    left = unt.get((p["table"], p["name"]))
+    state = f"UNTRANSLATED ({left.pop(0)})" if left else "translated"
     print(f"   {p['table']:11} {p['cmd']:6} {p['name']:34} "
-          f"hand: {HAND_POLICY.get(key, '(none)'):22} draft: UNTRANSLATED ({why})")
+          f"hand: {HAND_POLICY.get(key, '(none)'):22} draft: {state}")
 print(f"database policies with a hand-spec policy: {covered} of {len(pols)}")
 
 print("\n== never wider than the database ==")
 policies = (draft.get("policies") or {}).values()
 bad = [n for n, e in d_ents.items()
-       if not e.get("private") and not any(p["on"] == n for p in policies)]
+       if not e.get("private") and not any(p.get("on", p.get(True)) == n for p in policies)]
 print("entities exposed without a policy:", bad or "none")
 print("entities private:", sum(1 for e in d_ents.values() if e.get("private")), "of", len(d_ents))
 sys.exit(1 if bad else 0)
