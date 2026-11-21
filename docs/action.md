@@ -65,7 +65,7 @@ jobs:
 ## Comment
 
 ```
-### svetra plan: 3 changes to Bookings (from origin/develop)
+### svetra plan: 3 changes to Bookings (from origin/develop:svetra.yaml)
 
 | | Change |
 |---|---|
