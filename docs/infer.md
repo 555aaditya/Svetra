@@ -293,7 +293,7 @@ An entity is `private: true` **only** when none of its policies translated.
 Untranslated policies are comments at the end of the entity, one per policy, with the original SQL rebuilt from the snapshot and the reason after `--`:
 
 ```yaml
-    # UNTRANSLATED policy staff_read: CREATE POLICY staff_read ON public.orders AS PERMISSIVE FOR SELECT TO authenticated USING (is_staff()) -- a condition that isn't an owner check or `true`
+    # UNTRANSLATED policy staff_read: CREATE POLICY staff_read ON public.orders AS PERMISSIVE FOR SELECT TO authenticated USING (is_staff()) -- calls the function is_staff(); infer doesn't read function bodies
 ```
 
 ### Example
