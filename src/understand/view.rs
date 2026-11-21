@@ -205,7 +205,14 @@ pub fn model(doc: &Document, src: &str) -> Value {
                     })
                 })
                 .collect();
-            json!({ "name": h.name, "lines": parts::hole(doc, h), "callers": callers })
+            let mut v = json!({ "name": h.name, "lines": parts::hole(doc, h), "callers": callers });
+            // Nobody calls a scheduled hole, so it has no callers to evaluate.
+            if let Some(starts) = parts::starts(h) {
+                v["kind"] = json!("schedule");
+                v["starts"] = json!(starts);
+                v["callers"] = json!([]);
+            }
+            v
         })
         .collect();
     json!({
