@@ -314,3 +314,22 @@ The generated pgTAP tests already prove, for a `function` hole, its table privil
 
 Each kind also gets deliberate breakages in `tests/pg/breakages/`, like the existing ones, each failing exactly the expected checks: execute on a body function granted to `authenticated`, a job's schedule edited, a trigger's `when` dropped, a hole's role given a privilege it didn't declare.
 
+## How `explain` and `view` describe them
+
+Words follow [`understand.md`](understand.md): no "hole", "trigger" or "cron". They go in the existing **Custom code** section, one entry per hole, each saying what starts it and what it can read and change.
+
+| Kind | `explain` |
+|---|---|
+| `schedule` | `expire_invites: runs by itself every day at 03:00 (UTC). Nobody can run it from the app. It can read invites and change invites.` |
+| `trigger` | `notify_paid: runs by itself after an order is changed, only when its status becomes paid. Nobody can run it directly. It can read orders and customers and change notifications, whoever made the change.` |
+| `webhook` | `payment_received: runs when another service calls your app, and only if the call carries the right signature. Nobody can run it from the app. It can read invoices and change invoices and payments.` |
+
+- **Cron in words.** Common forms are spelled out: "every day at 03:00", "every 15 minutes", "every Monday at 09:00", "on the 1st of each month at 00:00". Any other valid expression is shown as written, in quotes, never guessed at.
+- **Side effects where readers look.** For a trigger, the entity it fires on gets an extra line under "Who can see and change what": "Changing an order also runs `notify_paid`, which changes notifications." The "Only custom code can change them" line names these holes too.
+- **Grants.** "It can give people the member role" gets a second sentence for `schedule` and `trigger`: "Nobody is asked first: it happens by itself." This is the `SVT040` warning in words under "Worth knowing".
+- **Before going live** gets, per webhook, the secret's name with its `supabase secrets set` command and the deploy step; and, once for any schedule, "turn on the pg_cron extension in the Supabase dashboard". A `shared_secret` webhook is described as weaker than a signature, and every webhook says old calls can be replayed.
+- **`context`** gets one line each, as today: `hole expire_invites: schedule "0 3 * * *"; reads Invite; writes Invite`, `hole notify_paid: trigger Order update when status == 'paid' and old.status != 'paid'; reads Order, Customer; writes Notification`, `hole payment_received: webhook secret PAYMENTS_WEBHOOK_SECRET (invoice Invoice.id, paid Invoice.amount, event_id text); reads Invoice; writes Invoice, Payment`.
+- **`graph`** draws them with the same rounded node, and a dotted line from the entity a trigger fires on into the hole, besides the usual `reads` and `changes` edges.
+- **`view`:** each Custom code card gets a first row, **Starts**, with the sentence above. The All, Some, No table of who can call it is replaced for these kinds by "Nobody can run this from the app", because there is no person to evaluate. The `--json` model gets `"kind"` and `"starts"` per hole, and `"secret"` (the name only) for a webhook. The page still makes no network requests.
+- **`svetra diff` and `plan`** ([change.md](change.md)): adding an automation is **safe**. Changing `schedule`, `on`, `events`, `when` or `secret` is **breaking**, because behaviour changes without a data change. Widening `reads`, `writes` or `grants` is access widening, as for `function` holes.
+
