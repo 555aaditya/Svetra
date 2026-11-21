@@ -68,4 +68,50 @@ The last column is the same on purpose: whatever starts it, the code gets the sa
 
 A hole with `grants` can give and take away roles. With no person behind a schedule or a trigger, that means a role handed out by a clock or a row. It is allowed ("make whoever accepted the invite a member" is a real trigger), but it gets a warning (`SVT040`) and its own line in `explain`.
 
+## Scheduled holes
+
+A scheduled hole runs on a clock.
+
+```yaml
+holes:
+  expire_invites:
+    kind: schedule
+    schedule: "0 3 * * *"        # every day at 03:00 UTC
+    reads: [Invite]
+    writes: [Invite]
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `kind` | yes | `schedule` |
+| `schedule` | yes | Five-field cron: minute, hour, day of month, month, day of week. UTC. Lists, ranges and steps are allowed (`*/15`, `1-5`, `1,15`). Names such as `mon` are not, so a field means one thing |
+| `reads`, `writes`, `grants` | no | As for `function` |
+
+Not allowed, because nobody passes or receives them: `input`, `output`, `as`, `when`. Using one is `SVT020`, and the hint says why. A guard on a scheduled hole is written in the body (`if not exists (...) then return; end if;`), where its author can see it.
+
+### What Svetra generates
+
+All of it goes in the `-- Holes` section of the SQL schema.
+
+1. **The role** `svetra_hole_<name>` and its grants, exactly as for a `function` hole.
+2. **The body function** `svetra_holes.<name>(p_caller uuid)`, with the usual attributes and no guard. `p_caller` is always `null`; it stays in the signature so a body can move between kinds.
+3. **A job**, scheduled in the same migration:
+   ```sql
+   create extension if not exists pg_cron;   -- UNVERIFIED: schema and spelling on Supabase
+   select cron.schedule('svetra_expire_invites', '0 3 * * *',
+     $job$select svetra_holes.expire_invites(null)$job$);
+   ```
+   The job runs as the migration's role (`postgres` on Supabase), the only role allowed to execute the body function. The body still runs as `svetra_hole_<name>`, so the job gives it no extra access.
+4. **A single-run guard.** The job takes `pg_try_advisory_xact_lock` on the hole's name and returns at once if the last run hasn't finished. Two overlapping runs of a cleanup are a usual way a nightly job corrupts data.
+5. **Cleanup of removed jobs.** Every job Svetra creates is named `svetra_<name>`. The schema ends with a statement that unschedules each `svetra_%` job that the design doesn't declare. Jobs you made by hand under other names are never touched.
+
+**There is no function in `public`,** so nothing in the API can call a scheduled hole, and `src/svetra.gen.ts` gets nothing for it.
+
+**The stub body** raises `expire_invites is not written yet: edit supabase/holes/expire_invites.sql`. Until it is written the job fails each run and says why in pg_cron's run log. It never changes data.
+
+### Failure and time
+
+- A failing body rolls back its own run. Svetra adds no retry: the next scheduled run is the retry.
+- Svetra can't know about a run missed while the database was down. A body should be safe to run twice and to run late. [`agents.md`](agents.md) says so.
+
 <!-- next -->
