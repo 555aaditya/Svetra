@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **`svetra infer` drafts policies: the owner column, `true`, and restrictive ones (milestone 2).** A database policy becomes one Svetra policy in a top-level `policies:` section when its condition is `true` or an owner check on a `user` field (`auth.uid() = col`, `(select auth.uid()) = col`, `col = auth.uid()`, with matching `::text` casts on both sides, joined by `AND`/`OR`): `when: "col == auth.user"`, with `allow` from the command (`ALL` is all four), `when`/`check` from `using`/`with check`, `restrictive: true`, and `as` from the roles. Everything else (subqueries, membership tables, jwt claims, functions) stays an `# UNTRANSLATED policy` comment with the rebuilt `CREATE POLICY`. **The draft is never wider than the database:** an action the role has no table privilege for is dropped, a restrictive policy that doesn't translate removes every policy of its table, an entity with only some policies translated says the draft is NARROWER, and `private: true` now appears only on an entity with no translated policy. A table with row-level security off stays private with a comment, and no policy is invented. Spec: `docs/infer.md`, Policies.
+
 ## 0.8.2 (2026-11-21)
 
 Check what your migrations build with no live database, draft a `svetra.yaml` from an existing one, start from a template, and generated tests that catch a class of gap the mutation study had missed.
