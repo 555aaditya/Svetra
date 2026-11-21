@@ -70,6 +70,8 @@ The same `svetra.yaml` and the same compiler version always produce byte-identic
    - For `private` entities, also `revoke all ... from anon, authenticated`, so the generated API can't reach them at all.
 5. **Policies.** One `create policy` for each policy and action.
 
+When any entity or hole has `audit: true`, an **Audit** section follows Guards (see [Audit](#audit)).
+
 When the file declares `roles`, a **Roles** section comes before Access:
 
 ```sql
@@ -238,6 +240,61 @@ where g."user_id" = (select auth.uid()) and g."role" = p_role and g."scope_id" i
 ```
 
 The list holds every role with `mfa: true`. Without any, the line is left out.
+
+## Audit
+
+An `-- Audit` section after `-- Guards`, present only when an entity or hole has `audit: true` (docs/format.md, Audit).
+
+```sql
+create schema if not exists "svetra";
+create table "svetra"."audit_log" (
+  "id" bigint generated always as identity primary key,
+  "at" timestamptz not null default now(),
+  "actor" uuid,
+  "kind" text not null check ("kind" in ('row', 'call')),
+  "subject" text not null,
+  "action" text not null check ("action" in ('insert', 'update', 'delete', 'call')),
+  "old" jsonb,
+  "new" jsonb
+);
+alter table "svetra"."audit_log" enable row level security;
+revoke all on table "svetra"."audit_log" from public, anon, authenticated;
+
+create function "svetra"."audit_frozen"() returns trigger language plpgsql as $svetra$
+begin
+  raise exception 'the audit log is append-only' using errcode = '42501';
+end $svetra$;
+create trigger "svetra_audit_frozen" before update or delete on "svetra"."audit_log"
+  for each row execute function "svetra"."audit_frozen"();
+create trigger "svetra_audit_frozen_truncate" before truncate on "svetra"."audit_log"
+  for each statement execute function "svetra"."audit_frozen"();
+
+create function "svetra"."audit_row"() returns trigger language plpgsql
+  security definer set search_path = '' as $svetra$
+begin
+  insert into "svetra"."audit_log" ("actor", "kind", "subject", "action", "old", "new")
+  values ((select auth.uid()), 'row', tg_table_name, lower(tg_op),
+    case when tg_op <> 'INSERT' then to_jsonb(old) end,
+    case when tg_op <> 'DELETE' then to_jsonb(new) end);
+  return null;
+end $svetra$;
+create trigger "svetra_audit" after insert or update or delete on "public"."ledger_entry"
+  for each row execute function "svetra"."audit_row"();
+```
+
+- **One generic row function**, `svetra.audit_row`, and one `svetra_audit` trigger per audited entity. It is `security definer`, so the writer needs no access to the log, and `search_path` is fixed to `''`.
+- **The log is `private` in effect:** row-level security with no policy, no grants for the API roles, and a schema Supabase doesn't expose. Hole roles get no grant on it.
+- **A hole with `audit: true`** gets one more statement in its `public.<name>` function, the one the app calls, before the call to the body function:
+
+  ```sql
+  insert into "svetra"."audit_log" ("actor", "kind", "subject", "action", "new")
+  values ((select auth.uid()), 'call', 'transfer', 'call', jsonb_build_object('source', source, 'amount', amount));
+  ```
+
+  The wrapper is owned by the migration's role, so the hole's own role never touches the log. It runs before the body function, so the `when` guard hasn't run yet; if the guard refuses, the exception rolls the record back with everything else, and only calls that were allowed stay recorded. A hole with no inputs logs `'{}'::jsonb`.
+- **Why `after` and `return null`:** the trigger records changes that went through, once every constraint and `before` trigger (such as the column guard) has passed.
+- **Append-only** is the `audit_frozen` trigger. It is not a privilege: it also stops the owner.
+- A document with no `audit: true` produces no change in the output.
 
 ## Holes
 
