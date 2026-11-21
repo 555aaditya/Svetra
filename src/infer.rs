@@ -939,7 +939,9 @@ fn entity(
             if mapped.is_some() {
                 consumed.push(s(fk, "name").to_string());
                 if let Some(a) = fk_actions(s(fk, "definition")) {
-                    note.push(format!("lossy: the foreign key had {a}, Svetra writes none"));
+                    note.push(format!(
+                        "lossy: the foreign key had {a}, Svetra writes none"
+                    ));
                 }
             }
         }
