@@ -438,3 +438,138 @@ pub fn json_migrations(findings: &[Finding], o: &crate::migrations::Outcome) -> 
     });
     v
 }
+
+/// Where `svetra check` reads from: the CLI and the MCP `check` tool share this.
+pub enum Source {
+    Db(String),
+    Snapshot(String),
+    Migrations {
+        dir: String,
+        scratch: Option<String>,
+    },
+}
+
+/// Why a check could not run. `Usage` is the caller's mistake (the CLI also prints its help);
+/// `Fail` is an environment problem. Both carry one sentence for the person.
+pub enum CheckError {
+    Usage(String),
+    Fail(String),
+}
+
+/// What a check found, and what it read.
+pub struct Report {
+    pub findings: Vec<Finding>,
+    /// Set when the source was migrations.
+    pub migrations: Option<crate::migrations::Outcome>,
+    /// Where it read from, passwords redacted.
+    pub source: String,
+}
+
+impl Report {
+    pub fn has_critical(&self) -> bool {
+        self.findings
+            .iter()
+            .any(|f| f.severity == Severity::Critical)
+    }
+
+    /// The `--json` document, with a `migrations` object for migrations.
+    pub fn json(&self) -> Value {
+        match &self.migrations {
+            Some(o) => json_migrations(&self.findings, o),
+            None => json(&self.findings),
+        }
+    }
+
+    pub fn human(&self, schemas: &[String]) -> String {
+        match &self.migrations {
+            Some(o) => human_migrations(&self.findings, schemas, o),
+            None => human(&self.findings, schemas, &self.source),
+        }
+    }
+
+    /// The CLI's exit code. A critical finding is the answer people act on; failing to read
+    /// all the migrations is 2 only when asked (`strict`), or when nothing could be read.
+    pub fn exit_code(&self, strict: bool) -> u8 {
+        if self.has_critical() {
+            return 1;
+        }
+        match &self.migrations {
+            Some(o) if o.applied == 0 || (strict && !o.failed.is_empty()) => 2,
+            _ => 0,
+        }
+    }
+}
+
+/// Run the check: read the snapshot from `source` and find the leaks in it. Read-only.
+pub fn run(source: &Source, schemas: &[String]) -> Result<Report, CheckError> {
+    let query = query(schemas);
+    let (text, migrations, label) = match source {
+        Source::Db(url) => {
+            let out = std::process::Command::new("psql")
+                .args([
+                    url.as_str(),
+                    "-X",
+                    "-A",
+                    "-t",
+                    "-q",
+                    "-v",
+                    "ON_ERROR_STOP=1",
+                    "-c",
+                    &query,
+                ])
+                .output();
+            match out {
+                Ok(o) if o.status.success() => (
+                    String::from_utf8_lossy(&o.stdout).to_string(),
+                    None,
+                    redact(url),
+                ),
+                Ok(o) => {
+                    return Err(CheckError::Fail(format!(
+                        "the database refused the query: {}",
+                        String::from_utf8_lossy(&o.stderr).trim()
+                    )));
+                }
+                Err(_) => {
+                    return Err(CheckError::Fail("psql isn't installed. Run `svetra check --print-query`, run the query in the Supabase SQL editor, save the JSON it returns to a file, then `svetra check --snapshot <file>`.".into()));
+                }
+            }
+        }
+        Source::Snapshot(file) => match std::fs::read_to_string(file) {
+            Ok(t) => (t, None, file.clone()),
+            Err(e) => return Err(CheckError::Usage(format!("cannot read {file}: {e}"))),
+        },
+        Source::Migrations { dir, scratch } => {
+            let path = std::path::Path::new(dir);
+            let outcome = match scratch {
+                Some(url) => crate::migrations::run_scratch(path, url, schemas, &query),
+                None => crate::migrations::run_docker(path, &query),
+            };
+            let o = outcome.map_err(|crate::migrations::Fail(m)| CheckError::Fail(m))?;
+            (o.snapshot.clone(), Some(o), dir.clone())
+        }
+    };
+    // Migrations where none applied have no snapshot, and so no findings.
+    let found = if migrations.as_ref().is_some_and(|o| o.applied == 0) {
+        Vec::new()
+    } else {
+        match serde_json::from_str::<Value>(text.trim()) {
+            Ok(snap) => findings(&snap),
+            Err(e) if migrations.is_some() => {
+                return Err(CheckError::Fail(format!(
+                    "the throwaway database returned something that isn't the check's JSON ({e})."
+                )));
+            }
+            Err(e) => {
+                return Err(CheckError::Fail(format!(
+                    "that isn't the JSON the check query returns ({e}). Run `svetra check --print-query` for the query."
+                )));
+            }
+        }
+    };
+    Ok(Report {
+        findings: found,
+        migrations,
+        source: label,
+    })
+}

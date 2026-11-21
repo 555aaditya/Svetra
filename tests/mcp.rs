@@ -54,7 +54,7 @@ fn result(reply: &Value) -> (Value, bool) {
 }
 
 #[test]
-fn handshake_lists_the_five_tools() {
+fn handshake_lists_the_tools() {
     let dir = project("handshake", include_str!("fixtures/clinic.yaml"));
     let replies = session(
         &dir,
@@ -81,7 +81,9 @@ fn handshake_lists_the_five_tools() {
         .collect();
     assert_eq!(
         names,
-        ["validate", "compile", "explain", "context", "graph", "plan"]
+        [
+            "validate", "compile", "explain", "context", "graph", "plan", "check"
+        ]
     );
     assert_eq!(replies[2]["result"], json!({}));
     assert_eq!(
@@ -204,4 +206,106 @@ fn compile_refuses_a_hole_body_that_is_a_whole_function() {
         "fix_hole_body"
     );
     assert!(!dir.join("supabase/schemas/svetra.sql").exists());
+}
+
+fn fixture(name: &str) -> String {
+    format!("{}/tests/fixtures/check/{name}", env!("CARGO_MANIFEST_DIR"))
+}
+
+/// The `check` tool on a saved snapshot gives the CLI's `--json` document and a summary.
+#[test]
+fn check_reads_a_snapshot_and_matches_the_cli_json() {
+    let dir = project("check-snapshot", include_str!("fixtures/clinic.yaml"));
+    let replies = session(
+        &dir,
+        &[call(
+            1,
+            "check",
+            json!({ "snapshot": fixture("leaky_app.json") }),
+        )],
+    );
+    let (mut got, is_error) = result(&replies[0]);
+    assert!(!is_error, "findings are results, not errors: {got}");
+    let summary = got.as_object_mut().unwrap().remove("summary").unwrap();
+    let summary = summary.as_str().unwrap();
+    assert!(
+        summary.contains("critical") && summary.contains("in public"),
+        "{summary}"
+    );
+    let golden: Value = serde_json::from_str(include_str!("golden/leaky_app.check.json")).unwrap();
+    assert_eq!(got, golden);
+}
+
+#[test]
+fn check_usage_errors_are_tool_errors() {
+    let dir = project("check-usage", include_str!("fixtures/clinic.yaml"));
+    let snap = fixture("leaky_app.json");
+    let replies = session(
+        &dir,
+        &[
+            call(1, "check", json!({ "snapshot": snap, "local": true })),
+            call(2, "check", json!({})),
+            call(3, "check", json!({ "snapshot": snap, "strict": true })),
+            call(4, "check", json!({ "snapshot": "missing.json" })),
+            call(5, "check", json!({ "snapshot": snap, "schemas": [] })),
+        ],
+    );
+    for reply in &replies {
+        let (v, is_error) = result(reply);
+        assert!(is_error, "{v}");
+        assert!(v["error"].is_string(), "{v}");
+    }
+}
+
+/// A connection string's password never comes back, whatever happens to the connection.
+#[test]
+fn check_never_echoes_a_password() {
+    let dir = project("check-redact", include_str!("fixtures/clinic.yaml"));
+    let replies = session(
+        &dir,
+        &[call(
+            1,
+            "check",
+            json!({ "db": "postgresql://app:hunter2secret@127.0.0.1:1/postgres" }),
+        )],
+    );
+    let text = replies[0].to_string();
+    assert!(!text.contains("hunter2secret"), "{text}");
+}
+
+/// Needs Docker, like tests/check_migrations.rs.
+#[test]
+fn check_builds_migrations_and_reports_what_applied() {
+    if !svetra::migrations::docker_available() {
+        eprintln!("skipped: Docker isn't running");
+        return;
+    }
+    let dir = project("check-migrations", include_str!("fixtures/clinic.yaml"));
+    let replies = session(
+        &dir,
+        &[
+            call(1, "check", json!({ "migrations": fixture("migrations") })),
+            call(
+                2,
+                "check",
+                json!({ "migrations": fixture("migrations_broken"), "strict": true }),
+            ),
+        ],
+    );
+    let (mut got, is_error) = result(&replies[0]);
+    assert!(!is_error, "{got}");
+    got.as_object_mut().unwrap().remove("summary").unwrap();
+    let migrations = got.as_object_mut().unwrap().remove("migrations").unwrap();
+    assert_eq!(
+        migrations,
+        json!({ "files": 3, "applied": 3, "failed": [] })
+    );
+    let golden: Value = serde_json::from_str(include_str!("golden/leaky_app.check.json")).unwrap();
+    assert_eq!(got, golden);
+    let (strict, is_error) = result(&replies[1]);
+    assert!(
+        is_error,
+        "strict makes a failed migration an error: {strict}"
+    );
+    assert_eq!(strict["migrations"]["failed"].as_array().unwrap().len(), 1);
 }

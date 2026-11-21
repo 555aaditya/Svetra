@@ -81,6 +81,49 @@ fn the_page_and_the_access_tests_agree() {
     }
 }
 
+/// A reviewer's update may change only the status, and the cell says so in `explain`'s words.
+#[test]
+fn a_change_cell_names_the_fields_a_column_rule_allows() {
+    let src = include_str!("fixtures/approvals.yaml");
+    let m = model(&doc(src), src);
+    let cells = m["cells"].as_array().unwrap();
+    let change = |person: &str| {
+        cells
+            .iter()
+            .find(|c| c["person"] == person && c["entity"] == "Doc" && c["action"] == "change")
+            .unwrap()
+    };
+    let only = change("bob")["only"].as_array().unwrap();
+    assert_eq!(only.len(), 1);
+    assert_eq!(only[0]["fields"], serde_json::json!(["status"]));
+    assert_eq!(only[0]["sentence"], "They can change only its status.");
+    assert!(
+        only[0]["rule"]
+            .as_str()
+            .unwrap()
+            .contains("its reviewer is them")
+    );
+    // Not signed in: the reviewers' rule doesn't cover them. Other actions carry no `only`.
+    assert!(change("anon").get("only").is_none());
+    assert!(
+        cells
+            .iter()
+            .all(|c| c["action"] == "change" || c.get("only").is_none())
+    );
+    // Entities without a column rule never get the key.
+    for (name, src) in EXAMPLES.iter().filter(|(n, _)| *n != "approvals") {
+        let m = model(&doc(src), src);
+        assert!(
+            m["cells"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|c| c.get("only").is_none()),
+            "{name}"
+        );
+    }
+}
+
 #[test]
 fn the_page_is_deterministic_and_self_contained() {
     for (name, src) in EXAMPLES {
@@ -122,6 +165,7 @@ fn the_page_never_uses_jargon() {
         for c in m["cells"].as_array().unwrap() {
             collect(&c["because"]);
             collect(&c["rules"]);
+            collect(&c["only"]);
             for r in c["rows"].as_array().unwrap() {
                 collect(&r["label"]);
             }

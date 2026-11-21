@@ -92,6 +92,19 @@ fn tools() -> Value {
             "properties": { "file": file, "from": { "type": "string", "description": "Path to the design the database has. Default: file as committed in git HEAD" } },
             "additionalProperties": false
         } },
+        { "name": "check", "description": "What is open in an existing Supabase database or in its migrations: tables without row-level security, policies open to everyone, views that skip it, risky functions. Needs no svetra.yaml and never writes. Give exactly one of db, local, snapshot or migrations. Returns findings with a fix each, counts, and a summary. Findings are results, not errors: read counts.", "inputSchema": {
+            "type": "object",
+            "properties": {
+                "db": { "type": "string", "description": "Connection string, read through psql" },
+                "local": { "type": "boolean", "description": "true: the database `supabase start` runs" },
+                "snapshot": { "type": "string", "description": "Path to a saved snapshot JSON (from `svetra check --print-query`)" },
+                "migrations": { "description": "A folder of migrations, or true for supabase/migrations. Built in a throwaway database (Docker, or `scratch`)", "oneOf": [{ "type": "string" }, { "type": "boolean" }] },
+                "scratch": { "type": "string", "description": "With migrations: an empty database to build them in, instead of Docker" },
+                "strict": { "type": "boolean", "description": "With migrations: a migration that fails to apply is an error" },
+                "schemas": { "type": "array", "items": { "type": "string" }, "description": "Schemas the API exposes. Default: [\"public\"]" }
+            },
+            "additionalProperties": false
+        } },
     ])
 }
 
@@ -202,6 +215,107 @@ fn call(name: &str, args: &Value) -> Option<Value> {
             }
             text(out, false)
         }
+        "check" => check(args),
         _ => return None,
     })
+}
+
+/// The `check` tool (docs/agents.md): the CLI's `--json` document plus a `summary`.
+fn check(args: &Value) -> Value {
+    let err = |m: &str| text(json!({ "error": m }), true);
+    let string = |k: &str| args.get(k).and_then(Value::as_str).map(str::to_string);
+    let flag = |k: &str| args.get(k).and_then(Value::as_bool).unwrap_or(false);
+    let migrations = match args.get("migrations") {
+        Some(Value::String(d)) if !d.is_empty() => Some(d.clone()),
+        Some(Value::Bool(true)) => Some("supabase/migrations".to_string()),
+        _ => None,
+    };
+    let (local, scratch, strict) = (flag("local"), string("scratch"), flag("strict"));
+    let db = if local {
+        Some("postgresql://postgres:postgres@127.0.0.1:54322/postgres".to_string())
+    } else {
+        string("db")
+    };
+    let snapshot = string("snapshot");
+    let given = [
+        db.is_some() || args.get("db").is_some(),
+        snapshot.is_some(),
+        migrations.is_some(),
+    ];
+    if given.iter().filter(|g| **g).count() != 1 || (local && args.get("db").is_some()) {
+        return err(
+            "Pass exactly one of db, local, snapshot or migrations (for example migrations: true).",
+        );
+    }
+    if migrations.is_none() && (scratch.is_some() || strict) {
+        return err("scratch and strict go with migrations.");
+    }
+    let schemas: Vec<String> = match args.get("schemas").and_then(Value::as_array) {
+        Some(a) => a
+            .iter()
+            .filter_map(|s| s.as_str().map(|s| s.trim().to_string()))
+            .filter(|s| !s.is_empty())
+            .collect(),
+        None => vec!["public".to_string()],
+    };
+    if schemas.is_empty() {
+        return err("schemas must name at least one schema, such as [\"public\"].");
+    }
+    let source = match (migrations, db, snapshot) {
+        (Some(dir), _, _) => crate::inspect::Source::Migrations { dir, scratch },
+        (None, Some(url), _) => crate::inspect::Source::Db(url),
+        (None, None, Some(f)) => crate::inspect::Source::Snapshot(f),
+        _ => return err("db must be a connection string."),
+    };
+    let report = match crate::inspect::run(&source, &schemas) {
+        Ok(r) => r,
+        Err(crate::inspect::CheckError::Usage(m) | crate::inspect::CheckError::Fail(m)) => {
+            return err(&m);
+        }
+    };
+    let mut out = report.json();
+    if let Some(o) = report
+        .migrations
+        .as_ref()
+        .filter(|o| strict && !o.failed.is_empty())
+    {
+        out["error"] = json!(format!(
+            "{} of {} migrations could not be applied. Fix them, or drop strict to accept partial findings.",
+            o.failed.len(),
+            o.files
+        ));
+        return text(out, true);
+    }
+    out["summary"] = json!(summary(&report, &out["counts"], &schemas));
+    text(out, false)
+}
+
+/// One plain-English sentence with the counts; the source is redacted.
+fn summary(report: &crate::inspect::Report, counts: &Value, schemas: &[String]) -> String {
+    let n = |k: &str| counts[k].as_u64().unwrap_or(0);
+    let plural = |n: u64, w: &str| format!("{n} {w}{}", if n == 1 { "" } else { "s" });
+    let mut out = match &report.migrations {
+        Some(o) if o.applied == 0 => format!(
+            "None of the {} migrations in {} could be applied, so nothing was checked.",
+            o.files, report.source
+        ),
+        _ => format!(
+            "{} critical, {}, {} in {} ({}).",
+            n("critical"),
+            plural(n("warning"), "warning"),
+            plural(n("info"), "note"),
+            schemas.join(", "),
+            report.source
+        ),
+    };
+    if let Some(o) = report.migrations.as_ref().filter(|o| o.applied > 0) {
+        out += &format!(" {} of {} migrations applied", o.applied, o.files);
+        out += if o.failed.is_empty() {
+            "."
+        } else {
+            "; the failed ones are listed, so the findings may be incomplete."
+        };
+        out += " This reads the migrations, not the live database.";
+    }
+    out
 }

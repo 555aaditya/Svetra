@@ -1,0 +1,34 @@
+# A blog. Anyone on the internet can read posts; only the author can write them.
+# Edit this file (or ask your coding agent to), then run `svetra validate`.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+svetra: "0.1"
+system: Blog
+
+# Authors sign in with their email. Readers don't need to.
+auth:
+  sign_in: [email]
+
+entities:
+  Post:
+    fields:
+      id:     { type: uuid, primary: true }
+      author: { type: user, required: true }
+      title:  { type: text, required: true }
+      body:   { type: text, required: true }
+    indexes:
+      - [author]
+
+policies:
+  # Anyone, signed in or not, can read every post.
+  # `as: anyone` is how you say "open to the whole internet" on purpose.
+  everyone_reads:
+    on: Post
+    allow: [select]
+    when: "true"
+    as: anyone
+
+  # A signed-in person can write, change and delete only their own posts.
+  authors_write:
+    on: Post
+    allow: [insert, update, delete]
+    when: "author == auth.user"

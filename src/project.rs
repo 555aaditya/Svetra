@@ -235,3 +235,58 @@ pub fn init(dir: &Path) -> Result<Initialised, Failure> {
     }
     Ok(Initialised { lines })
 }
+
+/// The starter designs `svetra new` writes (docs/new.md): name, one-line description, file.
+pub const TEMPLATES: [(&str, &str, &str); 5] = [
+    (
+        "notes",
+        "A private to-do list: each person sees only their own items",
+        include_str!("templates/notes.yaml"),
+    ),
+    (
+        "blog",
+        "A blog: anyone can read posts, only the author can write them",
+        include_str!("templates/blog.yaml"),
+    ),
+    (
+        "bookings",
+        "Customers book a slot; staff run one location; admins run everything",
+        include_str!("templates/bookings.yaml"),
+    ),
+    (
+        "teams",
+        "Teams of people who share tasks; only members see their team's tasks",
+        include_str!("templates/teams.yaml"),
+    ),
+    (
+        "approvals",
+        "Write a document, send it to a reviewer who approves or rejects it",
+        include_str!("templates/approvals.yaml"),
+    ),
+];
+
+/// Why `new` wrote nothing.
+#[derive(Debug)]
+pub enum NewFailure {
+    /// No template with that name.
+    Unknown(String),
+    /// `svetra.yaml` is already there.
+    Exists,
+    /// The folder or file couldn't be written.
+    Write(String),
+}
+
+/// `svetra new <template> [DIR]` (docs/new.md): write `svetra.yaml` from a template, never
+/// over an existing one. Returns the template's description.
+pub fn new_project(name: &str, dir: &Path) -> Result<&'static str, NewFailure> {
+    let Some((_, about, body)) = TEMPLATES.iter().find(|t| t.0 == name) else {
+        return Err(NewFailure::Unknown(name.to_string()));
+    };
+    let target = dir.join("svetra.yaml");
+    if target.exists() {
+        return Err(NewFailure::Exists);
+    }
+    write_atomic(&target, body)
+        .map_err(|e| NewFailure::Write(format!("cannot write {}: {e}", target.display())))?;
+    Ok(about)
+}

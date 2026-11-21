@@ -1,0 +1,63 @@
+# Bookings. Customers book a slot, staff run one location, admins run everything.
+# Edit this file (or ask your coding agent to), then run `svetra validate`.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+svetra: "0.1"
+system: Bookings
+
+auth:
+  sign_in: [email]
+
+# Roles are jobs you give to people.
+roles:
+  # An admin works across the whole business.
+  admin: { description: "Runs the business" }
+  # Staff work at one location only: the role is tied to a Location.
+  staff: { description: "Works at one location", scope: Location }
+
+entities:
+  Location:
+    fields:
+      id:   { type: uuid, primary: true }
+      name: { type: text, required: true }
+  Booking:
+    fields:
+      id:       { type: uuid, primary: true }
+      # The customer who made the booking.
+      customer: { type: user, required: true }
+      # `ref` links each booking to one location.
+      location: { type: ref, entity: Location, required: true }
+      starts:   { type: timestamp, required: true }
+    indexes:
+      - [customer]
+      - [location]
+
+policies:
+  # Customers can see and make their own bookings. They can't change or cancel them here.
+  customers_see_own:
+    on: Booking
+    allow: [select, insert]
+    when: "customer == auth.user"
+
+  # Staff can see and change bookings at their own location, and no other location.
+  staff_manage_local:
+    on: Booking
+    allow: [select, update]
+    when: "has_role('staff', location)"
+
+  # Admins can see, change and delete every booking.
+  admins_manage_all:
+    on: Booking
+    allow: [select, update, delete]
+    when: "has_role('admin')"
+
+  # Staff can see the location they work at.
+  staff_see_location:
+    on: Location
+    allow: [select]
+    when: "has_role('staff', id)"
+
+  # Admins can see, add and change every location.
+  admins_manage_locations:
+    on: Location
+    allow: [select, insert, update]
+    when: "has_role('admin')"

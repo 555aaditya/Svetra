@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main, develop]
+  # update-prs.yml starts it on a branch it updated: its own pushes don't start pull_request runs.
+  workflow_dispatch:
 
 permissions:
   contents: read

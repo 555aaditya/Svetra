@@ -110,6 +110,7 @@ supabase test db                 # the tests, run on your database as real users
 | `view` | One page: who can see and change what |
 | `diff`, `plan` | Classifies a change as safe, breaking or destructive, and keeps renamed data |
 | `check` | Finds leaks in a database you already have, no `svetra.yaml` needed |
+| `new` | Starts a project from a template (notes, blog, bookings, teams, approvals); `new --list` describes them ([spec](docs/new.md)) |
 | `mcp`, `init` | Serves all of this to your agent; sets up a project |
 
 ## What works today: `svetra validate`
@@ -190,7 +191,7 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 | Agents | The Svetra skill for Claude Code, `svetra init`, an MCP server for any agent, and holes: custom code as guarded Postgres functions | **Done** |
 | See who can see what | `svetra view`: one page with a table of every person × thing × action, in words, and a diagram ([spec](docs/view.md)) | **Done** |
 | Automations | Scheduled jobs, triggers when data changes, and incoming webhooks | Planned |
-| Start fast | `svetra new` with templates | Planned |
+| Start fast | `svetra new` with templates ([spec](docs/new.md)) | **Done** |
 | Change safely | `svetra diff` and `svetra plan`: classify every change as safe, breaking or destructive, show whose access widens, and keep renamed data ([spec](docs/change.md)) | **Done** |
 | Existing apps | `svetra check` finds the leaks in an app you've already built ([spec](docs/check.md)); `svetra infer` drafts its `svetra.yaml` | `check` **Done**; `infer` planned |
 | Feature packs | `svetra add teams`, `svetra remove stripe` | Planned |
