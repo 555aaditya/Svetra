@@ -45,6 +45,7 @@ The main part: a table.
 - **Selecting a cell** opens a panel with:
   - the rule sentences from `explain` that allow it, such as "Signed-in people can see and create a booking when its customer is them", or "Nobody can see bookings any other way" for **No**;
   - for **Some**, which of the test rows were allowed, in words ("their own booking: yes; another customer's booking: no");
+  - for **Change**, when a rule limits the fields an update may touch ([`column-rules.md`](column-rules.md), `only`), which fields, in the words `explain` uses: "They can change only its status.", with the rule that says so. A rule is listed when it covers this kind of person, whether or not one of the test rows shows it applying: the test rows can't make a person a reviewer of a submitted document, so a "No" cell can still carry it. The rule's own condition, in its sentence, says when it applies;
   - the access test numbers that check this cell, so a curious reader can find them in `supabase/tests/svetra.test.sql`.
 - **A question box** above the table answers the done-when question directly: pick a thing ("Bookings") and an action ("see"), and the page lists, per person, All, Some or No, with the sentence. It's a filter of the same table, not new logic.
 
@@ -97,6 +98,7 @@ The entities as boxes with their links, the people and roles, and the custom cod
 - **`because`** holds sentences `explain` prints, never new wording: the rules that allowed a row, or, when none did, the "Nobody can" lines that rule the action out.
 - **`rules`** holds every `explain` sentence that allows the action on the entity for anyone. For **No** cells where `because` is empty (rules exist, but none applies to this person), the page shows these as "only these rules let anyone…".
 - **Row labels** are from the person's side: "their own booking" and "someone else's booking" for alice and bob on entities with a `user` field; "a booking at their location" and "a booking at another location" for a scoped role; otherwise "one booking" and "another booking". Rows `c` and `d` (creating) start "a new one:".
+- **`only`** appears on a `change` cell when an update rule with `only` covers this person's kind (signed in or not): a list, one entry per such rule, in the order `explain` prints them, each `{ "fields": ["status"], "sentence": "They can change only its status.", "rule": "…the explain sentence…" }`. `fields` are the field names as written in the file, `sentence` is exactly the sentence `explain` ends the rule with, and `rule` is that rule's `explain` sentence. The key is absent when no rule limits fields. It is not decided per test row, so it doesn't change `access`, `rows` or `tests`. A person covered by another update rule without `only` may change more than these fields on rows that rule allows ([`column-rules.md`](column-rules.md), section 2); that rule is in `because` or `rules`.
 - **`tests`** are the numbers of the checks in `supabase/tests/svetra.test.sql` for this cell, so the page and the tests can be cross-checked.
 
 ## Implementation
