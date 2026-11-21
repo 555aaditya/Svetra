@@ -16,6 +16,8 @@ enum Hit {
     UnrecognizedJwt,
     /// An index into `VENDORS`.
     Secret(usize),
+    JwtSecret,
+    DbPassword,
 }
 
 /// How the part of a token after its prefix must look.
@@ -146,12 +148,14 @@ pub fn check(files: &[File], git: Option<&Git>) -> Vec<Finding> {
         for (i, line) in file.text.lines().enumerate() {
             let line_no = i + 1;
             let exposed = tracked || front_file || is_public_variable(line);
-            for hit in scan_line(line) {
+            for hit in scan_line(line, &file.path) {
                 if !exposed || !seen.insert((hit, line_no)) {
                     continue;
                 }
                 match hit {
                     Hit::ServiceKey => out.push(service_key(&file.path, line_no, front_file)),
+                    Hit::JwtSecret => out.push(jwt_secret(&file.path, line_no, front_file)),
+                    Hit::DbPassword => out.push(db_password(&file.path, line_no, front_file)),
                     Hit::Secret(v) => {
                         out.push(secret(&file.path, line_no, &VENDORS[v], front_file));
                     }
@@ -168,8 +172,74 @@ pub fn check(files: &[File], git: Option<&Git>) -> Vec<Finding> {
     out
 }
 
-fn scan_line(line: &str) -> Vec<Hit> {
+/// The value assigned to `name` on this line (`NAME=value`, `NAME: "value"`, `"NAME": "value"`),
+/// without its quotes. `colon` also accepts `:`, for YAML and JSON files.
+fn assigned<'a>(line: &'a str, name: &str, colon: bool) -> Option<&'a str> {
+    let at = line.find(name)?;
+    if line[..at]
+        .chars()
+        .next_back()
+        .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return None;
+    }
+    let rest = line[at + name.len()..].trim_start_matches(['"', '\'']);
+    let rest = rest.trim_start();
+    let rest = rest
+        .strip_prefix('=')
+        .or_else(|| rest.strip_prefix(':').filter(|_| colon))?
+        .trim_start();
+    let quote = rest.chars().next().filter(|c| matches!(c, '"' | '\''));
+    let value = match quote {
+        Some(q) => rest[1..].split(q).next().unwrap_or(""),
+        None => rest.split([' ', '\t', '#', ',', ';']).next().unwrap_or(""),
+    };
+    Some(value)
+}
+
+/// Supabase's local development JWT secret, public in its documentation.
+const LOCAL_JWT_SECRET: &str = "super-secret-jwt-token-with-at-least-32-characters-long";
+
+/// A connection string with a password, as `postgres://user:password@host/db`: whether it has a
+/// real one. The local database and placeholders don't count.
+fn has_db_password(line: &str) -> bool {
+    ["postgres://", "postgresql://"].iter().any(|scheme| {
+        line.match_indices(scheme).any(|(at, _)| {
+            let url = &line[at + scheme.len()..];
+            let url = url
+                .split(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '<' | '>'))
+                .next()
+                .unwrap_or("");
+            let Some((user_info, host)) = url.rsplit_once('@') else {
+                return false;
+            };
+            let Some((_, password)) = user_info.split_once(':') else {
+                return false;
+            };
+            let host = host.split(['/', ':', '?']).next().unwrap_or("");
+            !is_placeholder(password)
+                && !matches!(password, "password" | "postgres")
+                && !matches!(host, "localhost" | "127.0.0.1" | "[::1]")
+        })
+    })
+}
+
+fn scan_line(line: &str, path: &str) -> Vec<Hit> {
     let mut hits = Vec::new();
+    let colon = path.ends_with(".yml") || path.ends_with(".yaml") || path.ends_with(".json");
+    let jwt_secret = assigned(line, "SUPABASE_JWT_SECRET", colon).or_else(|| {
+        if path.ends_with("config.toml") {
+            assigned(line, "jwt_secret", false)
+        } else {
+            None
+        }
+    });
+    if jwt_secret.is_some_and(|v| !is_placeholder(v) && v != LOCAL_JWT_SECRET) {
+        hits.push(Hit::JwtSecret);
+    }
+    if has_db_password(line) {
+        hits.push(Hit::DbPassword);
+    }
     // The two halves of a PEM header, apart so that this file doesn't match itself.
     const BEGIN: &str = "-----BEGIN ";
     const END: &str = "PRIVATE KEY-----";
@@ -273,6 +343,37 @@ fn service_key(path: &str, line: usize, front_end: bool) -> Finding {
         area: "keys",
         message: "This line holds your Supabase service role key. It skips every row-level security rule, and anyone who can read this file can read, change and delete every row.".to_string(),
         fix: rotate_fix(front_end),
+        file: path.to_string(),
+        line: Some(line),
+    }
+}
+
+fn jwt_secret(path: &str, line: usize, front_end: bool) -> Finding {
+    Finding {
+        kind: "jwt_secret_exposed",
+        severity: Severity::Critical,
+        area: "keys",
+        message: "This line holds your project's JWT secret. With it anyone can sign in as any user, admins included.".to_string(),
+        fix: format!(
+            "{} In config.toml, write `env(SUPABASE_JWT_SECRET)` and keep the value in a .env file that isn't committed.",
+            rotate_fix(front_end)
+        ),
+        file: path.to_string(),
+        line: Some(line),
+    }
+}
+
+fn db_password(path: &str, line: usize, front_end: bool) -> Finding {
+    Finding {
+        kind: "db_password_exposed",
+        severity: Severity::Critical,
+        area: "keys",
+        message: "This line holds your database password. It gives full access to every table."
+            .to_string(),
+        fix: format!(
+            "{} Change the database password (Supabase dashboard, Settings, Database) and keep the connection string in an environment variable.",
+            rotate_fix(front_end)
+        ),
         file: path.to_string(),
         line: Some(line),
     }
