@@ -132,3 +132,27 @@ fn collects_every_problem_instead_of_stopping() {
     );
     assert_eq!(codes(&src), ["SVT020", "SVT023", "SVT023"]);
 }
+
+#[test]
+fn on_delete_problems_are_svt023() {
+    let doc = |spec: &str| {
+        codes(&format!(
+            "{HEAD}entities:\n  A:\n    fields:\n      id: {{ type: uuid, primary: true }}\n      x: {spec}\n"
+        ))
+    };
+    for ok in ["restrict", "cascade", "set_null"] {
+        assert!(doc(&format!("{{ type: ref, entity: A, on_delete: {ok} }}")).is_empty());
+    }
+    assert!(doc("{ type: ref, entity: A, required: true, on_delete: cascade }").is_empty());
+    // An unknown value, a type that has no foreign key to act on, and a field that can't be emptied.
+    assert_eq!(
+        doc("{ type: ref, entity: A, on_delete: delete }"),
+        ["SVT023"]
+    );
+    assert_eq!(doc("{ type: text, on_delete: cascade }"), ["SVT023"]);
+    assert_eq!(doc("{ type: user, on_delete: cascade }"), ["SVT023"]);
+    assert_eq!(
+        doc("{ type: ref, entity: A, required: true, on_delete: set_null }"),
+        ["SVT023"]
+    );
+}
