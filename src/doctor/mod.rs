@@ -5,6 +5,7 @@
 //! a file, a line and a kind of key.
 
 pub mod files;
+pub mod generated;
 pub mod jwt;
 pub mod keys;
 
@@ -226,6 +227,17 @@ pub fn run(dir: &Path) -> Result<Report, String> {
         ..Report::default()
     };
     report.findings.extend(keys::check(&files, git.as_ref()));
+    match generated::check(dir) {
+        Some(found) => {
+            report.has_design = true;
+            report.findings.extend(found);
+        }
+        None => report.not_checked.push((
+            "Generated files",
+            "there is no svetra.yaml in this folder, so there is nothing to compare them with"
+                .to_string(),
+        )),
+    }
     report.findings.sort_by(|a, b| {
         (a.area, a.severity, &a.file, a.line, a.kind)
             .cmp(&(b.area, b.severity, &b.file, b.line, b.kind))
