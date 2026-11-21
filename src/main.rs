@@ -29,6 +29,8 @@ Usage:
   svetra compile [FILE] [--check]   Write the SQL schema, TypeScript types and access tests next
                                     to FILE, and sign-in settings into supabase/config.toml;
                                     --check writes nothing and fails if they are out of date
+  svetra new <TEMPLATE> [DIR]       Start from a template: writes a svetra.yaml with comments
+                                    in plain words. `svetra new --list` shows the templates
   svetra init [DIR]                 Set up a project for agents: the Svetra skill, the MCP
                                     server in .mcp.json, and a starter svetra.yaml
   svetra mcp                        Serve validate, compile, explain, context and graph to
@@ -55,6 +57,7 @@ fn main() -> ExitCode {
         Some("validate") => validate(&args[1..]),
         Some("compile") => compile(&args[1..]),
         Some("init") => init(&args[1..]),
+        Some("new") => new(&args[1..]),
         Some("explain") => view("explain", &args[1..], false, |doc, diags| {
             svetra::understand::explain::explain(doc, diags)
         }),
@@ -238,6 +241,56 @@ fn init(args: &[String]) -> ExitCode {
         }
         Err(_) => unreachable!("init neither validates nor reads hole bodies"),
     }
+}
+
+/// `svetra new <template> [DIR]` and `svetra new --list` (docs/new.md).
+fn new(args: &[String]) -> ExitCode {
+    use svetra::project::{NewFailure, TEMPLATES};
+    let names = || TEMPLATES.iter().map(|t| t.0).collect::<Vec<_>>().join(", ");
+    let (name, dir) = match args {
+        [f] if f == "--list" => {
+            let width = TEMPLATES.iter().map(|t| t.0.len()).max().unwrap_or(0);
+            for (name, about, _) in TEMPLATES {
+                println!("{name:<width$}  {about}");
+            }
+            return ExitCode::SUCCESS;
+        }
+        [n] if !n.starts_with('-') => (n.as_str(), "."),
+        [n, d] if !n.starts_with('-') && !d.starts_with('-') => (n.as_str(), d.as_str()),
+        [] => return usage(&format!("new needs a template: {}", names())),
+        _ => return usage("new takes a template and an optional folder, or --list"),
+    };
+    let about = match svetra::project::new_project(name, std::path::Path::new(dir)) {
+        Ok(about) => about,
+        Err(NewFailure::Unknown(n)) => {
+            return usage(&format!("no template called '{n}'. Templates: {}", names()));
+        }
+        Err(NewFailure::Exists) => {
+            eprintln!(
+                "svetra: svetra.yaml already exists here; `svetra new` never replaces your design. Pick another folder, or move the file first."
+            );
+            return ExitCode::from(2);
+        }
+        Err(NewFailure::Write(e)) => {
+            eprintln!("svetra: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let file = std::path::Path::new(dir).join("svetra.yaml");
+    let diags = report::validate(&std::fs::read_to_string(&file).unwrap_or_default());
+    if report::has_errors(&diags) {
+        print!("{}", report::human(&file.display().to_string(), &diags));
+        return ExitCode::from(1);
+    }
+    println!("wrote {} ({name}: {about})", file.display());
+    println!("Next:");
+    if dir != "." {
+        println!("  cd {dir}");
+    }
+    println!("  svetra explain      read the rules in plain English");
+    println!("  svetra compile      write the SQL, types and access tests");
+    println!("  svetra init         set up your coding agent, when you want it to take over");
+    ExitCode::SUCCESS
 }
 
 /// `svetra view` (docs/view.md): validate, then write the page, or print the model with `--json`.
