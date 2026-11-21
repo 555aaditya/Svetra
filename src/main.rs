@@ -356,138 +356,33 @@ fn inspect(args: &[String]) -> ExitCode {
             "--migrations can't be combined with --db, --local, --snapshot or --print-query",
         );
     }
-    let query = svetra::inspect::query(&schemas);
-    if let Some(dir) = migrations {
-        return check_migrations(&dir, scratch.as_deref(), strict, &schemas, &query, json);
-    }
     if print {
-        println!("{query};");
+        println!("{};", svetra::inspect::query(&schemas));
         return ExitCode::SUCCESS;
     }
-    let (text, source) = match (&db, &snapshot) {
-        (Some(url), None) => {
-            let out = std::process::Command::new("psql")
-                .args([
-                    url.as_str(),
-                    "-X",
-                    "-A",
-                    "-t",
-                    "-q",
-                    "-v",
-                    "ON_ERROR_STOP=1",
-                    "-c",
-                    &query,
-                ])
-                .output();
-            match out {
-                Ok(o) if o.status.success() => (
-                    String::from_utf8_lossy(&o.stdout).to_string(),
-                    svetra::inspect::redact(url),
-                ),
-                Ok(o) => {
-                    eprintln!(
-                        "svetra: the database refused the query: {}",
-                        String::from_utf8_lossy(&o.stderr).trim()
-                    );
-                    return ExitCode::from(2);
-                }
-                Err(_) => {
-                    eprintln!(
-                        "svetra: psql isn't installed. Run `svetra check --print-query`, run the query in the Supabase SQL editor, save the JSON it returns to a file, then `svetra check --snapshot <file>`."
-                    );
-                    return ExitCode::from(2);
-                }
-            }
-        }
-        (None, Some(f)) => match read(f) {
-            Ok(t) => (t, f.clone()),
-            Err(e) => return usage(&e),
-        },
+    let source = match (migrations, db, snapshot) {
+        (Some(dir), _, _) => svetra::inspect::Source::Migrations { dir, scratch },
+        (None, Some(url), None) => svetra::inspect::Source::Db(url),
+        (None, None, Some(f)) => svetra::inspect::Source::Snapshot(f),
         _ => return usage("check needs one of --db URL, --local or --snapshot FILE"),
     };
-    let snap: serde_json::Value = match serde_json::from_str(text.trim()) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!(
-                "svetra: that isn't the JSON the check query returns ({e}). Run `svetra check --print-query` for the query."
-            );
+    let report = match svetra::inspect::run(&source, &schemas) {
+        Ok(r) => r,
+        Err(svetra::inspect::CheckError::Usage(m)) => return usage(&m),
+        Err(svetra::inspect::CheckError::Fail(m)) => {
+            eprintln!("svetra: {m}");
             return ExitCode::from(2);
-        }
-    };
-    let found = svetra::inspect::findings(&snap);
-    if json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&svetra::inspect::json(&found)).unwrap_or_default()
-        );
-    } else {
-        print!("{}", svetra::inspect::human(&found, &schemas, &source));
-    }
-    if found
-        .iter()
-        .any(|f| f.severity == svetra::inspect::Severity::Critical)
-    {
-        ExitCode::from(1)
-    } else {
-        ExitCode::SUCCESS
-    }
-}
-
-/// `svetra check --migrations` (docs/check.md, "Checking migrations").
-fn check_migrations(
-    dir: &str,
-    scratch: Option<&str>,
-    strict: bool,
-    schemas: &[String],
-    query: &str,
-    json: bool,
-) -> ExitCode {
-    let path = std::path::Path::new(dir);
-    let outcome = match scratch {
-        Some(url) => svetra::migrations::run_scratch(path, url, schemas, query),
-        None => svetra::migrations::run_docker(path, query),
-    };
-    let o = match outcome {
-        Ok(o) => o,
-        Err(svetra::migrations::Fail(message)) => {
-            eprintln!("svetra: {message}");
-            return ExitCode::from(2);
-        }
-    };
-    let found = if o.applied == 0 {
-        Vec::new()
-    } else {
-        match serde_json::from_str::<serde_json::Value>(o.snapshot.trim()) {
-            Ok(snap) => svetra::inspect::findings(&snap),
-            Err(e) => {
-                eprintln!(
-                    "svetra: the throwaway database returned something that isn't the check's JSON ({e})."
-                );
-                return ExitCode::from(2);
-            }
         }
     };
     if json {
         println!(
             "{}",
-            serde_json::to_string_pretty(&svetra::inspect::json_migrations(&found, &o))
-                .unwrap_or_default()
+            serde_json::to_string_pretty(&report.json()).unwrap_or_default()
         );
     } else {
-        print!("{}", svetra::inspect::human_migrations(&found, schemas, &o));
+        print!("{}", report.human(&schemas));
     }
-    // A critical finding is the answer people act on; failing to read everything is exit 2 only
-    // when asked (--strict), or when nothing could be read at all.
-    if found
-        .iter()
-        .any(|f| f.severity == svetra::inspect::Severity::Critical)
-    {
-        ExitCode::from(1)
-    } else if o.applied == 0 || (strict && !o.failed.is_empty()) {
-        ExitCode::from(2)
-    } else {
-        ExitCode::SUCCESS
-    }
+    ExitCode::from(report.exit_code(strict))
 }
 
 /// `svetra diff` and `svetra plan` (docs/change.md).
