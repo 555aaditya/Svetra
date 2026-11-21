@@ -690,10 +690,11 @@ fn policies(
             {
                 changes.push(change(
                     "change_policy",
-                    path,
+                    path.clone(),
                     Data::Safe,
                     format!("change rule {}", p.name),
-                ))
+                ));
+                changes.extend(only_change(x, p, new, &path));
             }
             _ => {}
         }
@@ -708,6 +709,94 @@ fn policies(
             ));
         }
     }
+}
+
+/// The access line for a change to a policy's `only` (docs/change.md, column rules): a shorter
+/// list, or gaining one, locks fields (narrower); a longer list, or losing it, frees them (wider).
+/// Fields are matched through `was`, so renaming a listed field changes nothing.
+fn only_change(old: &Policy, new: &Policy, doc: &Document, path: &str) -> Option<Change> {
+    let entity = doc.entities.iter().find(|e| e.name == new.on.name);
+    let was = |f: &str| -> String {
+        entity
+            .and_then(|e| e.fields.iter().find(|x| x.name == f))
+            .and_then(|x| x.was.as_ref())
+            .map_or(f, |w| w.name.as_str())
+            .to_string()
+    };
+    let before: Option<Vec<&str>> = old
+        .only
+        .as_ref()
+        .map(|o| o.iter().map(|f| f.name.as_str()).collect());
+    let after: Option<Vec<(String, &str)>> = new
+        .only
+        .as_ref()
+        .map(|o| o.iter().map(|f| (was(&f.name), f.name.as_str())).collect());
+    let things = plural(&new.on.name);
+    let (wider, message) = match (&before, &after) {
+        (None, None) => return None,
+        (None, Some(a)) => (
+            false,
+            format!(
+                "Rule {} now lets an update change only {} of {things} (was: every field).",
+                new.name,
+                a.iter().map(|(_, n)| *n).collect::<Vec<_>>().join(", "),
+            ),
+        ),
+        (Some(b), None) => (
+            true,
+            format!(
+                "Rule {} now lets an update change every field of {things} (was: only {}).",
+                new.name,
+                b.join(", ")
+            ),
+        ),
+        (Some(b), Some(a)) => {
+            let added: Vec<&str> = a
+                .iter()
+                .filter(|(o, _)| !b.contains(&o.as_str()))
+                .map(|(_, n)| *n)
+                .collect();
+            let removed: Vec<&str> = b
+                .iter()
+                .filter(|o| !a.iter().any(|(x, _)| x == *o))
+                .copied()
+                .collect();
+            // Freeing a field is wider even if another was locked in the same edit.
+            if !added.is_empty() {
+                (
+                    true,
+                    format!(
+                        "Rule {} now also lets an update change {}.",
+                        new.name,
+                        added.join(", ")
+                    ),
+                )
+            } else if !removed.is_empty() {
+                (
+                    false,
+                    format!(
+                        "Rule {} no longer lets an update change {}.",
+                        new.name,
+                        removed.join(", ")
+                    ),
+                )
+            } else {
+                return None;
+            }
+        }
+    };
+    let mut c = change(
+        if wider {
+            "wider_access"
+        } else {
+            "narrower_access"
+        },
+        path.to_string(),
+        Data::Safe,
+        message,
+    );
+    c.access = Some(if wider { "wider" } else { "narrower" });
+    Some(c)
 }
 
 fn auth_words(a: Option<&Auth>) -> Option<String> {
