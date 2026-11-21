@@ -266,9 +266,11 @@ policies:
 - **Holes, `auth` settings, column rules (`only`).** Not inferred. A database trigger that guards columns is not read.
 - **Views and functions,** apart from `check`'s findings.
 
-### Differential testing
+### Differential testing (planned, not built)
 
-The check that a draft means what the database does is to compile it, run its generated access tests (docs/compiler.md) against the **original** database, and look at each person-and-row check where they disagree. For a table whose policies **all** translated, the original database must pass every check the draft's tests make; a failure is a translation bug. Where the draft is narrower on purpose (an untranslated policy), the original allows more than the draft and the tests may fail, which is the expected disagreement, so that table is not part of the check. This is a test in the project, not a user command.
+Not built yet: it needs pgTAP in the throwaway database, which `scripts/pg-check.sh` installs from the network. When built:
+
+The check that a draft means what the database does is to compile it, run its generated access tests (docs/compiler.md) against the **original** database, and look at each person-and-row check where they disagree. For a table whose policies **all** translated, the original database must pass every check the draft's tests make; a failure is a translation bug. Where the draft is narrower on purpose (an untranslated policy), the original allows more than the draft and the tests may fail, which is the expected disagreement, so that table is not part of the check. It would be a test in the project, not a user command.
 
 ## Not in this version
 
