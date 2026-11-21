@@ -65,6 +65,12 @@ pub fn explain(doc: &Document, diags: &[Diagnostic]) -> String {
         for line in access(e, doc, &entities) {
             out += &format!("    - {line}\n");
         }
+        if e.audit {
+            out += &format!(
+                "    - Every change to {} is recorded in the audit log: who made it, when, and the row before and after.\n",
+                plural(&e.name)
+            );
+        }
     }
     if !doc.holes.is_empty() {
         out += "\nCustom code\n";
@@ -673,6 +679,9 @@ fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
                 roles.join(" or ")
             )
         });
+    }
+    if h.audit {
+        out.push("every call is recorded in the audit log, with who made it and what they sent.".into());
     }
     out
 }
