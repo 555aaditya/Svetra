@@ -1601,6 +1601,43 @@ pub fn analyse(doc: &Document) -> Analysis {
             // out of their scope.
             let Some(me) = &p.id else { continue };
             for (k, r) in ROWS.iter().enumerate().take(2) {
+                // A `user` primary key is the owner. The key can only be changed to one no stored
+                // row holds (the other rows' keys fail on the primary key whatever the rules say),
+                // so the person takes the row over when they hold none, and hands it to the
+                // fourth person, who holds none, either way. A row another stored row points at
+                // can't change its key (the foreign key refuses), so it gets no such check.
+                let pk = primary(e);
+                let constrained = e
+                    .constraints
+                    .iter()
+                    .any(|c| c.expr.contains(pk.name.as_str()));
+                if pk.ty == FieldType::User && !constrained && world.pointing_at(ei, k).is_empty() {
+                    let holds_row =
+                        (0..2).any(|j| world.value(ei, pk, j).1 == Val::Text(me.clone()));
+                    let mut targets = Vec::new();
+                    if !holds_row {
+                        targets.push((me.clone(), "themselves"));
+                    }
+                    targets.push((world.fourth.clone(), "a person who has no row"));
+                    for (id, who) in targets {
+                        let swap = Swap {
+                            field: &pk.name,
+                            to: SwapTo::User(id.clone()),
+                            and: None,
+                        };
+                        let expected = update_expected(doc, &world, p, ei, k, Some(&swap));
+                        let sql = format!(
+                            "update {} set {} = {} where {}",
+                            table(&e.name),
+                            q(&pk.name),
+                            lit(&id),
+                            key(&world, ei, k)
+                        );
+                        let what = format!("set the {} of {} {r} to {who}", pk.name, e.name);
+                        note_hazard(&mut hazards, doc, &world, p, ei, k, &swap, &what, expected);
+                        check(what, sql, expected, None);
+                    }
+                }
                 for f in e.fields.iter().filter(|f| !f.primary) {
                     let (to, value, words) = match &f.ty {
                         FieldType::User => {
