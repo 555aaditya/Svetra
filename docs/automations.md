@@ -333,3 +333,12 @@ Words follow [`understand.md`](understand.md): no "hole", "trigger" or "cron". T
 - **`view`:** each Custom code card gets a first row, **Starts**, with the sentence above. The All, Some, No table of who can call it is replaced for these kinds by "Nobody can run this from the app", because there is no person to evaluate. The `--json` model gets `"kind"` and `"starts"` per hole, and `"secret"` (the name only) for a webhook. The page still makes no network requests.
 - **`svetra diff` and `plan`** ([change.md](change.md)): adding an automation is **safe**. Changing `schedule`, `on`, `events`, `when` or `secret` is **breaking**, because behaviour changes without a data change. Widening `reads`, `writes` or `grants` is access widening, as for `function` holes.
 
+## Security summary
+
+- **No outside caller reaches a body directly.** Body functions are executable by the migration's role only. A webhook's public function is executable by `service_role` only. A scheduled or triggered hole has no public function.
+- **Whatever starts it, the code runs as `svetra_hole_<name>`,** with the declared grants and nothing else.
+- **Secrets are names in the design and values in `supabase secrets`.** Svetra never reads, writes or prints a value. A pasted value is an error that doesn't echo it.
+- **`verify_jwt = false` is written only for webhook functions,** and only next to a generated signature check.
+- **A trigger is inside the write.** A body that raises stops the person's change. Only someone who can already write that row can cause it, and it is the documented behaviour.
+- **Loops end in an error,** at validate time (`SVT038`) or at run time (the depth limit).
+
