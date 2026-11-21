@@ -2,6 +2,7 @@ pub mod change;
 pub mod check;
 pub mod compile;
 pub mod diag;
+pub mod doctor;
 pub mod expr;
 pub mod infer;
 pub mod inspect;
