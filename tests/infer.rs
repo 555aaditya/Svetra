@@ -76,7 +76,7 @@ fn everything_it_cannot_say_is_a_comment_with_the_original_sql() {
     ] {
         assert!(yaml.contains(needle), "missing: {needle}");
     }
-    assert!(yaml.contains("# 10 things left as UNTRANSLATED"), "{yaml}");
+    assert!(yaml.contains("# 13 things left as UNTRANSLATED"), "{yaml}");
     assert!(
         !yaml.contains("product_names") || yaml.contains("public.product_names: "),
         "views are only in the findings"
@@ -86,8 +86,8 @@ fn everything_it_cannot_say_is_a_comment_with_the_original_sql() {
 #[test]
 fn check_findings_are_comments_and_never_change_the_exit_code() {
     let yaml = draft();
-    assert!(yaml.contains("# svetra check found 4 critical, 2 warnings and 0 notes:"));
-    assert!(yaml.contains("#   critical  public.orders: "));
+    assert!(yaml.contains("# svetra check found 3 critical, 2 warnings and 0 notes:"));
+    assert!(yaml.contains("#   critical  public.order_items: "));
     assert!(yaml.contains("    # check: critical, rls_off: "));
     assert!(yaml.contains("# 4 entities from 6 tables. Skipped: 1 view, 0 functions."));
     // Same snapshot, same findings from `check`.
@@ -106,7 +106,7 @@ fn it_writes_the_file_and_says_what_it_did() {
     assert_eq!(
         String::from_utf8_lossy(&out.stdout),
         format!(
-            "wrote {f}: 4 entities, 22 fields, 10 things left as UNTRANSLATED, 4 critical findings in comments\nNext: review the draft, then `svetra validate`, then `svetra compile`.\n"
+            "wrote {f}: 4 entities, 22 fields, 13 things left as UNTRANSLATED, 3 critical findings in comments\nNext: review the draft, then `svetra validate`, then `svetra compile`.\n"
         )
     );
     assert_eq!(std::fs::read_to_string(&file).unwrap(), draft());
@@ -252,4 +252,175 @@ fn nothing_to_infer_is_an_error() {
     );
     let err = svetra::infer::infer(&snap).unwrap_err();
     assert!(err.starts_with("Nothing to infer"), "{err}");
+}
+
+fn snapshot() -> Value {
+    serde_json::from_str(&std::fs::read_to_string(SNAPSHOT).unwrap()).unwrap()
+}
+
+/// The draft of a changed snapshot, loaded and validated; its policies as `(name, entity)`.
+fn changed(edit: impl Fn(&mut Value)) -> (String, Vec<(String, String)>) {
+    let mut snap = snapshot();
+    edit(&mut snap);
+    let yaml = svetra::infer::infer(&snap).unwrap().yaml;
+    let (doc, diags) = svetra::load::load(&yaml);
+    assert!(diags.is_empty(), "{diags:?}");
+    assert!(!svetra::report::has_errors(&svetra::report::validate(
+        &yaml
+    )));
+    let policies = doc
+        .policies
+        .iter()
+        .map(|p| (p.name.clone(), p.on.name.clone()))
+        .collect();
+    (yaml, policies)
+}
+
+fn policy_row<'a>(snap: &'a mut Value, name: &str) -> &'a mut Value {
+    snap["policies"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|p| p["name"] == name)
+        .unwrap()
+}
+
+#[test]
+fn owner_and_true_policies_translate() {
+    let yaml = draft();
+    assert!(yaml.contains("# Policies: 6 of 9 translated."));
+    for block in [
+        "  orders_select_own:\n    on: Orders\n    as: authenticated\n    allow: [select]\n    when: \"customer == auth.user\"\n",
+        "  orders_insert_own:\n    on: Orders\n    as: authenticated\n    allow: [insert]\n    when: \"customer == auth.user\"\n",
+        "  orders_update_own:\n    on: Orders\n    as: authenticated\n    allow: [update]\n    when: \"customer == auth.user\"\n",
+        "  orders_delete_guard:\n    on: Orders\n    as: authenticated\n    allow: [delete]\n    restrictive: true\n",
+        "  products_read:\n    on: Products\n    as: anyone\n    allow: [select]\n    when: \"true\"\n",
+    ] {
+        assert!(yaml.contains(block), "missing: {block}");
+    }
+}
+
+#[test]
+fn a_partly_translated_table_says_the_draft_is_narrower() {
+    let yaml = draft();
+    let orders = yaml.split("\n  Orders:\n").nth(1).unwrap();
+    let orders = orders.split("\n  Products:").next().unwrap();
+    assert!(
+        orders.contains("# policies: 5 of 6 translated. The draft is NARROWER than the database")
+    );
+    assert!(!orders.contains("private: true"));
+    assert!(orders.contains("# UNTRANSLATED policy orders_staff_read: CREATE POLICY orders_staff_read ON public.orders AS PERMISSIVE FOR SELECT TO authenticated USING (((auth.jwt() ->> 'role'::text) = 'staff'::text))"));
+}
+
+#[test]
+fn no_policy_is_invented_or_drafted_where_rls_is_off() {
+    let (yaml, policies) = changed(|_| {});
+    let items = yaml
+        .split("  OrderItems:")
+        .nth(1)
+        .unwrap()
+        .split("  Orders:")
+        .next()
+        .unwrap();
+    assert!(items.contains("row-level security is off here"));
+    assert!(items.contains("private: true"));
+    assert!(items.contains("# UNTRANSLATED policy order_items_via_order"));
+    assert!(policies.iter().all(|(_, on)| on != "OrderItems"));
+    // Even a translatable policy isn't drafted when it isn't enforced.
+    let (_, policies) = changed(|snap| {
+        policy_row(snap, "order_items_via_order")["using"] = Value::String("true".into());
+    });
+    assert!(policies.iter().all(|(_, on)| on != "OrderItems"));
+}
+
+#[test]
+fn a_table_where_nothing_translated_stays_private() {
+    let yaml = draft();
+    let profiles = yaml.split("  Profiles:").nth(1).unwrap();
+    assert!(profiles.contains("# policies: none of 1 translated."));
+    assert!(profiles.contains("private: true"));
+}
+
+#[test]
+fn a_restrictive_policy_that_does_not_translate_removes_the_whole_table() {
+    let (yaml, policies) = changed(|snap| {
+        policy_row(snap, "orders_delete_guard")["using"] = Value::String("is_admin()".into());
+    });
+    assert!(
+        policies.iter().all(|(_, on)| on != "Orders"),
+        "{policies:?}"
+    );
+    let orders = yaml.split("\n  Orders:\n").nth(1).unwrap();
+    let orders = orders.split("\n  Products:").next().unwrap();
+    assert!(orders.contains("private: true"));
+    assert!(orders.contains("a restrictive policy on this table didn't translate"));
+    assert!(orders.contains("# UNTRANSLATED policy orders_select_own"));
+}
+
+#[test]
+fn restrictive_policies_alone_are_not_drafted() {
+    let (_, policies) = changed(|snap| {
+        for name in [
+            "orders_select_own",
+            "orders_update_own",
+            "orders_delete_own",
+            "orders_insert_own",
+        ] {
+            let p = policy_row(snap, name);
+            if p["using"].is_string() {
+                p["using"] = Value::String("is_admin()".into());
+            }
+            if p["check"].is_string() {
+                p["check"] = Value::String("is_admin()".into());
+            }
+        }
+    });
+    assert!(
+        policies.iter().all(|(_, on)| on != "Orders"),
+        "{policies:?}"
+    );
+}
+
+#[test]
+fn an_action_the_database_does_not_grant_is_not_allowed() {
+    let (_, policies) = changed(|snap| {
+        for t in snap["tables"].as_array_mut().unwrap() {
+            if t["name"] == "orders" {
+                t["authenticated"]["delete"] = Value::Bool(false);
+            }
+        }
+    });
+    // The restrictive delete guard lost its only action, so it isn't translated, and dropping a
+    // restrictive policy would widen access: the whole table goes.
+    assert!(
+        policies.iter().all(|(_, on)| on != "Orders"),
+        "{policies:?}"
+    );
+}
+
+#[test]
+fn a_permissive_policy_without_its_privilege_only_narrows() {
+    let (yaml, policies) = changed(|snap| {
+        for t in snap["tables"].as_array_mut().unwrap() {
+            if t["name"] == "orders" {
+                t["authenticated"]["insert"] = Value::Bool(false);
+            }
+        }
+    });
+    assert!(!policies.iter().any(|(n, _)| n == "orders_insert_own"));
+    assert!(policies.iter().any(|(n, _)| n == "orders_select_own"));
+    assert!(yaml.contains("# policies: 4 of 6 translated."));
+    assert!(yaml.contains("withholds the table privilege"));
+}
+
+#[test]
+fn the_translated_policies_compile() {
+    let (doc, diags) = svetra::load::load(&draft());
+    assert!(diags.is_empty(), "{diags:?}");
+    let sql = svetra::compile::sql::schema(&doc);
+    assert!(sql.contains("orders_select_own"), "{sql}");
+    assert!(sql.contains("as restrictive"), "{sql}");
+    assert!(sql.contains("(select auth.uid())"));
+    assert!(sql.contains("anon, authenticated"));
+    assert!(!sql.contains("order_items_via_order"));
 }
