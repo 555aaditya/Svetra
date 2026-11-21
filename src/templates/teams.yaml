@@ -1,0 +1,72 @@
+# Teams. People belong to a team and share its tasks; other teams can't see them.
+# Edit this file (or ask your coding agent to), then run `svetra validate`.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+svetra: "0.1"
+system: Teams
+
+auth:
+  sign_in: [email]
+
+roles:
+  # An admin runs the whole service and can see every team.
+  admin:  { description: "Runs the service" }
+  # A member belongs to one team: the role is tied to a Team.
+  member: { description: "Belongs to one team", scope: Team }
+
+entities:
+  Team:
+    fields:
+      id:   { type: uuid, primary: true }
+      name: { type: text, required: true }
+  Task:
+    fields:
+      id:     { type: uuid, primary: true }
+      # Each task belongs to one team.
+      team:   { type: ref, entity: Team, required: true }
+      author: { type: user, required: true }
+      title:  { type: text, required: true }
+    indexes:
+      - [team]
+      - [author]
+
+policies:
+  # Members can see their own team.
+  members_see_team:
+    on: Team
+    allow: [select]
+    when: "has_role('member', id)"
+
+  # Admins can see every team.
+  admins_see_teams:
+    on: Team
+    allow: [select]
+    when: "has_role('admin')"
+
+  # Members can see every task of their team.
+  members_see_tasks:
+    on: Task
+    allow: [select]
+    when: "has_role('member', team)"
+
+  # Members can add a task to their team, as themselves.
+  members_add_tasks:
+    on: Task
+    allow: [insert]
+    when: "has_role('member', team) and author == auth.user"
+
+  # The person who wrote a task can change or delete it, while they are still on the team.
+  authors_edit_tasks:
+    on: Task
+    allow: [update, delete]
+    when: "author == auth.user and has_role('member', team)"
+
+# A hole is custom code that policies can't express. Starting a team must also make its
+# creator the first member, so it can't be a plain insert. `svetra compile` writes an empty
+# stub at supabase/holes/start_team.sql; your agent (or you) fills it in.
+holes:
+  start_team:
+    kind: function
+    input: { name: Team.name }
+    output: Team
+    writes: [Team]
+    grants: [member]
