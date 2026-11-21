@@ -464,3 +464,34 @@ fn reordering_only_or_renaming_a_listed_field_is_not_a_column_change() {
     assert!(new.contains("was: name"));
     assert!(column_lines(&old, &new).is_empty());
 }
+
+#[test]
+fn turning_audit_on_or_off_is_listed_and_safe_for_data() {
+    let on = BASE.replace("  Customer:\n", "  Customer:\n    audit: true\n");
+    assert!(has(&kinds(&on), "add_audit", Data::Safe), "{:?}", kinds(&on));
+    // The other way round: from an audited design to the plain one.
+    let (a, _) = load(&on);
+    let (b, _) = load(BASE);
+    let p = plan(&a, &on, &b, BASE);
+    let c = p.changes.iter().find(|c| c.kind == "remove_audit").expect("listed");
+    assert_eq!((c.data, c.path.as_str()), (Data::Safe, "entities.Customer"));
+    assert!(c.hint.as_deref().unwrap_or("").contains("stay"));
+}
+
+#[test]
+fn turning_audit_on_for_a_hole_is_listed_by_hole() {
+    let hole = |audit: &str| {
+        format!("{BASE}holes:\n  close:\n    kind: function\n    writes: [Order]\n{audit}")
+    };
+    let (plain, audited) = (hole(""), hole("    audit: true\n"));
+    let (a, d) = load(&plain);
+    assert!(d.is_empty(), "{d:#?}");
+    let (b, d) = load(&audited);
+    assert!(d.is_empty(), "{d:#?}");
+    let found: Vec<_> = plan(&a, &plain, &b, &audited)
+        .changes
+        .into_iter()
+        .map(|c| (c.kind, c.path))
+        .collect();
+    assert_eq!(found, [("add_audit", "holes.close".to_string())]);
+}
