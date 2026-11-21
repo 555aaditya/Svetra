@@ -62,6 +62,7 @@ Changes are computed between the two typed models, never from text, so reorderin
 | `remove_constraint`, `remove_unique` | | safe for data |
 | `add_index`, `remove_index` | | safe |
 | `make_private` | `private: true` | **breaking**: the app's API loses the table |
+| `add_audit`, `remove_audit` | `audit: true` added to or removed from an entity or a hole | safe for data. `remove_audit` is listed so it's seen: what happens next is no longer recorded, and the log already written stays |
 | `add_role`, `remove_role` | `remove_role` also drops every grant of it | `remove_role` is **destructive** for those grants |
 | `add_hole`, `change_hole`, `remove_hole` | signatures change the typed client | `remove_hole` and a changed signature are **breaking** for app code calling it |
 | `change_auth` | `password.min_length` 10 → 12 | safe for data; listed so it's seen |
