@@ -359,3 +359,96 @@ fn plan_waits_for_a_yes_then_writes_the_rename_once() {
             .contains("destructive  remove Customer.tier: every value is deleted")
     );
 }
+
+/// BASE with an update rule that has `only` (or not), to compare column rules.
+fn with_only(only: &str) -> String {
+    BASE.replace(
+        "  own_orders:",
+        &format!(
+            "  edit_customers: {{ on: Customer, allow: [update], when: \"owner == auth.user\"{only} }}\n  own_orders:"
+        ),
+    )
+}
+
+/// The access lines (direction, message) on the `edit_customers` rule from `old` to `new`.
+fn column_lines(old: &str, new: &str) -> Vec<(&'static str, String)> {
+    let (a, d) = load(old);
+    assert!(d.is_empty(), "{d:#?}");
+    let (b, d) = load(new);
+    assert!(d.is_empty(), "{d:#?}");
+    plan(&a, old, &b, new)
+        .changes
+        .into_iter()
+        .filter(|c| c.path == "policies.edit_customers" && c.access.is_some())
+        .map(|c| (c.access.unwrap(), c.message))
+        .collect()
+}
+
+fn needs_yes(old: &str, new: &str) -> Vec<&'static str> {
+    let (a, _) = load(old);
+    let (b, _) = load(new);
+    plan(&a, old, &b, new).needs_yes()
+}
+
+#[test]
+fn gaining_only_is_narrower() {
+    let (old, new) = (with_only(""), with_only(", only: [name]"));
+    assert_eq!(
+        column_lines(&old, &new),
+        [(
+            "narrower",
+            "Rule edit_customers now lets an update change only name of customers (was: every field).".to_string()
+        )]
+    );
+    assert!(!needs_yes(&old, &new).contains(&"narrower_access"));
+    assert!(!needs_yes(&old, &new).contains(&"wider_access"));
+}
+
+#[test]
+fn losing_only_is_wider_and_plan_wants_a_yes() {
+    let (old, new) = (with_only(", only: [name]"), with_only(""));
+    assert_eq!(
+        column_lines(&old, &new),
+        [(
+            "wider",
+            "Rule edit_customers now lets an update change every field of customers (was: only name).".to_string()
+        )]
+    );
+    assert!(needs_yes(&old, &new).contains(&"wider_access"));
+}
+
+#[test]
+fn a_field_added_to_only_is_wider_and_removed_is_narrower() {
+    let one = with_only(", only: [name]");
+    let two = with_only(", only: [name, notes]");
+    assert_eq!(
+        column_lines(&one, &two),
+        [(
+            "wider",
+            "Rule edit_customers now also lets an update change notes.".to_string()
+        )]
+    );
+    assert!(needs_yes(&one, &two).contains(&"wider_access"));
+    assert_eq!(
+        column_lines(&two, &one),
+        [(
+            "narrower",
+            "Rule edit_customers no longer lets an update change notes.".to_string()
+        )]
+    );
+    assert!(!needs_yes(&two, &one).contains(&"wider_access"));
+}
+
+#[test]
+fn reordering_only_or_renaming_a_listed_field_is_not_a_column_change() {
+    let old = with_only(", only: [name, notes]");
+    assert!(column_lines(&old, &with_only(", only: [notes, name]")).is_empty());
+    let new = old
+        .replace(
+            "name:  { type: text, required: true }",
+            "title: { type: text, required: true, was: name }",
+        )
+        .replace("only: [name, notes]", "only: [title, notes]");
+    assert!(new.contains("was: name"));
+    assert!(column_lines(&old, &new).is_empty());
+}
