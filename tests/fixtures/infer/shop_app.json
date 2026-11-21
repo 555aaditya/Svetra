@@ -1,0 +1,794 @@
+{
+    "tables": [
+        {
+            "schema": "public",
+            "name": "legacy_codes",
+            "rls": false,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        },
+        {
+            "schema": "public",
+            "name": "membership",
+            "rls": false,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        },
+        {
+            "schema": "public",
+            "name": "order_items",
+            "rls": false,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        },
+        {
+            "schema": "public",
+            "name": "orders",
+            "rls": false,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        },
+        {
+            "schema": "public",
+            "name": "products",
+            "rls": true,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        },
+        {
+            "schema": "public",
+            "name": "profiles",
+            "rls": true,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
+        }
+    ],
+    "policies": [
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "products_read",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "public"
+            ],
+            "cmd": "SELECT",
+            "using": "true",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "profiles",
+            "name": "profiles_own",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "SELECT",
+            "using": "(id = auth.uid())",
+            "check": null
+        }
+    ],
+    "views": [
+        {
+            "schema": "public",
+            "name": "product_names",
+            "security_invoker": false,
+            "anon_select": true,
+            "authenticated_select": true,
+            "definition": " SELECT id,\n    name\n   FROM products;"
+        }
+    ],
+    "functions": [],
+    "columns": [
+        {
+            "schema": "public",
+            "table": "legacy_codes",
+            "name": "code",
+            "type": "text",
+            "type_schema": "pg_catalog",
+            "type_name": "text",
+            "kind": "b",
+            "not_null": false,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "legacy_codes",
+            "name": "label",
+            "type": "text",
+            "type_schema": "pg_catalog",
+            "type_name": "text",
+            "kind": "b",
+            "not_null": false,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "membership",
+            "name": "org",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "membership",
+            "name": "member",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "order_items",
+            "name": "id",
+            "type": "bigint",
+            "type_schema": "pg_catalog",
+            "type_name": "int8",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": "always",
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "order_items",
+            "name": "order_id",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "order_items",
+            "name": "product_id",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "order_items",
+            "name": "qty",
+            "type": "smallint",
+            "type_schema": "pg_catalog",
+            "type_name": "int2",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "id",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": "gen_random_uuid()",
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "customer",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "status",
+            "type": "order_status",
+            "type_schema": "public",
+            "type_name": "order_status",
+            "kind": "e",
+            "not_null": true,
+            "default": "'open'::order_status",
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "placed_on",
+            "type": "date",
+            "type_schema": "pg_catalog",
+            "type_name": "date",
+            "kind": "b",
+            "not_null": false,
+            "default": "CURRENT_DATE",
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "note",
+            "type": "text",
+            "type_schema": "pg_catalog",
+            "type_name": "text",
+            "kind": "b",
+            "not_null": false,
+            "default": "'none'::text",
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "created_at",
+            "type": "timestamp without time zone",
+            "type_schema": "pg_catalog",
+            "type_name": "timestamp",
+            "kind": "b",
+            "not_null": false,
+            "default": "now()",
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "shipped",
+            "type": "boolean",
+            "type_schema": "pg_catalog",
+            "type_name": "bool",
+            "kind": "b",
+            "not_null": true,
+            "default": "false",
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "id",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": "gen_random_uuid()",
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "sku",
+            "type": "text",
+            "type_schema": "pg_catalog",
+            "type_name": "text",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "name",
+            "type": "text",
+            "type_schema": "pg_catalog",
+            "type_name": "text",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "price",
+            "type": "numeric(12,2)",
+            "type_schema": "pg_catalog",
+            "type_name": "numeric",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "weight",
+            "type": "real",
+            "type_schema": "pg_catalog",
+            "type_name": "float4",
+            "kind": "b",
+            "not_null": false,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "stock",
+            "type": "integer",
+            "type_schema": "pg_catalog",
+            "type_name": "int4",
+            "kind": "b",
+            "not_null": true,
+            "default": "0",
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "rating",
+            "type": "numeric",
+            "type_schema": "pg_catalog",
+            "type_name": "numeric",
+            "kind": "b",
+            "not_null": false,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "tags",
+            "type": "text[]",
+            "type_schema": "pg_catalog",
+            "type_name": "_text",
+            "kind": "b",
+            "not_null": false,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "meta",
+            "type": "jsonb",
+            "type_schema": "pg_catalog",
+            "type_name": "jsonb",
+            "kind": "b",
+            "not_null": false,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "profiles",
+            "name": "id",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "profiles",
+            "name": "display_name",
+            "type": "text",
+            "type_schema": "pg_catalog",
+            "type_name": "text",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "profiles",
+            "name": "bio",
+            "type": "character varying(280)",
+            "type_schema": "pg_catalog",
+            "type_name": "varchar",
+            "kind": "b",
+            "not_null": false,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "profiles",
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "type_schema": "pg_catalog",
+            "type_name": "timestamptz",
+            "kind": "b",
+            "not_null": true,
+            "default": "now()",
+            "identity": null,
+            "generated": false
+        }
+    ],
+    "constraints": [
+        {
+            "schema": "public",
+            "table": "membership",
+            "name": "membership_member_fkey",
+            "kind": "f",
+            "columns": [
+                "member"
+            ],
+            "definition": "FOREIGN KEY (member) REFERENCES auth.users(id)",
+            "ref_schema": "auth",
+            "ref_table": "users",
+            "ref_columns": [
+                "id"
+            ]
+        },
+        {
+            "schema": "public",
+            "table": "membership",
+            "name": "membership_pkey",
+            "kind": "p",
+            "columns": [
+                "org",
+                "member"
+            ],
+            "definition": "PRIMARY KEY (org, member)",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "order_items",
+            "name": "order_items_order_id_fkey",
+            "kind": "f",
+            "columns": [
+                "order_id"
+            ],
+            "definition": "FOREIGN KEY (order_id) REFERENCES orders(id)",
+            "ref_schema": "public",
+            "ref_table": "orders",
+            "ref_columns": [
+                "id"
+            ]
+        },
+        {
+            "schema": "public",
+            "table": "order_items",
+            "name": "order_items_order_id_product_id_key",
+            "kind": "u",
+            "columns": [
+                "order_id",
+                "product_id"
+            ],
+            "definition": "UNIQUE (order_id, product_id)",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "order_items",
+            "name": "order_items_pkey",
+            "kind": "p",
+            "columns": [
+                "id"
+            ],
+            "definition": "PRIMARY KEY (id)",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "order_items",
+            "name": "order_items_product_id_fkey",
+            "kind": "f",
+            "columns": [
+                "product_id"
+            ],
+            "definition": "FOREIGN KEY (product_id) REFERENCES products(id)",
+            "ref_schema": "public",
+            "ref_table": "products",
+            "ref_columns": [
+                "id"
+            ]
+        },
+        {
+            "schema": "public",
+            "table": "order_items",
+            "name": "order_items_qty_check",
+            "kind": "c",
+            "columns": [
+                "qty"
+            ],
+            "definition": "CHECK (((qty > 0) AND (qty < LEAST(10, 100))))",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_check",
+            "kind": "c",
+            "columns": [
+                "status",
+                "shipped"
+            ],
+            "definition": "CHECK (((status <> 'shipped'::order_status) OR shipped))",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_customer_fkey",
+            "kind": "f",
+            "columns": [
+                "customer"
+            ],
+            "definition": "FOREIGN KEY (customer) REFERENCES auth.users(id) ON DELETE CASCADE",
+            "ref_schema": "auth",
+            "ref_table": "users",
+            "ref_columns": [
+                "id"
+            ]
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_pkey",
+            "kind": "p",
+            "columns": [
+                "id"
+            ],
+            "definition": "PRIMARY KEY (id)",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "products_pkey",
+            "kind": "p",
+            "columns": [
+                "id"
+            ],
+            "definition": "PRIMARY KEY (id)",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "products_price_check",
+            "kind": "c",
+            "columns": [
+                "price"
+            ],
+            "definition": "CHECK ((price >= (0)::numeric))",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "products_sku_key",
+            "kind": "u",
+            "columns": [
+                "sku"
+            ],
+            "definition": "UNIQUE (sku)",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "stock_non_negative",
+            "kind": "c",
+            "columns": [
+                "stock"
+            ],
+            "definition": "CHECK ((stock >= 0))",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "stock_text",
+            "kind": "c",
+            "columns": [
+                "stock"
+            ],
+            "definition": "CHECK (((stock)::text <> '-1'::text))",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "profiles",
+            "name": "profiles_id_fkey",
+            "kind": "f",
+            "columns": [
+                "id"
+            ],
+            "definition": "FOREIGN KEY (id) REFERENCES auth.users(id)",
+            "ref_schema": "auth",
+            "ref_table": "users",
+            "ref_columns": [
+                "id"
+            ]
+        },
+        {
+            "schema": "public",
+            "table": "profiles",
+            "name": "profiles_pkey",
+            "kind": "p",
+            "columns": [
+                "id"
+            ],
+            "definition": "PRIMARY KEY (id)",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        }
+    ],
+    "indexes": [
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_customer_idx",
+            "unique": false,
+            "method": "btree",
+            "columns": [
+                "customer"
+            ],
+            "partial": false,
+            "definition": "CREATE INDEX orders_customer_idx ON public.orders USING btree (customer)"
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_note_idx",
+            "unique": false,
+            "method": "btree",
+            "columns": [
+                null
+            ],
+            "partial": false,
+            "definition": "CREATE INDEX orders_note_idx ON public.orders USING btree (lower(note))"
+        },
+        {
+            "schema": "public",
+            "table": "products",
+            "name": "products_tags_idx",
+            "unique": false,
+            "method": "gin",
+            "columns": [
+                "tags"
+            ],
+            "partial": false,
+            "definition": "CREATE INDEX products_tags_idx ON public.products USING gin (tags)"
+        }
+    ],
+    "enums": [
+        {
+            "schema": "public",
+            "name": "order_status",
+            "values": [
+                "open",
+                "paid",
+                "shipped"
+            ]
+        }
+    ]
+}
