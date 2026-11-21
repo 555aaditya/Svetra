@@ -106,7 +106,7 @@ fn always(cond: &Value) -> bool {
     })
 }
 
-fn roles(p: &Value) -> Vec<String> {
+pub(crate) fn roles(p: &Value) -> Vec<String> {
     match &p["roles"] {
         Value::Array(a) => a
             .iter()

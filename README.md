@@ -111,7 +111,7 @@ supabase test db                 # the tests, run on your database as real users
 | `diff`, `plan` | Classifies a change as safe, breaking or destructive, and keeps renamed data |
 | `check` | Finds leaks in a database you already have, no `svetra.yaml` needed |
 | `new` | Starts a project from a template (notes, blog, bookings, teams, approvals); `new --list` describes them ([spec](docs/new.md)) |
-| `infer` | Drafts a `svetra.yaml` (entities and fields, with `check`'s findings as comments) from a database you already have; whatever it can't translate stays an `UNTRANSLATED` comment ([spec](docs/infer.md)) |
+| `infer` | Drafts a `svetra.yaml` (entities, fields and owner-column and `true` policies, with `check`'s findings as comments) from a database you already have, never wider than the database; whatever it can't translate stays an `UNTRANSLATED` comment ([spec](docs/infer.md)) |
 | `mcp`, `init` | Serves all of this to your agent; sets up a project |
 
 ## What works today: `svetra validate`

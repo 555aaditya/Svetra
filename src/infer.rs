@@ -340,8 +340,14 @@ enum Tok {
 /// Split a deparsed SQL expression into tokens, or `None` on anything outside the small subset
 /// that has an equivalent in Svetra's expression language.
 fn lex(sql: &str) -> Option<Vec<Tok>> {
-    const SYMS: [&str; 17] = [
+    lex_with(sql, false)
+}
+
+/// `lex`, optionally also reading `.` (policies name `auth.uid()`; check constraints don't).
+fn lex_with(sql: &str, dots: bool) -> Option<Vec<Tok>> {
+    const SYMS: [&str; 18] = [
         "::", "<>", "!=", "<=", ">=", "=", "<", ">", "+", "-", "*", "/", "(", ")", "[", "]", ",",
+        ".",
     ];
     let chars: Vec<char> = sql.chars().collect();
     let mut out = Vec::new();
@@ -386,7 +392,9 @@ fn lex(sql: &str) -> Option<Vec<Tok>> {
             out.push(Tok::Id(chars[start..i].iter().collect()));
         } else {
             let rest: String = chars[i..].iter().take(2).collect();
-            let sym = SYMS.iter().find(|s| rest.starts_with(**s))?;
+            let sym = SYMS
+                .iter()
+                .find(|s| rest.starts_with(**s) && (dots || **s != "."))?;
             i += sym.len();
             out.push(Tok::Sym(sym));
         }
@@ -589,6 +597,262 @@ pub fn translate_check(definition: &str, fields: &[String]) -> Option<String> {
     reads_only(&parsed, fields).then_some(text)
 }
 
+// ---- Policies (docs/infer.md, Policies) ----
+
+/// A policy condition in the few shapes that translate exactly.
+#[derive(Debug, Clone, PartialEq)]
+enum Cond {
+    True,
+    /// `col = auth.uid()` for a `user` field `col`.
+    Owner(String),
+    And(Vec<Cond>),
+    Or(Vec<Cond>),
+}
+
+impl Cond {
+    fn render(&self) -> String {
+        match self {
+            Cond::True => "true".into(),
+            Cond::Owner(c) => format!("{c} == auth.user"),
+            Cond::And(v) => v
+                .iter()
+                .map(|c| match c {
+                    Cond::Or(_) => format!("({})", c.render()),
+                    _ => c.render(),
+                })
+                .collect::<Vec<_>>()
+                .join(" and "),
+            Cond::Or(v) => v.iter().map(Cond::render).collect::<Vec<_>>().join(" or "),
+        }
+    }
+}
+
+/// One side of an `=`: the signed-in person's id, or a column, with the casts applied to it.
+enum Side {
+    Uid,
+    Col(String),
+}
+
+struct Cursor<'a> {
+    toks: &'a [Tok],
+    pos: usize,
+    users: &'a [String],
+}
+
+const RESERVED: [&str; 8] = ["select", "as", "and", "or", "true", "false", "null", "not"];
+
+impl Cursor<'_> {
+    fn word(&self, w: &str) -> bool {
+        matches!(self.toks.get(self.pos), Some(Tok::Id(x)) if x.eq_ignore_ascii_case(w))
+    }
+
+    fn sym(&self, s: &str) -> bool {
+        matches!(self.toks.get(self.pos), Some(Tok::Sym(x)) if *x == s)
+    }
+
+    fn eat(&mut self, s: &str) -> Option<()> {
+        self.sym(s).then(|| self.pos += 1)
+    }
+
+    fn list(
+        &mut self,
+        word: &str,
+        one: fn(&mut Self) -> Option<Cond>,
+        make: fn(Vec<Cond>) -> Cond,
+    ) -> Option<Cond> {
+        let mut v = vec![one(self)?];
+        while self.word(word) {
+            self.pos += 1;
+            v.push(one(self)?);
+        }
+        Some(if v.len() == 1 { v.remove(0) } else { make(v) })
+    }
+
+    fn expr(&mut self) -> Option<Cond> {
+        self.list("or", Self::and, Cond::Or)
+    }
+
+    fn and(&mut self) -> Option<Cond> {
+        self.list("and", Self::atom, Cond::And)
+    }
+
+    fn atom(&mut self) -> Option<Cond> {
+        let start = self.pos;
+        if let Some(c) = self.eq() {
+            return Some(c);
+        }
+        self.pos = start;
+        if self.eat("(").is_some() {
+            let c = self.expr()?;
+            self.eat(")")?;
+            return Some(c);
+        }
+        if self.word("true") {
+            self.pos += 1;
+            return Some(Cond::True);
+        }
+        None
+    }
+
+    /// `col = auth.uid()` in either order. A cast to `uuid` changes nothing; a cast to `text`
+    /// compares the same values only when both sides have it.
+    fn eq(&mut self) -> Option<Cond> {
+        let (a, ca) = self.side()?;
+        self.eat("=")?;
+        let (b, cb) = self.side()?;
+        let col = match (a, b) {
+            (Side::Uid, Side::Col(c)) | (Side::Col(c), Side::Uid) => c,
+            _ => return None,
+        };
+        let plain = ca.is_empty() || ca == ["text"];
+        (ca == cb && plain && self.users.contains(&col)).then_some(Cond::Owner(col))
+    }
+
+    fn side(&mut self) -> Option<(Side, Vec<String>)> {
+        let (base, mut casts) = if self.eat("(").is_some() {
+            let sub = self.word("select");
+            if sub {
+                self.pos += 1;
+            }
+            let inner = self.side()?;
+            if sub && self.word("as") {
+                self.pos += 2;
+            }
+            self.eat(")")?;
+            inner
+        } else if self.word("auth") {
+            self.pos += 1;
+            self.eat(".")?;
+            self.word("uid").then_some(())?;
+            self.pos += 1;
+            self.eat("(")?;
+            self.eat(")")?;
+            (Side::Uid, Vec::new())
+        } else {
+            let Some(Tok::Id(name)) = self.toks.get(self.pos) else {
+                return None;
+            };
+            if RESERVED.iter().any(|w| name.eq_ignore_ascii_case(w)) {
+                return None;
+            }
+            self.pos += 1;
+            if self.sym(".") || self.sym("(") {
+                return None;
+            }
+            (Side::Col(name.clone()), Vec::new())
+        };
+        while self.eat("::").is_some() {
+            let Some(Tok::Id(ty)) = self.toks.get(self.pos) else {
+                return None;
+            };
+            self.pos += 1;
+            if ty != "uuid" {
+                casts.push(ty.clone());
+            }
+        }
+        Some((base, casts))
+    }
+}
+
+/// A policy condition as a Svetra expression, when it is `true`, an owner check on one of the
+/// `user` fields, or `and`/`or` of those. `None` for anything else.
+pub fn translate_condition(sql: &str, users: &[String]) -> Option<String> {
+    if sql.len() > 400 {
+        return None;
+    }
+    let toks = lex_with(sql, true)?;
+    let mut cur = Cursor {
+        toks: &toks,
+        pos: 0,
+        users,
+    };
+    let cond = cur.expr()?;
+    if cur.pos != toks.len() {
+        return None;
+    }
+    let text = cond.render();
+    crate::expr::parse(&text).ok()?;
+    Some(text)
+}
+
+/// A database policy that translates to one Svetra policy.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Translated {
+    pub role: &'static str,
+    pub actions: Vec<&'static str>,
+    pub restrictive: bool,
+    pub when: String,
+    pub check: Option<String>,
+}
+
+/// One row of the snapshot's `policies`, as a Svetra policy, or why not. `granted(role, action)`
+/// says whether the database gives that role the table privilege.
+pub fn translate_policy(
+    p: &Value,
+    users: &[String],
+    granted: &dyn Fn(&str, &str) -> bool,
+) -> Result<Translated, String> {
+    let roles = crate::inspect::roles(p);
+    let role = if roles.iter().any(|r| r == "public")
+        || (roles.len() == 2 && roles.iter().all(|r| r == "anon" || r == "authenticated"))
+    {
+        "anyone"
+    } else if roles == ["authenticated"] {
+        "authenticated"
+    } else if roles == ["anon"] {
+        "anon"
+    } else {
+        return Err(format!("roles {}", roles.join(", ")));
+    };
+    let cond = |key: &str| {
+        let sql = p[key].as_str()?;
+        Some(
+            translate_condition(sql, users)
+                .ok_or("a condition that isn't an owner check or `true`"),
+        )
+    };
+    let (using, check) = (cond("using"), cond("check"));
+    let some_sql = |key: &str| p[key].as_str().is_some();
+    let cmd = s(p, "cmd").to_ascii_uppercase();
+    let (mut actions, when, check): (Vec<&'static str>, String, Option<String>) = match cmd.as_str()
+    {
+        "SELECT" | "DELETE" if !some_sql("check") => {
+            let a = if cmd == "SELECT" { "select" } else { "delete" };
+            (vec![a], using.ok_or("no using")??, None)
+        }
+        "INSERT" if !some_sql("using") => (vec!["insert"], check.ok_or("no with check")??, None),
+        "UPDATE" => {
+            let u = using.ok_or("an update policy with no using")??;
+            let k = check.transpose()?.filter(|k| *k != u);
+            (vec!["update"], u, k)
+        }
+        "ALL" => {
+            let u = using.ok_or("no using")??;
+            if check.transpose()?.is_some_and(|k| k != u) {
+                return Err("FOR ALL with a with check that differs from using".into());
+            }
+            (vec!["select", "insert", "update", "delete"], u, None)
+        }
+        _ => return Err(format!("command {cmd}")),
+    };
+    let covered: &[&str] = if role == "anyone" {
+        &["anon", "authenticated"]
+    } else {
+        &[role]
+    };
+    actions.retain(|a| covered.iter().all(|r| granted(r, a)));
+    if actions.is_empty() {
+        return Err("the database withholds the table privilege from this role".into());
+    }
+    Ok(Translated {
+        role,
+        actions,
+        restrictive: s(p, "permissive").eq_ignore_ascii_case("restrictive"),
+        when,
+        check,
+    })
+}
+
 /// A drafted `svetra.yaml` and what it holds, for the summary line.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Draft {
@@ -643,6 +907,8 @@ struct Plan {
 struct Counts {
     fields: usize,
     untranslated: usize,
+    policies: usize,
+    policies_done: usize,
 }
 
 /// A constraint put in the draft, so a validation error can send it back to a comment.
@@ -657,6 +923,8 @@ struct Placed {
 struct Entity {
     text: String,
     placed: Vec<Placed>,
+    /// The `policies:` blocks this entity's policies became.
+    policies: Vec<String>,
 }
 
 /// Draft a `svetra.yaml` from a snapshot taken with `inspect::infer_query`.
@@ -702,6 +970,12 @@ fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Plac
     let mut counts = Counts {
         fields: 0,
         untranslated: 0,
+        policies: 0,
+        policies_done: 0,
+    };
+    let access = Access {
+        tables: rows(snap, "tables"),
+        policies: rows(snap, "policies"),
     };
     let mut left_out: Vec<String> = Vec::new();
     let mut plans: Vec<Plan> = Vec::new();
@@ -772,8 +1046,10 @@ fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Plac
     }
     plans.sort_by(|a, b| a.table.cmp(&b.table));
     let mut used: Vec<String> = Vec::new();
+    let mut used_policies: Vec<String> = Vec::new();
     let mut placed = Vec::new();
     let mut body = String::new();
+    let mut policy_blocks: Vec<String> = Vec::new();
     for plan in &plans {
         let e = entity(
             plan,
@@ -784,11 +1060,20 @@ fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Plac
             &enums,
             &findings,
             rejected,
+            &access,
             &mut used,
+            &mut used_policies,
             &mut counts,
         );
         body += &e.text;
         placed.extend(e.placed);
+        policy_blocks.extend(e.policies);
+    }
+    if !policy_blocks.is_empty() {
+        body += "\npolicies:\n";
+        for block in &policy_blocks {
+            body += block;
+        }
     }
     if !left_out.is_empty() {
         body += "\n# Tables left out of the entities:\n";
@@ -805,9 +1090,15 @@ fn build(snap: &Value, rejected: &[(String, String)]) -> Result<(Draft, Vec<Plac
     );
     let mut head = String::from(
         "# Drafted by `svetra infer` from a database snapshot. Review before adopting.\n\
-# Every entity is `private: true`: no policies are inferred yet, so nothing is exposed through\n\
-# the API until you add policies and remove `private`. That differs from the live database.\n",
+# An entity is `private: true` only when none of its policies translated; the draft is never\n\
+# wider than the database (docs/infer.md, Policies).\n",
     );
+    if counts.policies > 0 {
+        head += &format!(
+            "# Policies: {} of {} translated.\n",
+            counts.policies_done, counts.policies
+        );
+    }
     head += &format!(
         "# {} entities from {} tables. Skipped: {}, {}.\n",
         plans.len(),
@@ -863,6 +1154,177 @@ fn fk_actions(definition: &str) -> Option<String> {
     Some(one_line(&definition[at..]))
 }
 
+/// The snapshot's table and policy rows, for the policies of each entity.
+struct Access<'a> {
+    tables: Vec<&'a Value>,
+    policies: Vec<&'a Value>,
+}
+
+/// What the policies of one table become: `policies:` blocks, comments for the entity, and
+/// whether the entity stays `private`.
+struct TablePolicies {
+    blocks: Vec<String>,
+    notes: Vec<String>,
+    comment: Option<String>,
+    private: bool,
+}
+
+/// The policy as `CREATE POLICY`, rebuilt from its `pg_policies` row, for an `UNTRANSLATED` comment.
+fn original_policy(table: &str, p: &Value) -> String {
+    let roles = crate::inspect::roles(p);
+    let mut sql = format!(
+        "CREATE POLICY {} ON public.{table} AS {} FOR {} TO {}",
+        s(p, "name"),
+        s(p, "permissive"),
+        s(p, "cmd"),
+        if roles.is_empty() {
+            "PUBLIC".to_string()
+        } else {
+            roles.join(", ")
+        }
+    );
+    for (key, clause) in [("using", "USING"), ("check", "WITH CHECK")] {
+        if let Some(c) = p[key].as_str() {
+            sql += &format!(" {clause} ({c})");
+        }
+    }
+    sql
+}
+
+/// Translate a table's policies, never widening access (docs/infer.md, Policies).
+fn table_policies(
+    plan: &Plan,
+    users: &[String],
+    access: &Access,
+    used: &mut Vec<String>,
+    counts: &mut Counts,
+) -> TablePolicies {
+    let table = plan.table.as_str();
+    let rows = on(&access.policies, table);
+    let rls = access
+        .tables
+        .iter()
+        .find(|t| s(t, "schema") == "public" && s(t, "name") == table)
+        .is_some_and(|t| b(t, "rls"));
+    let granted = |role: &str, action: &str| {
+        access
+            .tables
+            .iter()
+            .find(|t| s(t, "schema") == "public" && s(t, "name") == table)
+            .is_some_and(|t| b(&t[role], action))
+    };
+    let mut out = TablePolicies {
+        blocks: Vec::new(),
+        notes: Vec::new(),
+        comment: None,
+        private: true,
+    };
+    counts.policies += rows.len();
+    if !rls {
+        out.comment = Some(
+            "row-level security is off here, so the database has no access rule (see the check finding). No policy is invented; add one deliberately."
+                .into(),
+        );
+    }
+    let mut results: Vec<(&Value, Result<Translated, String>)> = rows
+        .iter()
+        .map(|p| {
+            let r = if rls {
+                translate_policy(p, users, &granted)
+            } else {
+                Err("row-level security is off, so the policy isn't enforced".into())
+            };
+            (*p, r)
+        })
+        .collect();
+    let restrictive_lost = results
+        .iter()
+        .any(|(p, r)| r.is_err() && s(p, "permissive").eq_ignore_ascii_case("restrictive"));
+    let permissive_kept = results
+        .iter()
+        .any(|(_, r)| r.as_ref().is_ok_and(|t| !t.restrictive));
+    if restrictive_lost || !permissive_kept {
+        let why = if restrictive_lost {
+            "a restrictive policy on this table didn't translate, and without it this policy would be wider than the database"
+        } else {
+            "no permissive policy on this table translated, and a restrictive one alone lets nobody in"
+        };
+        for (_, r) in results.iter_mut() {
+            if r.is_ok() {
+                *r = Err(why.into());
+            }
+        }
+    }
+    let done = results.iter().filter(|(_, r)| r.is_ok()).count();
+    for (p, r) in &results {
+        match r {
+            Ok(t) => {
+                let name = s(p, "name");
+                let base = if is_snake(name) {
+                    name.to_string()
+                } else {
+                    format!("{table}_policy")
+                };
+                let mut final_name = base.clone();
+                let mut n = 2;
+                while used.contains(&final_name) {
+                    final_name = if n == 2 && is_snake(name) {
+                        format!("{table}_{name}")
+                    } else {
+                        format!("{base}_{n}")
+                    };
+                    n += 1;
+                }
+                used.push(final_name.clone());
+                let mut block = format!(
+                    "  {final_name}:\n    on: {}\n    as: {}\n    allow: [{}]\n",
+                    plan.entity,
+                    t.role,
+                    t.actions.join(", ")
+                );
+                if t.restrictive {
+                    block += "    restrictive: true\n";
+                }
+                let quote =
+                    |e: &str| format!("\"{}\"", e.replace('\\', "\\\\").replace('"', "\\\""));
+                block += &format!("    when: {}\n", quote(&t.when));
+                if let Some(k) = &t.check {
+                    block += &format!("    check: {}\n", quote(k));
+                }
+                out.blocks.push(block);
+            }
+            Err(why) => {
+                out.notes.push(untranslated(
+                    counts,
+                    format!(
+                        "policy {}: {} -- {why}",
+                        s(p, "name"),
+                        original_policy(table, p)
+                    ),
+                ));
+            }
+        }
+    }
+    counts.policies_done += done;
+    out.private = done == 0;
+    if rls && !rows.is_empty() {
+        out.comment = Some(if done == 0 {
+            format!(
+                "policies: none of {} translated. The database lets some people in; this draft keeps everyone out (private) until you port a policy.",
+                rows.len()
+            )
+        } else if done < rows.len() {
+            format!(
+                "policies: {done} of {} translated. The draft is NARROWER than the database: whatever an UNTRANSLATED policy below lets in, this draft keeps out, until you port it.",
+                rows.len()
+            )
+        } else {
+            return out;
+        });
+    }
+    out
+}
+
 #[allow(clippy::too_many_arguments)]
 fn entity(
     plan: &Plan,
@@ -873,7 +1335,9 @@ fn entity(
     enums: &[&Value],
     findings: &[crate::inspect::Finding],
     rejected: &[(String, String)],
+    access: &Access,
     used: &mut Vec<String>,
+    used_policies: &mut Vec<String>,
     counts: &mut Counts,
 ) -> Entity {
     let table = plan.table.as_str();
@@ -884,6 +1348,7 @@ fn entity(
     let mut lines: Vec<(String, Vec<String>)> = Vec::new(); // (key and spec, notes) or ("", [comment])
     let mut fields: Vec<String> = Vec::new();
     let mut consumed: Vec<String> = Vec::new();
+    let mut users: Vec<String> = Vec::new();
     for col in &cols {
         let name = s(col, "name");
         let ty = s(col, "type");
@@ -1008,6 +1473,9 @@ fn entity(
         }
         counts.fields += 1;
         fields.push(name.to_string());
+        if mapped.ty == "user" {
+            users.push(name.to_string());
+        }
         lines.push((format!("{name}: {{ {} }}", spec.join(", ")), note));
     }
     // Constraints, unique and indexes, now that the fields are known.
@@ -1079,6 +1547,8 @@ fn entity(
             None => notes.push(untranslated(counts, format!("index {name}: {def}"))),
         }
     }
+    let pol = table_policies(plan, &users, access, used_policies, counts);
+    notes.extend(pol.notes);
     // Render.
     let width = lines
         .iter()
@@ -1097,7 +1567,13 @@ fn entity(
             one_line(&f.message)
         );
     }
-    text += "    private: true\n    fields:\n";
+    if let Some(c) = &pol.comment {
+        text += &format!("    # {c}\n");
+    }
+    if pol.private {
+        text += "    private: true\n";
+    }
+    text += "    fields:\n";
     for (spec, note) in &lines {
         match spec.split_once(": ") {
             Some((n, rest)) => {
@@ -1142,7 +1618,11 @@ fn entity(
     for n in &notes {
         text += &format!("    {n}\n");
     }
-    Entity { text, placed }
+    Entity {
+        text,
+        placed,
+        policies: pol.blocks,
+    }
 }
 
 /// An index's columns when every position is a plain column.
@@ -1376,5 +1856,190 @@ mod sql_tests {
         ] {
             assert_eq!(check(def), None, "{def}");
         }
+    }
+}
+
+#[cfg(test)]
+mod policy_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn cond(sql: &str) -> Option<String> {
+        translate_condition(sql, &["owner".to_string(), "editor".to_string()])
+    }
+
+    fn all(_: &str, _: &str) -> bool {
+        true
+    }
+
+    fn policy(cmd: &str, roles: Value, using: Value, check: Value) -> Value {
+        json!({ "cmd": cmd, "roles": roles, "using": using, "check": check, "permissive": "PERMISSIVE" })
+    }
+
+    fn tr(p: &Value) -> Result<Translated, String> {
+        translate_policy(p, &["owner".to_string()], &all)
+    }
+
+    #[test]
+    fn owner_in_every_shape_the_database_prints() {
+        for sql in [
+            "(owner = auth.uid())",
+            "(auth.uid() = owner)",
+            "owner = auth.uid()",
+            "((owner = auth.uid()))",
+            "(owner = ( SELECT auth.uid() AS uid))",
+            "(( SELECT auth.uid() AS uid) = owner)",
+            "(owner = (SELECT auth.uid()))",
+            "(owner = (auth.uid())::uuid)",
+            "((owner)::uuid = auth.uid())",
+            "((owner)::text = (auth.uid())::text)",
+            "(((auth.uid())::text) = (owner)::text)",
+            "((owner)::text = ( SELECT (auth.uid())::text AS uid))",
+        ] {
+            assert_eq!(cond(sql).as_deref(), Some("owner == auth.user"), "{sql}");
+        }
+    }
+
+    #[test]
+    fn true_and_combinations() {
+        assert_eq!(cond("true").as_deref(), Some("true"));
+        assert_eq!(cond("(true)").as_deref(), Some("true"));
+        assert_eq!(
+            cond("((owner = auth.uid()) AND (editor = auth.uid()))").as_deref(),
+            Some("owner == auth.user and editor == auth.user")
+        );
+        assert_eq!(
+            cond("(((owner = auth.uid()) OR (editor = auth.uid())) AND true)").as_deref(),
+            Some("(owner == auth.user or editor == auth.user) and true")
+        );
+    }
+
+    #[test]
+    fn everything_else_stays_untranslated() {
+        for sql in [
+            "(other = auth.uid())",
+            "(owner = auth.uid()) AND (other = 1)",
+            "((owner)::text = auth.uid())",
+            "(owner = (auth.uid())::text)",
+            "((owner)::text = (auth.uid())::varchar)",
+            "((owner)::text::text = (auth.uid())::text::text)",
+            "(owner = auth.uid()) AND",
+            "(owner = auth.uid() OR)",
+            "owner = auth.uid() owner",
+            "(owner <> auth.uid())",
+            "(NOT (owner = auth.uid()))",
+            "(owner IS NOT NULL)",
+            "false",
+            "(status = 'published'::text)",
+            "((auth.jwt() ->> 'role'::text) = 'admin'::text)",
+            "(auth.role() = 'authenticated'::text)",
+            "is_admin()",
+            "(owner = auth.uid() AND is_admin())",
+            "(EXISTS ( SELECT 1 FROM membership m WHERE ((m.org = orders.org) AND (m.member = auth.uid()))))",
+            "(owner IN ( SELECT user_id FROM team))",
+            "(owner = ( SELECT id FROM profiles))",
+            "(t.owner = auth.uid())",
+            "(auth.uid() = auth.uid())",
+            "",
+        ] {
+            assert_eq!(cond(sql), None, "{sql}");
+        }
+    }
+
+    #[test]
+    fn commands_become_allow_when_and_check() {
+        let own = json!("(owner = auth.uid())");
+        let auth = json!(["authenticated"]);
+        let t = tr(&policy("SELECT", auth.clone(), own.clone(), Value::Null)).unwrap();
+        assert_eq!(t.role, "authenticated");
+        assert_eq!(t.actions, ["select"]);
+        assert_eq!(t.when, "owner == auth.user");
+        assert!(t.check.is_none() && !t.restrictive);
+        let t = tr(&policy("INSERT", auth.clone(), Value::Null, own.clone())).unwrap();
+        assert_eq!(
+            (&t.actions[..], t.when.as_str()),
+            (&["insert"][..], "owner == auth.user")
+        );
+        let t = tr(&policy("DELETE", auth.clone(), own.clone(), Value::Null)).unwrap();
+        assert_eq!(t.actions, ["delete"]);
+        let t = tr(&policy("UPDATE", auth.clone(), own.clone(), Value::Null)).unwrap();
+        assert!(t.check.is_none());
+        // The same check as `using` is left out; a different one is kept.
+        let same = policy(
+            "UPDATE",
+            auth.clone(),
+            own.clone(),
+            json!("owner = auth.uid()"),
+        );
+        assert!(tr(&same).unwrap().check.is_none());
+        let t = tr(&policy("UPDATE", auth.clone(), json!("true"), own.clone())).unwrap();
+        assert_eq!(
+            (t.when.as_str(), t.check.as_deref()),
+            ("true", Some("owner == auth.user"))
+        );
+        let t = tr(&policy("ALL", auth.clone(), own.clone(), Value::Null)).unwrap();
+        assert_eq!(t.actions, ["select", "insert", "update", "delete"]);
+        let t = tr(&policy("ALL", auth.clone(), own.clone(), own.clone())).unwrap();
+        assert!(t.check.is_none());
+    }
+
+    #[test]
+    fn commands_it_cannot_say_exactly() {
+        let own = json!("(owner = auth.uid())");
+        let auth = json!(["authenticated"]);
+        for p in [
+            policy("ALL", auth.clone(), own.clone(), json!("true")),
+            policy("UPDATE", auth.clone(), Value::Null, own.clone()),
+            policy("SELECT", auth.clone(), own.clone(), own.clone()),
+            policy("INSERT", auth.clone(), own.clone(), own.clone()),
+            policy("SELECT", auth.clone(), json!("is_admin()"), Value::Null),
+            policy("UPDATE", auth.clone(), own.clone(), json!("is_admin()")),
+            policy("TRUNCATE", auth.clone(), own.clone(), Value::Null),
+        ] {
+            assert!(tr(&p).is_err(), "{p}");
+        }
+    }
+
+    #[test]
+    fn roles_become_as() {
+        let role = |r: Value| tr(&policy("SELECT", r, json!("true"), Value::Null));
+        assert_eq!(role(json!(["public"])).unwrap().role, "anyone");
+        assert_eq!(
+            role(json!(["anon", "authenticated"])).unwrap().role,
+            "anyone"
+        );
+        assert_eq!(
+            role(json!(["authenticated"])).unwrap().role,
+            "authenticated"
+        );
+        assert_eq!(role(json!(["anon"])).unwrap().role, "anon");
+        assert_eq!(role(json!("{anon,authenticated}")).unwrap().role, "anyone");
+        for r in [
+            json!(["service_role"]),
+            json!(["authenticated", "service_role"]),
+            json!([]),
+        ] {
+            assert!(role(r).is_err());
+        }
+    }
+
+    #[test]
+    fn restrictive_is_kept() {
+        let mut p = policy("ALL", json!(["authenticated"]), json!("true"), Value::Null);
+        p["permissive"] = json!("RESTRICTIVE");
+        assert!(tr(&p).unwrap().restrictive);
+    }
+
+    #[test]
+    fn privileges_are_respected() {
+        let p = policy("ALL", json!(["public"]), json!("true"), Value::Null);
+        let no_delete = |_: &str, a: &str| a != "delete";
+        let t = translate_policy(&p, &[], &no_delete).unwrap();
+        assert_eq!(t.actions, ["select", "insert", "update"]);
+        // `anyone` needs both roles to hold it.
+        let only_anon = |r: &str, _: &str| r == "anon";
+        assert!(translate_policy(&p, &[], &only_anon).is_err());
+        let q = policy("SELECT", json!(["anon"]), json!("true"), Value::Null);
+        assert!(translate_policy(&q, &[], &only_anon).is_ok());
     }
 }

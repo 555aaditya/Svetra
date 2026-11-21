@@ -54,7 +54,7 @@
         {
             "schema": "public",
             "name": "orders",
-            "rls": false,
+            "rls": true,
             "anon": {
                 "select": true,
                 "insert": true,
@@ -104,6 +104,90 @@
         }
     ],
     "policies": [
+        {
+            "schema": "public",
+            "table": "order_items",
+            "name": "order_items_via_order",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "ALL",
+            "using": "(EXISTS ( SELECT 1\n   FROM orders o\n  WHERE ((o.id = order_items.order_id) AND (o.customer = auth.uid()))))",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_delete_guard",
+            "permissive": "RESTRICTIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "DELETE",
+            "using": "(customer = auth.uid())",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_delete_own",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "DELETE",
+            "using": "(customer = auth.uid())",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_insert_own",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "INSERT",
+            "using": null,
+            "check": "(( SELECT auth.uid() AS uid) = customer)"
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_select_own",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "SELECT",
+            "using": "(customer = auth.uid())",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_staff_read",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "SELECT",
+            "using": "((auth.jwt() ->> 'role'::text) = 'staff'::text)",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "orders",
+            "name": "orders_update_own",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "UPDATE",
+            "using": "(customer = auth.uid())",
+            "check": "(customer = auth.uid())"
+        },
         {
             "schema": "public",
             "table": "products",
