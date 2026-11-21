@@ -141,7 +141,7 @@ Supabase's dashboard lints overlap with several findings (row-level security off
 
 ## Not in version 0.1
 
-- `svetra infer`, which drafts a `svetra.yaml` from the snapshot (M7, next).
+- `svetra infer`, which drafts a `svetra.yaml` from the snapshot: specified in [infer.md](infer.md).
 - Storage buckets and their policies.
 - Seeding (`seed.sql`), the declarative `supabase/schemas` folder, Edge Functions, and a Supabase config's extension list: only the migrations are read.
 - Applying migrations to a real Supabase to check them there; the stand-in is the only throwaway database in 0.1 of this mode.
