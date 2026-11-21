@@ -1,14 +1,14 @@
 # Drafted by `svetra infer` from a database snapshot. Review before adopting.
-# Every entity is `private: true`: no policies are inferred yet, so nothing is exposed through
-# the API until you add policies and remove `private`. That differs from the live database.
+# An entity is `private: true` only when none of its policies translated; the draft is never
+# wider than the database (docs/infer.md, Policies).
+# Policies: 6 of 9 translated.
 # 4 entities from 6 tables. Skipped: 1 view, 0 functions.
-# 10 things left as UNTRANSLATED (search for UNTRANSLATED).
+# 13 things left as UNTRANSLATED (search for UNTRANSLATED).
 #
-# svetra check found 4 critical, 2 warnings and 0 notes:
+# svetra check found 3 critical, 2 warnings and 0 notes:
 #   critical  public.legacy_codes: Anyone on the internet can read, add, change and delete every row of public.legacy_codes: row-level security is off.
 #   critical  public.membership: Anyone on the internet can read, add, change and delete every row of public.membership: row-level security is off.
 #   critical  public.order_items: Anyone on the internet can read, add, change and delete every row of public.order_items: row-level security is off.
-#   critical  public.orders: Anyone on the internet can read, add, change and delete every row of public.orders: row-level security is off.
 #   warning   public.product_names: public.product_names runs with its owner's rights, so it skips the row-level security of the tables it reads.
 #   warning   public.products: Anyone on the internet can read every row of public.products (policy products_read). Fine for public data; a leak otherwise.
 # yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
@@ -18,6 +18,7 @@ system: App   # rename
 entities:
   OrderItems:
     # check: critical, rls_off: Anyone on the internet can read, add, change and delete every row of public.order_items: row-level security is off.
+    # row-level security is off here, so the database has no access rule (see the check finding). No policy is invented; add one deliberately.
     private: true
     fields:
       id:         { type: int, primary: true }   # UNTRANSLATED identity (always): Svetra has no auto-increment, inserts must give a value
@@ -27,9 +28,9 @@ entities:
     unique:
       - [order_id, product_id]
     # UNTRANSLATED check order_items_qty_check: CHECK (((qty > 0) AND (qty < LEAST(10, 100))))
+    # UNTRANSLATED policy order_items_via_order: CREATE POLICY order_items_via_order ON public.order_items AS PERMISSIVE FOR ALL TO authenticated USING ((EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = order_items.order_id) AND (o.customer = auth.uid()))))) -- row-level security is off, so the policy isn't enforced
   Orders:
-    # check: critical, rls_off: Anyone on the internet can read, add, change and delete every row of public.orders: row-level security is off.
-    private: true
+    # policies: 5 of 6 translated. The draft is NARROWER than the database: whatever an UNTRANSLATED policy below lets in, this draft keeps out, until you port it.
     fields:
       id:         { type: uuid, primary: true }
       customer:   { type: user, required: true }   # lossy: the foreign key had ON DELETE CASCADE, Svetra writes none
@@ -43,9 +44,9 @@ entities:
     indexes:
       - [customer]
     # UNTRANSLATED index orders_note_idx: CREATE INDEX orders_note_idx ON public.orders USING btree (lower(note))
+    # UNTRANSLATED policy orders_staff_read: CREATE POLICY orders_staff_read ON public.orders AS PERMISSIVE FOR SELECT TO authenticated USING (((auth.jwt() ->> 'role'::text) = 'staff'::text)) -- a condition that isn't an owner check or `true`
   Products:
     # check: warning, open_read: Anyone on the internet can read every row of public.products (policy products_read). Fine for public data; a leak otherwise.
-    private: true
     fields:
       id:     { type: uuid, primary: true }
       sku:    { type: text, required: true, unique: true }
@@ -62,6 +63,7 @@ entities:
     # UNTRANSLATED check stock_text: CHECK (((stock)::text <> '-1'::text))
     # UNTRANSLATED index products_tags_idx: CREATE INDEX products_tags_idx ON public.products USING gin (tags)
   Profiles:
+    # policies: none of 1 translated. The database lets some people in; this draft keeps everyone out (private) until you port a policy.
     private: true
     fields:
       id:           { type: uuid, primary: true }
@@ -69,6 +71,40 @@ entities:
       bio:          { type: text }   # lossy: was character varying(280), the length limit is dropped
       created_at:   { type: timestamp, required: true, auto: now }
     # UNTRANSLATED foreign key profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id)
+    # UNTRANSLATED policy profiles_own: CREATE POLICY profiles_own ON public.profiles AS PERMISSIVE FOR SELECT TO authenticated USING ((id = auth.uid())) -- a condition that isn't an owner check or `true`
+
+policies:
+  orders_delete_guard:
+    on: Orders
+    as: authenticated
+    allow: [delete]
+    restrictive: true
+    when: "customer == auth.user"
+  orders_delete_own:
+    on: Orders
+    as: authenticated
+    allow: [delete]
+    when: "customer == auth.user"
+  orders_insert_own:
+    on: Orders
+    as: authenticated
+    allow: [insert]
+    when: "customer == auth.user"
+  orders_select_own:
+    on: Orders
+    as: authenticated
+    allow: [select]
+    when: "customer == auth.user"
+  orders_update_own:
+    on: Orders
+    as: authenticated
+    allow: [update]
+    when: "customer == auth.user"
+  products_read:
+    on: Products
+    as: anyone
+    allow: [select]
+    when: "true"
 
 # Tables left out of the entities:
 # UNTRANSLATED table public.legacy_codes: no primary key
