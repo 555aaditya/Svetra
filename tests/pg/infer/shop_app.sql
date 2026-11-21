@@ -1,5 +1,5 @@
 -- A small shop, as an AI app builder might write it, for `svetra infer` (docs/infer.md).
--- Applied after src/standin/base.sql. Covers each mapping, and what can't be translated.
+-- Applied after src/standin/base.sql and extra.sql (for auth.role()). Covers each mapping, and what can't be translated.
 create type public.order_status as enum ('open', 'paid', 'shipped');
 create table public.profiles (
   id uuid primary key references auth.users (id),
@@ -49,6 +49,7 @@ create table public.membership (
 create view public.product_names as select id, name from public.products;
 alter table public.profiles enable row level security;
 create policy profiles_own on public.profiles for select to authenticated using (id = auth.uid());
+create policy profiles_insert_own on public.profiles for insert to authenticated with check (auth.uid() = id);
 alter table public.products enable row level security;
 create policy products_read on public.products for select using (true);
 -- Owner policies on orders: the shapes that translate, a restrictive one, and one that can't.
@@ -62,3 +63,19 @@ create policy orders_staff_read on public.orders for select to authenticated usi
 -- order_items: row-level security stays off, so this policy isn't enforced and must not be drafted.
 create policy order_items_via_order on public.order_items for all to authenticated
   using (exists (select 1 from public.orders o where o.id = order_items.order_id and o.customer = auth.uid()));
+-- Reviews: owned through the profile table, a read that names the role, and foreign keys with an `on delete`.
+create table public.reviews (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.products (id) on delete cascade,
+  author uuid not null references public.profiles (id) on delete cascade,
+  parent_id uuid references public.reviews (id) on delete set null,
+  body text not null
+);
+alter table public.reviews enable row level security;
+create policy reviews_read on public.reviews for select to authenticated using (auth.role() = 'authenticated');
+create policy reviews_insert_own on public.reviews for insert to authenticated with check (author = auth.uid());
+create policy reviews_update_own on public.reviews for update to authenticated
+  using ((auth.role() = 'authenticated') and (author = auth.uid())) with check (author = auth.uid());
+create policy reviews_delete_own on public.reviews for delete to authenticated using (author = auth.uid());
+create policy reviews_delete_moderator on public.reviews for delete to authenticated
+  using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.display_name = 'moderator'));
