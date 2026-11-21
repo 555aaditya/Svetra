@@ -262,4 +262,28 @@ Not allowed: `as` (always the Edge Function) and `output` (a webhook answers `20
 
 Deduplication stops duplicate deliveries. It doesn't stop an old, correctly signed call being sent again. Timestamp checks are [not in this version](#not-in-this-version), and `explain` says so.
 
-<!-- next -->
+## Diagnostics
+
+The highest code in use is `SVT036`. `SVT011` to `SVT018` have never been used; they stay free, and new codes continue after `SVT036`. Existing codes are reused wherever they already mean the thing.
+
+| Code | Severity | Rule | Remediation action |
+|---|---|---|---|
+| `SVT037` | error | A `schedule` isn't a valid five-field cron expression: wrong number of fields, a value out of range, or a name where a number is needed. The message says which field | `fix_schedule` |
+| `SVT038` | error | Trigger holes form a loop: one writes an entity whose trigger hole (or its own) fires on it. The message names the cycle | `break_loop` |
+| `SVT039` | error | A webhook's `secret` isn't the name of a secret (`^[A-Z][A-Z0-9_]*$`), which usually means its value was pasted into the file. The message never prints the value | `use_secret_name` |
+| `SVT040` | warning | A `schedule` or `trigger` hole has `grants`: a role is given or taken away with no person calling it | `confirm_grants` |
+
+Existing codes the new kinds use:
+
+| Code | Used for |
+|---|---|
+| `SVT020` | A key not allowed for the hole's kind, such as `input` on a `schedule` or `as` on a `webhook`. The hint lists the keys the kind takes |
+| `SVT028` | A key the kind requires is missing: `schedule`, `on`, `events`, `secret`, `input` |
+| `SVT029` | `events` isn't a list of `insert`, `update`, `delete`, or a `scheme` isn't one of the two |
+| `SVT002` | `on` names an entity that doesn't exist |
+| `SVT003` | `when` on a trigger or webhook uses what it can't: another entity, `auth.user`, `has_role`, `old.` outside `[update]` |
+| `SVT004` | Already counts a hole's `writes`; it now counts all kinds |
+| `SVT032` | The body rule, unchanged, for all kinds |
+
+Per [`AGENTS.md`](../AGENTS.md), each new code needs a row in `src/diag.rs`, a row in `format.md`'s Diagnostics table, a test that triggers it, and a message that says what is wrong and how to fix it. The loader's allowed-key constants and `schema/svetra.schema.json` change together (`tests/schema.rs`).
+
