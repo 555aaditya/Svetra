@@ -31,6 +31,11 @@ Usage:
                                     Run the draft's access tests against a throwaway copy of
                                     the original database (Docker) and list where they
                                     disagree. Never touches the original
+  svetra doctor [DIR] [--json]      The pre-launch checklist for the project folder: service
+                                    keys and other secrets in code, committed .env files,
+                                    secrets in supabase/config.toml, generated files out of
+                                    date. Reads only, prints no secret's value, never says
+                                    ready: the database is not checked yet
   svetra view [FILE] [--out PATH] [--no-open] [--json]
                                     Write one page showing who can see and change what
                                     (default .svetra/view.html) and open it; --json prints
@@ -47,7 +52,8 @@ Usage:
   svetra --version                  Print the version
   svetra --help                     Print this help
 
-Exit codes: 0 ok, 1 errors found (or stale files with --check), 2 usage error.
+Exit codes: 0 ok, 1 errors found (or stale files with --check; a critical finding with
+doctor), 2 usage error.
 ";
 
 // ponytail: hand-rolled argument parsing; each command takes one file and one flag. Switch to
@@ -76,6 +82,7 @@ fn main() -> ExitCode {
         Some("context") => view("context", &args[1..], true, |doc, _| {
             svetra::understand::context::context(doc)
         }),
+        Some("doctor") => doctor(&args[1..]),
         Some("view") => page(&args[1..]),
         Some(cmd @ ("check" | "infer")) => inspect(cmd, &args[1..]),
         Some(cmd @ ("diff" | "plan")) => change(cmd, &args[1..]),
@@ -249,6 +256,39 @@ fn init(args: &[String]) -> ExitCode {
             ExitCode::from(1)
         }
         Err(_) => unreachable!("init neither validates nor reads hole bodies"),
+    }
+}
+
+/// `svetra doctor [DIR] [--json]` (docs/doctor.md). The database sources (`--db`, `--local`,
+/// `--migrations`) come in a later pull request.
+fn doctor(args: &[String]) -> ExitCode {
+    let json = args.iter().any(|a| a == "--json");
+    let dirs: Vec<&String> = args.iter().filter(|a| *a != "--json").collect();
+    if let Some(bad) = dirs.iter().find(|a| a.starts_with('-')) {
+        let why = if matches!(
+            bad.as_str(),
+            "--db" | "--local" | "--migrations" | "--scratch"
+        ) {
+            "doctor can't read a database yet; it reads the project folder only"
+        } else {
+            "unknown option"
+        };
+        return usage(&format!("{why}: '{bad}'"));
+    }
+    if dirs.len() > 1 {
+        return usage("doctor takes one folder");
+    }
+    let dir = dirs.first().map_or(".", |d| d.as_str());
+    match svetra::doctor::run(std::path::Path::new(dir)) {
+        Ok(report) => {
+            print!("{}", if json { report.json() } else { report.human() });
+            if report.has_critical() {
+                ExitCode::from(1)
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
+        Err(e) => usage(&e),
     }
 }
 

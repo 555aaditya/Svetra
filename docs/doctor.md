@@ -255,6 +255,23 @@ Doctor ships in three pull requests, each one topic. The spec is this document.
 2. **Auth settings and storage buckets.** A small `config.toml` reader (the compiler's `config.rs` already finds tables and keys line by line; share it rather than add a TOML crate), the auth checks, and the `buckets` key in doctor's query. Before it is written, the UNVERIFIED keys in this document are checked against a `config.toml` made by `supabase init`, and this document is corrected.
 3. **Agents.** A `doctor` tool in `svetra mcp` ([agents.md](agents.md)) with the same inputs and the same JSON plus a `summary`, and a line in the Svetra skill: run `doctor` before telling anyone an app is ready.
 
+**What the first PR built, where it differs from the list above.** It builds the folder checks and nothing that needs a database, so the command is `svetra doctor [DIR] [--json]` and `--db`, `--local`, `--migrations` and `--scratch` are a usage error (exit 2) until the data exposure part lands. The code is `src/doctor/` (`files.rs`, `jwt.rs`, `keys.rs`, `generated.rs`, and the report in `mod.rs`).
+
+- **Built:** all eight kinds of `keys`; `stale_generated` and `design_invalid`; the three backups reminders; argument parsing, exit codes, the report and `--json`.
+- **Not built yet:** data exposure; `schema_not_in_git` (it needs to know the project has tables, which only a database gives); auth settings and storage buckets (the second PR).
+- **Always under "Not checked":** "Database" and "Auth settings", so this build never prints the third last line and `ready` is always false. "Git" is added when `DIR` isn't a repository, and "Generated files" when there is no `svetra.yaml` (the last-line rule counts that as a part not checked, so it is listed, not skipped without comment). The first line says "(database not checked)".
+- **Reminders** are printed when `DIR/supabase/` exists (there is no `--db` yet).
+- **Decisions the spec left open:**
+  - A tracked `.env` file with no value that is non-public by design, and no critical finding, gets no `env_committed` finding: the warning is "for a file with any value that isn't public by design".
+  - `config_secret` is critical when the file is tracked or git is unavailable, and a warning otherwise (ignored, or untracked and not ignored).
+  - `SUPABASE_JWT_SECRET: value` is read in `.yml`, `.yaml` and `.json` files only; elsewhere only `=` counts, so a TypeScript type declaration isn't a value. `jwt_secret` is read in `supabase/config.toml` only. Supabase's documented local development secret is skipped, like the local database.
+  - A `.env*` file is found by its name (`.env`, or `.env.` and a suffix), except `.example`, `.sample` and `.template`.
+  - `jwt_unrecognized` needs a front-end or tracked file, like every key kind: an untracked server-side file is never reported.
+  - Findings are sorted by area, severity, file, line and kind. Findings about a whole file (`env_committed`, `env_not_ignored`, `stale_generated`, `design_invalid`) have a `file` and no `line`.
+  - A line in a front-end file that holds several keys gives one finding per kind and line.
+  - Symbolic links are never followed or read.
+  - Prefix lengths are the UNVERIFIED ones: Stripe 20 or more characters after the prefix, GitHub `ghp_` 30 or more, `github_pat_` 22 or more, AWS 16 capitals and digits, `sbp_` exactly 40 hex digits, `sb_secret_` 16 or more.
+
 **Tests in the first PR** (AGENTS.md: one test per finding kind, CLI tests run the real binary):
 - A fixture project built at test time, in a temporary folder with a real `git init`, so no secret-shaped string is committed to this repository. Tokens are assembled at run time from pieces (a JWT is built from `base64(header)`, `base64(payload)`, and a dummy signature), because a committed key-shaped string trips GitHub's push protection and every scanner.
 - One test per kind of `keys`, `backups` and `generated`: the planted service key in a `.tsx` file; the same key in an ignored `.env` (not reported); a tracked `.env` with and without a secret; a `config.toml` with a literal and with `env(...)`; a placeholder and an example file.
