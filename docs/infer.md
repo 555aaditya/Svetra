@@ -257,6 +257,8 @@ Everything else is **not translated**, with no attempt to be clever. That includ
 
 The result is never wider: a dropped role was already refused by the database, and a kept role gets exactly the rest of the condition.
 
+One caveat, about `anon`. A request that carries no JWT at all runs as the role `anon`, but `auth.role()` is then null, not `'anon'`, so `auth.role() = 'anon'` is not true for it. `infer` reads `auth.role()` as the role, so it says `as: anon` and lets that request in. This only matters for a request that skips Supabase's API (which always sends the `anon` key as a JWT whose role is `anon`), for example a direct database connection as `anon`. Review a policy that names `anon` this way. `authenticated` has no such gap, since a request can only run as it with a JWT.
+
 ### Why a policy didn't translate
 
 The reason after `--` on an `UNTRANSLATED policy` comment names the first thing in the condition that stopped it, so a person knows what to do:
