@@ -8,6 +8,7 @@ pub mod files;
 pub mod jwt;
 pub mod keys;
 
+use crate::project;
 use serde_json::{Value, json};
 use std::path::Path;
 
@@ -210,7 +211,15 @@ pub fn run(dir: &Path) -> Result<Report, String> {
         return Err(format!("{} is not a folder", dir.display()));
     }
     let files = files::walk(dir);
-    let git = files::Git::open(dir);
+    let mut git = files::Git::open(dir);
+    if let Some(g) = git.as_mut() {
+        let candidates: Vec<&str> = files
+            .iter()
+            .map(|f| f.path.as_str())
+            .filter(|p| keys::is_env_file(p) || *p == project::CONFIG)
+            .collect();
+        g.check_ignored(dir, &candidates);
+    }
     let mut report = Report {
         project: dir.display().to_string(),
         git: git.is_some(),
