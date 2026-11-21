@@ -102,6 +102,18 @@ The `ref`'s `on delete` and `on update` actions are not part of Svetra's foreign
 
 **A column that can't be translated is left out of the entity, never dropped silently:** the entity's comment block lists it with the original type and SQL. Because it's left out, a `not null` column the app depends on would be missing from the compiled table. The comment says so, and the summary line counts it.
 
+### Through a profile table
+
+Supabase apps keep a `public.users` or `profiles` table whose primary key is the person's id: `id uuid primary key references auth.users (id)`. Other tables then point at **that** table (`created_by uuid references public.users (id)`), and policies compare the column with `auth.uid()`. The value in such a column is a person's id: every value in `profiles.id` is also in `auth.users.id`, so `created_by = auth.uid()` asks the same question as it would on a column that referenced `auth.users` directly.
+
+`infer` says this as follows, and calls it a change, not an exact translation:
+
+- **The profile table's key** is `{ type: user, primary: true }`. Its own policies `auth.uid() = id` are then owner checks.
+- **A `uuid` column with a single-column foreign key to that key** is `{ type: user }` and not a `ref`. `created_by == auth.user` then compiles to the very condition the database has. A `ref` would need `created_by.id == auth.user`, which compiles to a subquery on the profile table and is subject to **its** row-level security: someone who can't see their own profile row would be refused, so the draft would mean something different from the database.
+- **What is lost, and said in a `# lossy` note on the field:** the foreign key to the profile table. The compiled column references `auth.users`, so it accepts a person who has no profile row, which the database refuses (looser data integrity, not wider access: no policy reads it), and an `on delete` action of the original key is not written. The note names the table and the original action.
+- **The field type changes for every such column,** not only those a policy reads. A `ref` to the profile entity and a `user` field both hold the same uuid, and one rule for the whole draft is easier to review than a choice per column. A person who wants the `ref` back (for the foreign key, `on_delete` or a path like `created_by.username`) changes the one field and its policy by hand.
+- **Only one hop is followed.** A column that references a table that references a profile table stays a `ref`; so does a foreign key with more than one column, or to a column other than the primary key.
+
 ### Check constraints
 
 A check constraint is translated only if it comes out as an expression that Svetra's expression language parses (docs/format.md, Expressions) and that type-checks against the entity's fields. `infer` does this in small, fixed steps, and no others:
