@@ -217,3 +217,17 @@ What can be read locally, and is a finding:
 
 With no git, or no `supabase/` folder, this check is skipped and listed under "Not checked".
 
+## Storage buckets
+
+Supabase Storage keeps files in buckets, and a **public bucket** serves every file in it to anyone who has the URL, with no sign-in and no policy involved.
+
+**What it reads.** Doctor's database read is `check`'s query plus one more key, `buckets`: for each row of `storage.buckets`, its id, name, `public`, `file_size_limit` and `allowed_mime_types`. `check`'s own query and output are unchanged. It works with `--db`, `--local` and `--migrations` (a migration that inserts into `storage.buckets` is applied to the throwaway database; the stand-in has the table, `src/standin/extra.sql`). A database without a `storage.buckets` table has no buckets, which isn't an error.
+
+| Kind | Severity | When | Message and fix |
+|---|---|---|---|
+| `public_bucket` | warning | A bucket with `public = true` | "Every file in the bucket avatars can be opened by anyone with its link. Fine for logos and profile pictures; a leak for invoices and uploads. fix: make the bucket private and hand out time-limited signed links, or check that every file in it is meant for everyone." |
+
+Always a warning, never critical: public buckets are normal, and the content decides. A bucket with `file_size_limit` unset or no `allowed_mime_types` is not flagged in this version (see "Not in this version").
+
+Without a database source, this is listed under "Not checked". Doctor does not read `[storage.buckets.*]` tables in `config.toml`: UNVERIFIED that the CLI has such tables, and they describe local buckets only.
+
