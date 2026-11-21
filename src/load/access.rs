@@ -138,21 +138,65 @@ impl Cx {
         let hname = self.string(name, "holes")?;
         let path = format!("holes.{hname}");
         let entries = self.map(body, &path)?;
-        let k = self.keys(entries, &path, super::HOLE_KEYS);
-        let kind = self.need(&k, "kind", &path, name)?;
-        if self.string(kind, &format!("{path}.kind"))? != "function" {
-            self.report(
-                Code::Svt023,
-                &format!("{path}.kind"),
-                kind,
-                "Version 0.1 supports only `kind: function`.".into(),
-                "Write kind: function.",
-            );
+        // The kind decides which keys are allowed, so find it first.
+        let Some(kind_node) = entries
+            .iter()
+            .find(|(k, _)| k.as_str() == Some("kind"))
+            .map(|(_, v)| v)
+        else {
+            let msg = format!("Missing required key `kind` in {}.", super::show(&path));
+            self.report(Code::Svt028, &path, name, msg, "Add `kind`.");
             return None;
+        };
+        let kind_name = self.string(kind_node, &format!("{path}.kind"))?;
+        let allowed = match kind_name.as_str() {
+            "function" => super::FUNCTION_HOLE_KEYS,
+            "schedule" => super::SCHEDULE_HOLE_KEYS,
+            other => {
+                self.report(
+                    Code::Svt023,
+                    &format!("{path}.kind"),
+                    kind_node,
+                    format!("`{other}` is not a kind of hole."),
+                    &format!("Use one of: {}.", super::HOLE_KINDS.join(", ")),
+                );
+                return None;
+            }
+        };
+        // A key another kind takes gets its own message, which says why it doesn't apply here.
+        let mut mine = Vec::new();
+        for (key, value) in entries {
+            match key.as_str() {
+                Some(k) if super::HOLE_KEYS.contains(&k) && !allowed.contains(&k) => {
+                    let msg = format!(
+                        "`{k}` isn't allowed on a `{kind_name}` hole in {}: {}",
+                        super::show(&path),
+                        why_not(&kind_name, k)
+                    );
+                    let hint = format!(
+                        "Remove it. A {kind_name} hole takes: {}.",
+                        allowed.join(", ")
+                    );
+                    self.report(Code::Svt020, &super::join(&path, k), key, msg, &hint);
+                }
+                _ => mine.push((key.clone(), value.clone())),
+            }
         }
+        let k = self.keys(&mine, &path, allowed);
+        let kind = if kind_name == "schedule" {
+            let node = self.need(&k, "schedule", &path, name)?;
+            let cron = self.string(node, &format!("{path}.schedule"))?;
+            HoleKind::Schedule(Schedule {
+                cron,
+                pos: pos(node),
+            })
+        } else {
+            HoleKind::Function
+        };
         let mut hole = Hole {
             name: hname,
             pos: pos(name),
+            kind,
             input: Vec::new(),
             output: None,
             reads: Vec::new(),
@@ -256,5 +300,20 @@ impl Cx {
         };
         k.insert("type", &n);
         self.field_type(&k, path, at)
+    }
+}
+
+/// Why a key of another kind of hole doesn't apply to `kind`.
+fn why_not(kind: &str, key: &str) -> &'static str {
+    match (kind, key) {
+        ("schedule", "input" | "output") => {
+            "nobody passes or receives it, because the clock runs it."
+        }
+        ("schedule", "as") => "nobody calls it, because the clock runs it.",
+        ("schedule", "when") => {
+            "there is no call to guard. Write the check in the body, such as `if not exists (...) then return; end if;`."
+        }
+        ("function", "schedule") => "only `kind: schedule` runs on a clock.",
+        _ => "this kind doesn't take it.",
     }
 }

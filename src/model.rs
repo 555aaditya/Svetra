@@ -195,18 +195,34 @@ pub struct Policy {
     pub role: Role,
 }
 
-/// A hole. Version 0.1 has one kind, `function`, so the kind isn't stored.
+/// What starts a hole (docs/format.md, Holes; docs/automations.md).
+#[derive(Debug, Clone, PartialEq)]
+pub enum HoleKind {
+    /// Called by a person through `rpc`.
+    Function,
+    /// Run by the database's clock.
+    Schedule(Schedule),
+}
+
+/// A scheduled hole's cron expression, as written, with its position.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Schedule {
+    pub cron: String,
+    pub pos: Pos,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Hole {
     pub name: String,
     pub pos: Pos,
+    pub kind: HoleKind,
     pub input: Vec<Param>,
     pub output: Option<ParamType>,
     pub reads: Vec<NameRef>,
     pub writes: Vec<NameRef>,
     /// Roles the hole may give and take away, by writing `svetra.role_grants`.
     pub grants: Vec<NameRef>,
-    /// Who may call it, as for policies.
+    /// Who may call it, as for policies. A `schedule` has no caller, and this stays the default.
     pub role: Role,
     /// A condition over the inputs that must hold for the call to run.
     pub when: Option<String>,
