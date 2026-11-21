@@ -33,6 +33,11 @@ pub struct Finding {
 
 /// The read-only catalog query: one JSON document (docs/check.md, What it reads).
 pub fn query(schemas: &[String]) -> String {
+    format!("select json_build_object({})", keys(schemas))
+}
+
+/// The key list of `check`'s query, shared with `infer`'s (docs/infer.md, What it reads).
+fn keys(schemas: &[String]) -> String {
     let list: Vec<String> = schemas.iter().map(|s| lit(s)).collect();
     let list = list.join(", ");
     let table_priv = |role: &str, p: &str| {
@@ -61,7 +66,7 @@ pub fn query(schemas: &[String]) -> String {
         )
     };
     format!(
-        "select json_build_object(\
+        "\
 'tables', (select coalesce(json_agg(json_build_object('schema', n.nspname, 'name', c.relname, 'rls', c.relrowsecurity, {roles}) order by n.nspname, c.relname), '[]') \
 from pg_class c join pg_namespace n on n.oid = c.relnamespace where c.relkind in ('r', 'p') and n.nspname in ({list})), \
 'policies', (select coalesce(json_agg(json_build_object('schema', schemaname, 'table', tablename, 'name', policyname, 'permissive', permissive, 'roles', roles, 'cmd', cmd, 'using', qual, 'check', with_check) order by schemaname, tablename, policyname), '[]') \
@@ -73,7 +78,7 @@ from pg_class c join pg_namespace n on n.oid = c.relnamespace where c.relkind in
 'functions', (select coalesce(json_agg(json_build_object('schema', n.nspname, 'name', p.proname, 'args', pg_get_function_identity_arguments(p.oid), \
 'security_definer', p.prosecdef, 'search_path_set', coalesce(exists (select 1 from unnest(p.proconfig) x where x like 'search_path=%'), false), \
 'anon_execute', {fa}, 'authenticated_execute', {fu}) order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)), '[]') \
-from pg_proc p join pg_namespace n on n.oid = p.pronamespace where p.prokind = 'f' and n.nspname in ({list})))",
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace where p.prokind = 'f' and n.nspname in ({list}))",
         roles = roles(&table_priv),
         va = table_priv("anon", "select"),
         vu = table_priv("authenticated", "select"),
