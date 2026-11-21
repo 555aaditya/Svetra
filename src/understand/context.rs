@@ -59,8 +59,9 @@ pub fn context(doc: &Document) -> String {
     for e in &doc.entities {
         let fields: Vec<String> = e.fields.iter().map(field).collect();
         let mut line = format!(
-            "{}{}: {}",
+            "{}{}{}: {}",
             if e.private { "private " } else { "" },
+            if e.audit { "audit " } else { "" },
             e.name,
             fields.join("; ")
         );
@@ -163,6 +164,9 @@ pub fn context(doc: &Document) -> String {
         }
         if let Some(w) = &h.when {
             line += &format!("; when {w}");
+        }
+        if h.audit {
+            line += "; audit";
         }
         out += &line;
         out.push('\n');

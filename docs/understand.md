@@ -187,6 +187,8 @@ policy owner_reads_own_transactions: Transaction select authenticated when sourc
 hole transfer: (source Account.id, destination Account.id, amount Transaction.amount) -> Transaction; reads Account; writes Account, Transaction
 ```
 
+- `context` marks an audited entity with an `audit ` prefix (`audit Note: …`, after `private ` if both) and ends an audited hole's line with `; audit`.
+
 **The size target:** `context` should be no larger than `svetra.yaml` itself, and much smaller than the generated code. Measured on the fixtures:
 
 | Fixture | `svetra.yaml` | `context` | Generated code (SQL + TS) |
