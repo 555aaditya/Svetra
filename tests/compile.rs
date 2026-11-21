@@ -214,7 +214,10 @@ fn audit_output_appears_only_when_something_is_audited() {
         include_str!("fixtures/posts.yaml"),
     ] {
         let sql = compile(src);
-        assert!(!sql.contains("\"svetra\".\"audit_log\""), "unexpected audit log");
+        assert!(
+            !sql.contains("\"svetra\".\"audit_log\""),
+            "unexpected audit log"
+        );
         assert!(!sql.contains("-- Audit"));
     }
     let sql = compile(include_str!("fixtures/audited.yaml"));
@@ -229,7 +232,9 @@ fn an_audited_hole_logs_in_the_wrapper_and_never_in_its_own_role() {
     assert_eq!(sql.matches("'call', 'archive'").count(), 1);
     assert!(sql.contains("jsonb_build_object('note', note)"));
     assert!(sql.contains("'call', 'sweep', 'call', '{}'::jsonb"));
-    assert!(!sql.contains("to \"svetra_hole_archive\";\ncreate policy \"svetra_hole_archive\" on \"svetra\""));
+    assert!(!sql.contains(
+        "to \"svetra_hole_archive\";\ncreate policy \"svetra_hole_archive\" on \"svetra\""
+    ));
     assert!(!sql.contains("on table \"svetra\".\"audit_log\" to"));
 }
 

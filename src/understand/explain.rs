@@ -681,7 +681,9 @@ fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
         });
     }
     if h.audit {
-        out.push("every call is recorded in the audit log, with who made it and what they sent.".into());
+        out.push(
+            "every call is recorded in the audit log, with who made it and what they sent.".into(),
+        );
     }
     out
 }

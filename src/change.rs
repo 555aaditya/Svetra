@@ -681,14 +681,14 @@ fn audit_change(path: String, on: bool, what: &str) -> Change {
 fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
     for h in &new.holes {
         let path = format!("holes.{}", h.name);
-        if let Some(x) = old.holes.iter().find(|x| x.name == h.name) {
-            if x.audit != h.audit {
-                changes.push(audit_change(
-                    path.clone(),
-                    h.audit,
-                    &format!("calls of {}", h.name),
-                ));
-            }
+        if let Some(x) = old.holes.iter().find(|x| x.name == h.name)
+            && x.audit != h.audit
+        {
+            changes.push(audit_change(
+                path.clone(),
+                h.audit,
+                &format!("calls of {}", h.name),
+            ));
         }
         match old.holes.iter().find(|x| x.name == h.name) {
             None => changes.push(change("add_hole", path, Data::Safe, format!("add custom code {}", h.name))),
