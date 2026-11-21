@@ -1,0 +1,2 @@
+not ok 46 - expire_invites runs on the schedule 0 3 * * *
+# Looks like you failed 1 test of 49
