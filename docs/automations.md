@@ -198,4 +198,68 @@ Holes of other kinds that write an entity do fire its trigger holes. That is an 
 - The trigger runs **in the same transaction** as the change. If the body raises, the person's insert, update or delete is rolled back. That is right for "keep two things consistent" and wrong for "send an email". 0.2 has only this mode.
 - A slow body makes every write on the entity slow. Keep it short. Slow or external work is [not in this version](#not-in-this-version).
 
+## Webhook holes
+
+A webhook hole is an incoming HTTPS call from another service: a payment provider reporting a charge, a form tool sending a submission.
+
+### Decision: a generated Edge Function in front of a locked function
+
+There are two ways to receive an outside call on Supabase.
+
+| | PostgREST RPC with a secret in the request | Edge Function that checks, then calls the database |
+|---|---|---|
+| Where the check runs | In SQL, inside the function | In the Edge Function, before the database is touched |
+| Signature over the raw body (HMAC), as most providers send | Hard. PostgREST gives SQL parsed JSON, not the bytes the sender signed. Taking raw bytes depends on PostgREST behaviour that is **UNVERIFIED** here | Natural: read the raw body, compute the HMAC, compare in constant time |
+| Where the secret lives | Readable by SQL, so in the database (the Vault, **UNVERIFIED**) or a setting | In `supabase secrets`, never in the database |
+| Front door | Anyone with the project's public key, straight into a database function | Anyone on the internet, but a bad call stops before the database |
+| Extra moving part | None | One generated file to deploy |
+
+**Decision: the Edge Function.** Providers sign the raw body, and only code that sees the raw body can check it. A check in SQL would have to skip signatures or trust re-serialised JSON, and would put the secret in the database. The cost is one deploy step, which `explain` lists under "Before going live", as it does for sign-in settings.
+
+The Edge Function is **generated in full**, so no hand-written code sits in front of the data. The only hand-written logic is still the SQL body. After the check passes, the function can do one thing: call the hole's locked database function.
+
+```yaml
+holes:
+  payment_received:
+    kind: webhook
+    secret: PAYMENTS_WEBHOOK_SECRET   # the NAME of a secret, never its value
+    signature:
+      scheme: hmac_sha256
+      header: x-signature
+    input:
+      invoice: Invoice.id
+      paid: Invoice.amount
+      event_id: text
+    dedupe: event_id
+    reads: [Invoice]
+    writes: [Invoice, Payment]
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `kind` | yes | `webhook` |
+| `secret` | yes | The **name** of the secret that holds the key: `^[A-Z][A-Z0-9_]*$`. Set with `supabase secrets set NAME=...`. Anything else is `SVT039`, so a pasted key is caught |
+| `signature` | no | `{ scheme, header }`. `scheme` is `hmac_sha256` (the header is the hex HMAC-SHA256 of the raw body) or `shared_secret` (the header must equal the secret). Default: `hmac_sha256` in `x-signature`. Provider-specific formats are not in this version |
+| `input` | yes | Map of name to type, as for `function`. Each is read from the JSON body's top-level key of the same name |
+| `dedupe` | no | One `input` name that identifies the event. A second call with the same value is answered `200` and ignored |
+| `reads`, `writes`, `grants` | no | As for `function` |
+| `when` | no | A condition on the inputs, as for `function`, without `auth.user` or `has_role` (`SVT003`): nobody is signed in |
+
+Not allowed: `as` (always the Edge Function) and `output` (a webhook answers `200` with no body).
+
+### What Svetra generates
+
+1. **The role** `svetra_hole_<name>` and its grants.
+2. **The body function** `svetra_holes.<name>(p_caller uuid, p_<input>, …)`: the `when` guard, then the body. `p_caller` is `null`.
+3. **The callable function** `public.<name>(…)`, generated as for a `function` hole, but with execute granted **only to `service_role`** and revoked from `public`, `anon` and `authenticated` by name. PostgREST can see it, and only the service key can run it. It stays `security definer`, so what runs the body is the hole's role, not the service role's wide access.
+4. **The Edge Function** `supabase/functions/<name>/index.ts`, generated and overwritten each compile, with the "do not edit" header of the other generated files. It:
+   - reads the raw body **before** parsing it;
+   - checks the signature in constant time against `Deno.env.get('<secret>')`. A missing secret, a missing header or a mismatch is `401` with no detail;
+   - parses the JSON and validates it with the same Zod schema as `src/svetra.gen.ts` (`400` on failure);
+   - calls `rpc('<name>', …)` with the service key. Success is `200`, a refused guard (`42501`) is `403`, and any other failure is `500` with no detail.
+5. **`supabase/config.toml`:** `[functions.<name>]` with `verify_jwt = false`, written in place like the sign-in keys, because the provider has no Supabase token. The signature check takes its place.
+6. **Deduplication,** only when some webhook uses `dedupe`: a table `svetra.webhook_events (hook text, event_id text, primary key (hook, event_id))`, owned by `postgres`, with no grants to API roles. The generated `public.<name>` inserts into it with `on conflict do nothing` in the same transaction as the body and returns early when the pair was already there. A failed body rolls the insert back, so the provider's retry runs again.
+
+Deduplication stops duplicate deliveries. It doesn't stop an old, correctly signed call being sent again. Timestamp checks are [not in this version](#not-in-this-version), and `explain` says so.
+
 <!-- next -->
