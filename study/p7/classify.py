@@ -73,6 +73,13 @@ def classify(r):
         return "real", "anyone with a second factor counts as an admin"
     if op == "role-grants-open":
         return "real", "a person can grant themselves any role"
+    # outside_slack (study/p7/outside): the Supabase Slack clone. Checked with outside/verify_slack.py.
+    if app == "outside_slack" and op == "policy-all-actions" and t.startswith("message."):
+        return "equivalent", "the added rule is the owner's (user_id == auth.user), and owners of a message already have every action on it"
+    if app == "outside_slack" and op == "table-leak-read":
+        return "equivalent", "every select policy on the table is already true for signed-in people"
+    if app == "outside_slack" and op == "role-ignore-scope":
+        return "equivalent", "the app has no scoped roles"
     return "UNCLASSIFIED", ""
 
 def table(path, title):
