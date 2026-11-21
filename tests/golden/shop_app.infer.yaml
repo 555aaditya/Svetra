@@ -1,0 +1,75 @@
+# Drafted by `svetra infer` from a database snapshot. Review before adopting.
+# Every entity is `private: true`: no policies are inferred yet, so nothing is exposed through
+# the API until you add policies and remove `private`. That differs from the live database.
+# 4 entities from 6 tables. Skipped: 1 view, 0 functions.
+# 10 things left as UNTRANSLATED (search for UNTRANSLATED).
+#
+# svetra check found 4 critical, 2 warnings and 0 notes:
+#   critical  public.legacy_codes: Anyone on the internet can read, add, change and delete every row of public.legacy_codes: row-level security is off.
+#   critical  public.membership: Anyone on the internet can read, add, change and delete every row of public.membership: row-level security is off.
+#   critical  public.order_items: Anyone on the internet can read, add, change and delete every row of public.order_items: row-level security is off.
+#   critical  public.orders: Anyone on the internet can read, add, change and delete every row of public.orders: row-level security is off.
+#   warning   public.product_names: public.product_names runs with its owner's rights, so it skips the row-level security of the tables it reads.
+#   warning   public.products: Anyone on the internet can read every row of public.products (policy products_read). Fine for public data; a leak otherwise.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+svetra: "0.1"
+system: App   # rename
+
+entities:
+  OrderItems:
+    # check: critical, rls_off: Anyone on the internet can read, add, change and delete every row of public.order_items: row-level security is off.
+    private: true
+    fields:
+      id:         { type: int, primary: true }   # UNTRANSLATED identity (always): Svetra has no auto-increment, inserts must give a value
+      order_id:   { type: ref, entity: Orders, required: true }
+      product_id: { type: ref, entity: Products, required: true }
+      qty:        { type: int, required: true }   # lossy: was smallint, compiles to bigint
+    unique:
+      - [order_id, product_id]
+    # UNTRANSLATED check order_items_qty_check: CHECK (((qty > 0) AND (qty < LEAST(10, 100))))
+  Orders:
+    # check: critical, rls_off: Anyone on the internet can read, add, change and delete every row of public.orders: row-level security is off.
+    private: true
+    fields:
+      id:         { type: uuid, primary: true }
+      customer:   { type: user, required: true }   # lossy: the foreign key had ON DELETE CASCADE, Svetra writes none
+      status:     { type: enum, values: [open, paid, shipped], required: true, default: open }   # lossy: was enum type order_status, compiles to text with a check
+      placed_on:  { type: date, auto: now }
+      note:       { type: text, default: none }
+      created_at: { type: timestamp, auto: now }   # lossy: was timestamp without time zone, compiles to timestamptz
+      shipped:    { type: bool, required: true, default: false }
+    constraints:
+      orders_check: "(status != 'shipped') or shipped"
+    indexes:
+      - [customer]
+    # UNTRANSLATED index orders_note_idx: CREATE INDEX orders_note_idx ON public.orders USING btree (lower(note))
+  Products:
+    # check: warning, open_read: Anyone on the internet can read every row of public.products (policy products_read). Fine for public data; a leak otherwise.
+    private: true
+    fields:
+      id:     { type: uuid, primary: true }
+      sku:    { type: text, required: true, unique: true }
+      name:   { type: text, required: true }
+      price:  { type: money, precision: 12, scale: 2, required: true }
+      weight: { type: float }   # lossy: was real, compiles to double precision
+      stock:  { type: int, required: true, default: 0 }   # lossy: was integer, compiles to bigint
+      # UNTRANSLATED column rating numeric: numeric without precision and scale
+      # UNTRANSLATED column tags text[]: type text[]
+      meta:   { type: json }
+    constraints:
+      products_price_check: "price >= 0"
+      stock_non_negative: "stock >= 0"
+    # UNTRANSLATED check stock_text: CHECK (((stock)::text <> '-1'::text))
+    # UNTRANSLATED index products_tags_idx: CREATE INDEX products_tags_idx ON public.products USING gin (tags)
+  Profiles:
+    private: true
+    fields:
+      id:           { type: uuid, primary: true }
+      display_name: { type: text, required: true }
+      bio:          { type: text }   # lossy: was character varying(280), the length limit is dropped
+      created_at:   { type: timestamp, required: true, auto: now }
+    # UNTRANSLATED foreign key profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id)
+
+# Tables left out of the entities:
+# UNTRANSLATED table public.legacy_codes: no primary key
+# UNTRANSLATED table public.membership: an entity needs one primary field: membership_pkey PRIMARY KEY (org, member)
