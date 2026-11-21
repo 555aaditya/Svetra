@@ -258,7 +258,7 @@ Doctor ships in three pull requests, each one topic. The spec is this document.
 **What the first PR built, where it differs from the list above.** It builds the folder checks and nothing that needs a database, so the command is `svetra doctor [DIR] [--json]` and `--db`, `--local`, `--migrations` and `--scratch` are a usage error (exit 2) until the data exposure part lands. The code is `src/doctor/` (`files.rs`, `jwt.rs`, `keys.rs`, `generated.rs`, and the report in `mod.rs`).
 
 - **Built:** all eight kinds of `keys`; `stale_generated` and `design_invalid`; the three backups reminders; argument parsing, exit codes, the report and `--json`.
-- **Not built yet:** data exposure; `schema_not_in_git` (it needs to know the project has tables, which only a database gives); auth settings and storage buckets (the second PR).
+- **Not built yet:** data exposure and `schema_not_in_git` (the second PR); auth settings and storage buckets.
 - **Always under "Not checked":** "Database" and "Auth settings", so this build never prints the third last line and `ready` is always false. "Git" is added when `DIR` isn't a repository, and "Generated files" when there is no `svetra.yaml` (the last-line rule counts that as a part not checked, so it is listed, not skipped without comment). The first line says "(database not checked)".
 - **Reminders** are printed when `DIR/supabase/` exists (there is no `--db` yet).
 - **Decisions the spec left open:**
@@ -271,6 +271,17 @@ Doctor ships in three pull requests, each one topic. The spec is this document.
   - A line in a front-end file that holds several keys gives one finding per kind and line.
   - Symbolic links are never followed or read.
   - Prefix lengths are the UNVERIFIED ones: Stripe 20 or more characters after the prefix, GitHub `ghp_` 30 or more, `github_pat_` 22 or more, AWS 16 capitals and digits, `sbp_` exactly 40 hex digits, `sb_secret_` 16 or more.
+
+**What the second PR built, where it differs from the list above.** The database half of the first list: `--db`, `--local`, `--migrations [DIR]`, `--scratch`, `--strict` and `--schema` now work, and `schema_not_in_git` is built. Auth settings and storage buckets come in a later PR.
+
+- **Data exposure** calls `inspect::run` and copies each finding unchanged (kind, severity, message, fix) under the area `data`. In the report and in `--json` they come first, in `check`'s own order; the folder findings follow, sorted as before. A data finding's `object` is the database object (for example `public.orders`) and it has no `file` or `line` key.
+- **The command line** is `svetra doctor [DIR] (--db URL | --local | --migrations [MIGRATIONS_DIR]) [--scratch URL] [--strict] [--schema public,...] [--json]`. A word after `--migrations` that doesn't start with `--` is its folder, so give `DIR` before it. `MIGRATIONS_DIR` defaults to `DIR/supabase/migrations`. More than one source, or `--scratch` or `--strict` without `--migrations`, is a usage error (exit 2).
+- **Exit codes:** a critical finding in either group exits `1`. Otherwise `2` when no migration applied, or, with `--strict`, any failed; an unreachable database or missing Docker also exits `2`. `0` for the rest.
+- **The first line** drops "(database not checked)" and the `Database:` line says what was read: `3 migrations, 3 applied (reads your migrations, not your live database)`, or the connection string without its password. `--json` adds `migrations` as in `check`.
+- **Failed migrations** are listed under "Data exposure" with the database's first error line, and "Database" goes under "Not checked" (so no clearance), both when some failed and when none applied.
+- **`ready` is still always false in this build,** because "Auth settings" and a new "Storage buckets" entry are always under "Not checked" until the third part lands. The "Not a clearance." last line stays.
+- **`schema_not_in_git`** is a warning with the object `supabase`: the database snapshot has at least one table (in the schemas read), `DIR/supabase/` exists, and no `.sql` file under `supabase/migrations/` or `supabase/schemas/` is tracked. It also appears for `--migrations` run on a folder whose migrations aren't committed. Without git it is listed under "Not checked" as "Schema in git"; without a `supabase/` folder it is skipped silently.
+- **Reminders** are printed when `DIR/supabase/` exists or a database source was given.
 
 **Tests in the first PR** (AGENTS.md: one test per finding kind, CLI tests run the real binary):
 - A fixture project built at test time, in a temporary folder with a real `git init`, so no secret-shaped string is committed to this repository. Tokens are assembled at run time from pieces (a JWT is built from `base64(header)`, `base64(payload)`, and a dummy signature), because a committed key-shaped string trips GitHub's push protection and every scanner.

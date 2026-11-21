@@ -12,6 +12,7 @@ Data for "Checking Row-Level Security Against Its Specification: Spec-Derived Ac
 | `round3-supabase/` | the same | real local Supabase (CLI 3.1.0, PostgreSQL 17), no patch needed |
 | `outside/` | the same generator (0.8.2) on an app written by someone else, the Supabase Slack clone; `outside/supabase/` on real Supabase | both; see `outside/README.md` |
 | `outside/v2/` | the outside app again with a `user`-keyed Profile and a cascading reference (no workarounds): 67 of 86 caught, 2 real survivors, a limit of the generated tests for user-keyed entities; `outside/v2/supabase/` on real Supabase, identical | both; see `outside/v2/README.md` |
+| `outside/v2-fixed/` | the same 86 mutants after PR #120 closed that gap (tables keyed by a user now also try keys nobody holds): 69 of 86 caught, 69 of 69 that change access, 0 real survivors, identical on a real Supabase |
 | `outside/infer/` | `svetra infer` (milestones 1 and 2) on that app's migrations, against the hand-written spec: 5 of 5 entities, 18 of 18 fields, 0 of 14 policies translated, nothing wider than the database | PostgreSQL 16 with the stand-in; see `outside/infer/README.md` |
 
 The Supabase rounds use the 0.4.0 and 0.4.1 sources with only the 0.4.2 revocation fix applied (`revoke ... from public, anon, authenticated` in `src/compile/sql.rs`), because the released compilers fail their own tests on real Supabase. Their outcomes and failing checks are identical to the stand-in's.

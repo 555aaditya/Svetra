@@ -642,7 +642,7 @@ fn usage_errors_exit_2() {
     file.write("f.txt", "x");
     let out = svetra(&["doctor", file.0.join("f.txt").to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(2));
-    for flag in ["--db", "--local", "--migrations", "--bogus"] {
+    for flag in ["--db", "--bogus"] {
         let out = svetra(&["doctor", flag]);
         assert_eq!(out.status.code(), Some(2), "{flag}");
     }
