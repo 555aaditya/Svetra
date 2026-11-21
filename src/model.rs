@@ -117,8 +117,20 @@ pub struct Field {
     pub unique: bool,
     pub default: Option<Literal>,
     pub auto_now: bool,
+    /// What deleting the referenced row does to this one. Only a `ref` field has it.
+    pub on_delete: OnDelete,
     /// What it was called in the design the database has: declares a rename (docs/change.md).
     pub was: Option<NameRef>,
+}
+
+/// What deleting the row a `ref` points at does to the row holding it (docs/format.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OnDelete {
+    /// Refused while a row points at it (PostgreSQL's default, `no action`).
+    #[default]
+    Restrict,
+    Cascade,
+    SetNull,
 }
 
 #[derive(Debug, Clone, PartialEq)]

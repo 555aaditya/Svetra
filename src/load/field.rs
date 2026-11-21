@@ -25,6 +25,7 @@ impl Cx {
             unique: flag(self, "unique"),
             default: None,
             auto_now: false,
+            on_delete: OnDelete::Restrict,
             was: None,
             ty,
         };
@@ -58,7 +59,49 @@ impl Cx {
                 );
             }
         }
+        if let Some(v) = k.get("on_delete") {
+            self.on_delete(v, &mut field, &format!("{path}.on_delete"));
+        }
         Some(field)
+    }
+
+    /// `on_delete` applies to `ref` fields only, and `set_null` needs a field that may be empty.
+    fn on_delete(&mut self, v: &Node, field: &mut Field, path: &str) {
+        if !matches!(field.ty, FieldType::Ref(_)) {
+            self.report(
+                Code::Svt023,
+                path,
+                v,
+                "`on_delete` applies only to `ref` fields.".into(),
+                "Remove `on_delete`, or change the type to ref.",
+            );
+            return;
+        }
+        let Some(word) = self.string(v, path) else {
+            return;
+        };
+        match word.as_str() {
+            "restrict" => {}
+            "cascade" => field.on_delete = OnDelete::Cascade,
+            "set_null" if field.required => self.report(
+                Code::Svt023,
+                path,
+                v,
+                "`on_delete: set_null` can't be used on a required field.".into(),
+                "Remove `required: true`, or use `cascade` or `restrict`.",
+            ),
+            "set_null" => field.on_delete = OnDelete::SetNull,
+            other => {
+                let msg = format!("Unknown `on_delete` value `{other}`.");
+                self.report(
+                    Code::Svt023,
+                    path,
+                    v,
+                    msg,
+                    "Use one of: restrict, cascade, set_null.",
+                );
+            }
+        }
     }
 
     /// Read `type` and the options it needs. Options that don't apply to the type are SVT023.

@@ -53,6 +53,7 @@ Changes are computed between the two typed models, never from text, so reorderin
 | `rename_entity`, `rename_field` | declared with `was:` (below) | safe, with a migration step |
 | `change_type`, widening | `int` → `decimal`, `decimal(10,2)` → `decimal(18,2)` | safe |
 | `change_type`, anything else | `text` → `int`, scale reduced, `ref` target changed | **destructive**: values can be rejected or rounded |
+| `change_on_delete` | `on_delete: restrict` → `cascade` | `cascade` is **breaking**: deleting a row now also deletes the rows that point at it. Any other change is safe |
 | `add_enum_value` | `status` gains `archived` | safe |
 | `remove_enum_value` | `status` loses `frozen` | **breaking**: rows holding it fail the new check |
 | `make_required` | `required: false` → `true` | **breaking**: rows with no value fail |

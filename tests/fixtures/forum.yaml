@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+#
+# A small forum that shows what `on_delete` does when a row that others point at is deleted:
+#   Board    <- Thread    cascade:   deleting a board deletes its threads
+#   Thread   <- Post      restrict:  a thread with posts can't be deleted (the default)
+#   Post     <- Reaction  cascade:   deleting a post deletes its reactions
+#   Post     <- Tag       set_null:  deleting a post clears the tag's post, the tag stays
+#   Post     <- Post      set_null:  a reply keeps standing when the post it answers is deleted
+# People delete only their own rows, so the access rules are the same everywhere; what differs
+# is whether the database then lets the delete happen.
+svetra: "0.1"
+system: Forum
+
+entities:
+  Board:
+    fields:
+      id:    { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      name:  { type: text, required: true }
+  Thread:
+    fields:
+      id:    { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      board: { type: ref, entity: Board, required: true, on_delete: cascade }
+      title: { type: text, required: true }
+  Post:
+    fields:
+      id:       { type: uuid, primary: true }
+      owner:    { type: user, required: true }
+      thread:   { type: ref, entity: Thread, required: true }
+      reply_to: { type: ref, entity: Post, on_delete: set_null }
+      body:     { type: text }
+  Reaction:
+    fields:
+      id:    { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      post:  { type: ref, entity: Post, required: true, on_delete: cascade }
+  Tag:
+    fields:
+      id:    { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      post:  { type: ref, entity: Post, on_delete: set_null }
+      label: { type: text }
+
+policies:
+  boards_read:      { on: Board, allow: [select], when: "true" }
+  boards_own:       { on: Board, allow: [insert, update, delete], when: "owner == auth.user" }
+  threads_read:     { on: Thread, allow: [select], when: "true" }
+  threads_own:      { on: Thread, allow: [insert, update, delete], when: "owner == auth.user" }
+  posts_read:       { on: Post, allow: [select], when: "true" }
+  posts_own:        { on: Post, allow: [insert, update, delete], when: "owner == auth.user" }
+  reactions_read:   { on: Reaction, allow: [select], when: "true" }
+  reactions_own:    { on: Reaction, allow: [insert, update, delete], when: "owner == auth.user" }
+  tags_read:        { on: Tag, allow: [select], when: "true" }
+  tags_own:         { on: Tag, allow: [insert, update, delete], when: "owner == auth.user" }

@@ -88,6 +88,18 @@ fn data_changes_are_classified() {
             Data::Safe,
         ),
         (
+            "customer: { type: ref, entity: Customer, required: true }",
+            "customer: { type: ref, entity: Customer, required: true, on_delete: cascade }",
+            "change_on_delete",
+            Data::Breaking,
+        ),
+        (
+            "customer: { type: ref, entity: Customer, required: true }",
+            "customer: { type: ref, entity: Customer, on_delete: set_null }",
+            "change_on_delete",
+            Data::Safe,
+        ),
+        (
             "values: [free, paid]",
             "values: [free, paid, gold]",
             "add_enum_value",

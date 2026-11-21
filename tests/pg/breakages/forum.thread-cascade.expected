@@ -1,0 +1,5 @@
+not ok 24 - alice can't delete Board a: Post a still points at it
+not ok 35 - bob can't delete Board b: Post b still points at it
+not ok 62 - alice can't delete Thread a: Post a still points at it
+not ok 77 - bob can't delete Thread b: Post b still points at it
+# Looks like you failed 4 tests of 261
