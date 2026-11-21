@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **`on_delete` on `ref` fields: `restrict` (default), `cascade` or `set_null`.** It compiles into the foreign key. The generated delete checks now expect a delete the rules allow to be `blocked` (SQLSTATE 23503) while a `restrict` reference still points at the row, through any cascades, worked out from the spec and not from the keys; before, such a check on a referenced row failed on an unmodified app. `diff` and `plan` report a changed `on_delete` (`cascade` is breaking). `on_delete` on any other type, an unknown value, or `set_null` on a required field is `SVT023`. New example `forum`. Spec: `docs/format.md`.
+
 ## 0.8.2 (2026-11-21)
 
 Check what your migrations build with no live database, draft a `svetra.yaml` from an existing one, start from a template, and generated tests that catch a class of gap the mutation study had missed.
