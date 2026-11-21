@@ -31,7 +31,7 @@ All four cover ordinary tables in the listed schemas (not views, not partitions 
 
 | Key | For each | Fields |
 |---|---|---|
-| `columns` | column of a table (`pg_attribute`, not dropped, not a system column), in column order | `schema`, `table`, `name`, `type` (`format_type`, such as `numeric(18,6)`, `character varying(255)`, `timestamp with time zone`), `kind` (the type's `typtype`: `b` base, `e` enum, `d` domain, and so on), `not_null`, `default` (the deparsed expression, or `null`), `identity` (`always`, `by default` or `null`), `generated` (`true` for a generated column) |
+| `columns` | column of a table (`pg_attribute`, not dropped, not a system column), in column order | `schema`, `table`, `name`, `type` (`format_type`, such as `numeric(18,6)`, `character varying(255)`, `timestamp with time zone`), `type_schema` and `type_name` (the type's own name, to find an enum), `kind` (the type's `typtype`: `b` base, `e` enum, `d` domain, and so on), `not_null`, `default` (the deparsed expression, or `null`), `identity` (`always`, `by default` or `null`), `generated` (`true` for a generated column) |
 | `constraints` | constraint on those tables (`pg_constraint`): primary key, foreign key, unique, check | `schema`, `table`, `name`, `kind` (`p`, `f`, `u`, `c`), `columns` (the constrained columns, in order), `definition` (`pg_get_constraintdef`), and for a foreign key `ref_schema`, `ref_table`, `ref_columns` |
 | `indexes` | index on those tables that backs no constraint (`pg_index`) | `schema`, `table`, `name`, `unique`, `method` (`btree`, `gin`, ...), `columns` (names; `null` where the position is an expression), `partial` (has a `where`), `definition` (`pg_get_indexdef`) |
 | `enums` | enum type in a listed schema (`pg_enum`) | `schema`, `name`, `values` in sort order |
@@ -76,8 +76,10 @@ Each row says what a column becomes and whether the draft means exactly what the
 | an enum type | `{ type: enum, values: [...] }` | Values exact. The compiled column is `text` with a `check`, not the enum type (note) |
 | foreign key to a table that becomes an entity with a `uuid` primary key | `{ type: ref, entity: X }` | Exact, when the key is one column pointing at the target's primary key |
 | foreign key to `auth.users (id)` | `{ type: user }` | Exact |
-| any other foreign key | the column's own type, plus a comment | `UNTRANSLATED` foreign key with its SQL |
-| arrays, ranges, `bytea`, `inet`, `tsvector`, `interval`, domains, extension types (`vector`, `geometry`), `serial` sequences, generated and identity columns | not translated | `UNTRANSLATED`, the column is left out of the entity |
+| any other foreign key, including one on the primary key itself | the column's own type, plus a comment | `UNTRANSLATED` foreign key with its SQL, at the end of the entity |
+| `real` or `double precision` on a column named like money | not translated | `UNTRANSLATED`: Svetra refuses float for money (`SVT005`), so the draft would not validate. Choose `numeric(p,s)` |
+| arrays, ranges, `bytea`, `inet`, `tsvector`, `interval`, domains, extension types (`vector`, `geometry`), generated columns | not translated | `UNTRANSLATED`, the column is left out of the entity |
+| identity column or `serial` (a `nextval` default) | the column's type, plus a comment | `UNTRANSLATED` identity or default: Svetra has no auto-increment, so inserts must give the value |
 
 The `ref`'s `on delete` and `on update` actions are not part of Svetra's foreign keys (it writes none). A foreign key that has one gets a `# lossy` note with the original.
 
@@ -103,7 +105,7 @@ The `ref`'s `on delete` and `on update` actions are not part of Svetra's foreign
 
 A check constraint is translated only if it comes out as an expression that Svetra's expression language parses (docs/format.md, Expressions) and that type-checks against the entity's fields. `infer` does this in small, fixed steps, and no others:
 
-1. Drop outer parentheses and `::type` casts.
+1. Drop `::type` casts, and brackets that change nothing (around one token, or around the whole expression). Dropping a cast can change what an expression means (`stock::text <> '-1'`), which is why step 6 exists.
 2. `AND`, `OR`, `NOT` become `and`, `or`, `not`. `=` becomes `==`, `<>` becomes `!=`.
 3. `x IS NULL` and `x IS NOT NULL` become `x == null` and `x != null`.
 4. `x = ANY (ARRAY['a', 'b'])` becomes `x in ['a', 'b']`.
@@ -122,12 +124,12 @@ One file. It starts with a header comment, then the findings, then the YAML.
 
 ```yaml
 # Drafted by `svetra infer` from a database snapshot. Review before adopting.
-# Entities are private: true, because no policies are inferred yet (see "Policies, later").
-#   Remove `private` and add policies when you adopt it. Until then they aren't exposed.
+# Every entity is `private: true`: no policies are inferred yet, so nothing is exposed through
+# the API until you add policies and remove `private`. That differs from the live database.
 # 14 entities from 14 tables. Skipped: 3 views, 6 functions.
 # 5 things left as UNTRANSLATED (search for UNTRANSLATED).
 #
-# svetra check found 2 critical, 3 warnings:
+# svetra check found 2 critical, 3 warnings and 1 note:
 #   critical  public.orders: Anyone on the internet can read every row of public.orders: row-level security is off.
 #   ...
 # yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
@@ -147,18 +149,18 @@ entities:
       # UNTRANSLATED column tags text[]
     constraints:
       total_non_negative: "total >= 0"
-    # UNTRANSLATED check "qty_range": CHECK (((qty > 0) AND (qty < least(max_qty, 100))))
+    # UNTRANSLATED check qty_range: CHECK (((qty > 0) AND (qty < least(max_qty, 100))))
 ```
 
 Exact rules:
 
 - **Every entity has `private: true`.** The draft has no policies, and `svetra validate` makes an exposed entity without a policy an error (`SVT001`). Private is the safe reading: nothing is exposed until you write a rule. This changes what an adopted draft does compared with the live database (the API stops reaching these tables), and the header says so.
 - **Entities are in table-name order,** fields in column order, so the output is deterministic and reviewable. No clocks, no hash order.
-- **Entity keys, in order:** comments, `private`, `fields`, `constraints`, `unique`, `indexes`.
+- **Entity keys, in order:** finding comments, `private`, `fields`, `constraints`, `unique`, `indexes`, then the entity's `UNTRANSLATED` comments for checks, unique constraints, indexes and foreign keys. An untranslated column's comment sits in `fields` at its place; a default's or identity's note is at the end of that field's line.
 - **Comments:** `# UNTRANSLATED <what> <name>: <original SQL>` for anything left out, always with the original SQL on one line. `# lossy: ...` for a widened or changed translation. `# check: <severity>, <kind>: <message>` for a finding on that table, above `private`.
 - **Findings** are `check`'s, unchanged. Those about a table are repeated above that entity; all are listed in the header, most severe first, as one line each (`severity  object: message`). Findings about views and functions only appear in the header. Fixes are not repeated: run `svetra check` for them.
 - **Text in comments is made safe:** newlines in SQL are collapsed to single spaces, so a comment can't end early or inject a key.
-- **A table left as a comment** appears at the end, under `# Tables left out:`, one line each with the reason.
+- **A table left as a comment** appears at the end, under `# Tables left out of the entities:`, one `# UNTRANSLATED table <schema.name>: <reason>` line each.
 
 It prints, and writes the file only if `--out` isn't `-`:
 
@@ -167,7 +169,11 @@ wrote svetra.yaml: 14 entities, 97 fields, 5 things left as UNTRANSLATED, 2 crit
 Next: review the draft, then `svetra validate`, then `svetra compile`.
 ```
 
-With nothing left out it says `0 things left as UNTRANSLATED`. The counts are the entities and fields in the file, the comments beginning `# UNTRANSLATED`, and the critical findings (the other severities are in the file but not repeated here).
+With nothing left out it says `0 things left as UNTRANSLATED`. The header counts words as they are: `1 view`, `0 functions`. The counts are the entities and fields in the file, the comments beginning `# UNTRANSLATED`, and the critical findings (the other severities are in the file but not repeated here).
+
+### What `validate` says about a draft
+
+A draft has no errors. `svetra validate` still reports `SVT004` (warning) on every entity, because nothing can write a table that has no policy, and `SVT009` (info), because there is no `auth` section; `SVT010` (info) appears for a reference with no index. All three go away as you add policies, `auth` and indexes.
 
 ## Policies, later
 
@@ -182,7 +188,7 @@ Milestone 1 writes no `policies:` and no `roles:`, because inferring them is the
 
 - Policies, roles, holes and `auth` settings.
 - Views, functions, triggers, sequences, comments on objects, extensions, grants and storage buckets.
-- Composite primary keys and foreign keys, domains, arrays, ranges, and generated or identity columns.
+- Composite primary keys and foreign keys, domains, arrays, ranges, generated columns, and identity as a real auto-increment.
 - Singular entity names and renames (`was`).
 - Following a foreign key to a table outside the listed schemas, other than `auth.users`.
 - An MCP tool for `infer`.
