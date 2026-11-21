@@ -99,6 +99,13 @@ impl Git {
         self.tracked.contains(path)
     }
 
+    /// True when a `.sql` file under one of the `prefixes` is tracked.
+    pub fn tracks_sql_under(&self, prefixes: &[&str]) -> bool {
+        self.tracked
+            .iter()
+            .any(|p| p.ends_with(".sql") && prefixes.iter().any(|d| p.starts_with(d)))
+    }
+
     pub fn ignored(&self, path: &str) -> bool {
         self.ignored.contains(path)
     }
