@@ -101,6 +101,23 @@
                 "update": true,
                 "delete": true
             }
+        },
+        {
+            "schema": "public",
+            "name": "reviews",
+            "rls": true,
+            "anon": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            },
+            "authenticated": {
+                "select": true,
+                "insert": true,
+                "update": true,
+                "delete": true
+            }
         }
     ],
     "policies": [
@@ -203,6 +220,18 @@
         {
             "schema": "public",
             "table": "profiles",
+            "name": "profiles_insert_own",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "INSERT",
+            "using": null,
+            "check": "(auth.uid() = id)"
+        },
+        {
+            "schema": "public",
+            "table": "profiles",
             "name": "profiles_own",
             "permissive": "PERMISSIVE",
             "roles": [
@@ -211,6 +240,66 @@
             "cmd": "SELECT",
             "using": "(id = auth.uid())",
             "check": null
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "reviews_delete_moderator",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "DELETE",
+            "using": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.display_name = 'moderator'::text))))",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "reviews_delete_own",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "DELETE",
+            "using": "(author = auth.uid())",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "reviews_insert_own",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "INSERT",
+            "using": null,
+            "check": "(author = auth.uid())"
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "reviews_read",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "SELECT",
+            "using": "(auth.role() = 'authenticated'::text)",
+            "check": null
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "reviews_update_own",
+            "permissive": "PERMISSIVE",
+            "roles": [
+                "authenticated"
+            ],
+            "cmd": "UPDATE",
+            "using": "((auth.role() = 'authenticated'::text) AND (author = auth.uid()))",
+            "check": "(author = auth.uid())"
         }
     ],
     "views": [
@@ -588,6 +677,71 @@
             "default": "now()",
             "identity": null,
             "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "id",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": "gen_random_uuid()",
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "product_id",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "author",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "parent_id",
+            "type": "uuid",
+            "type_schema": "pg_catalog",
+            "type_name": "uuid",
+            "kind": "b",
+            "not_null": false,
+            "default": null,
+            "identity": null,
+            "generated": false
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "body",
+            "type": "text",
+            "type_schema": "pg_catalog",
+            "type_name": "text",
+            "kind": "b",
+            "not_null": true,
+            "default": null,
+            "identity": null,
+            "generated": false
         }
     ],
     "constraints": [
@@ -824,6 +978,64 @@
             "ref_schema": null,
             "ref_table": null,
             "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "reviews_author_fkey",
+            "kind": "f",
+            "columns": [
+                "author"
+            ],
+            "definition": "FOREIGN KEY (author) REFERENCES profiles(id) ON DELETE CASCADE",
+            "ref_schema": "public",
+            "ref_table": "profiles",
+            "ref_columns": [
+                "id"
+            ]
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "reviews_parent_id_fkey",
+            "kind": "f",
+            "columns": [
+                "parent_id"
+            ],
+            "definition": "FOREIGN KEY (parent_id) REFERENCES reviews(id) ON DELETE SET NULL",
+            "ref_schema": "public",
+            "ref_table": "reviews",
+            "ref_columns": [
+                "id"
+            ]
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "reviews_pkey",
+            "kind": "p",
+            "columns": [
+                "id"
+            ],
+            "definition": "PRIMARY KEY (id)",
+            "ref_schema": null,
+            "ref_table": null,
+            "ref_columns": []
+        },
+        {
+            "schema": "public",
+            "table": "reviews",
+            "name": "reviews_product_id_fkey",
+            "kind": "f",
+            "columns": [
+                "product_id"
+            ],
+            "definition": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE",
+            "ref_schema": "public",
+            "ref_table": "products",
+            "ref_columns": [
+                "id"
+            ]
         }
     ],
     "indexes": [
