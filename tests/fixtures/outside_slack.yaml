@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/555aaditya/Svetra/main/schema/svetra.schema.json
+#
+# An app written by someone else: the Next.js Slack clone, an official Supabase example.
+#   source:  https://github.com/supabase/supabase/tree/master/examples/slack-clone/nextjs-slack-clone
+#   commit:  9964968b53f078bf4e246fc25443e3220a8a143b (supabase/supabase, master)
+#   files:   supabase/migrations/20240214102356_init.sql and 20240214114147_auth-hook.sql
+#   licence: Apache-2.0 (LICENSE at the repository root)
+# This file is a hand-written spec of the access those migrations intend, for the mutation study
+# in study/p7/outside/. It is not the app's own file and is not endorsed by its authors.
+#
+# Differences from the original, each also listed in study/p7/outside/README.md:
+#  - Row ids are uuid. The original uses bigint identity keys, and a Svetra ref needs a uuid key.
+#  - `Profile` is the original's `users` table (an entity's table is its snake_case name).
+#  - Roles are Svetra's own: a row in svetra.role_grants, checked live. The original keeps them in
+#    user_roles, copies one into the JWT claim `user_role` with an auth hook, and maps roles to
+#    permissions through the role_permissions table. Here the two permissions are written into the
+#    policies: channels.delete is `admin`, messages.delete is `admin` or `moderator`. The tables
+#    user_roles and role_permissions, `authorize()`, the hook and the signup trigger are not modelled.
+#  - `created_by` and `user_id` reference auth.users (type user) instead of public.users.
+#  - The original lets a person read their own user_roles row; svetra.role_grants has no such rule.
+#  - Realtime publication and `replica identity full` are not modelled.
+svetra: "0.1"
+system: SlackClone
+
+auth:
+  sign_in: [email]
+
+roles:
+  admin:     { description: "May delete any channel or message" }
+  moderator: { description: "May delete any message" }
+
+entities:
+  Profile:
+    fields:
+      id:       { type: user, primary: true }
+      username: { type: text }
+      status:   { type: enum, values: [ONLINE, OFFLINE], default: OFFLINE }
+  Channel:
+    fields:
+      id:          { type: uuid, primary: true }
+      inserted_at: { type: timestamp, auto: now, required: true }
+      slug:        { type: text, required: true, unique: true }
+      created_by:  { type: user, required: true }
+  Message:
+    fields:
+      id:          { type: uuid, primary: true }
+      inserted_at: { type: timestamp, auto: now, required: true }
+      message:     { type: text }
+      user_id:     { type: user, required: true }
+      channel_id:  { type: ref, entity: Channel, required: true }
+
+policies:
+  profiles_read:        { on: Profile, allow: [select], when: "true" }
+  profiles_insert_own:  { on: Profile, allow: [insert], when: "id == auth.user" }
+  profiles_update_own:  { on: Profile, allow: [update], when: "id == auth.user" }
+
+  channels_read:         { on: Channel, allow: [select], when: "true" }
+  channels_insert_own:   { on: Channel, allow: [insert], when: "created_by == auth.user" }
+  channels_delete_own:   { on: Channel, allow: [delete], when: "created_by == auth.user" }
+  channels_delete_admin: { on: Channel, allow: [delete], when: "has_role('admin')" }
+
+  messages_read:         { on: Message, allow: [select], when: "true" }
+  messages_insert_own:   { on: Message, allow: [insert], when: "user_id == auth.user" }
+  messages_update_own:   { on: Message, allow: [update], when: "user_id == auth.user" }
+  messages_delete_own:   { on: Message, allow: [delete], when: "user_id == auth.user" }
+  messages_delete_staff: { on: Message, allow: [delete], when: "has_role('admin') or has_role('moderator')" }
