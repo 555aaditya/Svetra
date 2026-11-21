@@ -13,6 +13,7 @@ svetra infer --db URL        [--schema public,...] [--out FILE] [--force]
 svetra infer --local         [--schema public,...] [--out FILE] [--force]
 svetra infer --snapshot FILE [--schema public,...] [--out FILE] [--force]
 svetra infer --print-query   [--schema public,...]
+svetra infer --check-draft FILE (--migrations [DIR] | --db URL | --local) [--schema public,...]
 ```
 
 - **`--db`, `--local`, `--snapshot`, `--print-query`** work as in `check`. `--print-query` prints the query for the Supabase SQL editor; save the one JSON value it returns and pass it with `--snapshot`.
@@ -266,11 +267,38 @@ policies:
 - **Holes, `auth` settings, column rules (`only`).** Not inferred. A database trigger that guards columns is not read.
 - **Views and functions,** apart from `check`'s findings.
 
-### Differential testing (planned, not built)
+### Differential testing: `--check-draft`
 
-Not built yet: it needs pgTAP in the throwaway database, which `scripts/pg-check.sh` installs from the network. When built:
+The check that a draft means what the database does: compile the draft, run its generated access tests (docs/compiler.md) against a **copy of the original** database, and look at each person-and-row check where they disagree.
 
-The check that a draft means what the database does is to compile it, run its generated access tests (docs/compiler.md) against the **original** database, and look at each person-and-row check where they disagree. For a table whose policies **all** translated, the original database must pass every check the draft's tests make; a failure is a translation bug. Where the draft is narrower on purpose (an untranslated policy), the original allows more than the draft and the tests may fail, which is the expected disagreement, so that table is not part of the check. It would be a test in the project, not a user command.
+```sh
+svetra infer --check-draft FILE --migrations [DIR]
+svetra infer --check-draft FILE (--db URL | --local) [--schema public,...]
+```
+
+- **`FILE`** is a draft, as `infer` wrote it or as you have edited it since. It must load and validate with no errors, or the command stops (exit 2) and says why.
+- **The copy.** With `--migrations`, the migrations are built in a throwaway database exactly as `check --migrations` does (Docker, no network, file-name order, a failing migration is listed and the rest still run). With `--db` or `--local`, `infer` runs `pg_dump --schema-only` on the listed schemas (read-only; needs `pg_dump`, which ships with `psql`) and loads the dump into the same kind of throwaway database. **Nothing is ever written to your database, and the tests never run on it**, so there is no `--scratch` form: pgTAP and the test rows would have to be installed in it. The copy has the schema, policies and grants, and no data. Statements of the dump that the throwaway database refuses (an extension it lacks, a grant to a role it lacks) are counted and the first is shown; the copy is then not exact, and the report says so.
+- **The throwaway database is Supabase's own image,** `public.ecr.aws/supabase/postgres` at a pinned tag (the one the Supabase CLI starts, also published as `supabase/postgres` on Docker Hub), not the PostgreSQL 16 image and stand-in that `check --migrations` uses. It ships pgTAP, Supabase's roles and `auth` schema, so nothing is installed at run time (the container has no network). The only addition is `auth.jwt()` when the image lacks it. If the image isn't on the machine, `infer` stops and prints the `docker pull` command; it never pulls by itself.
+
+What is checked. The generated tests seed the draft's own test world (people, and two rows per entity) into the copy as the database owner, then try each person on each row, as a real user, and every check must come out as the draft says.
+
+- **An entity whose policies all translated** must pass every check. A failing check is a place where the draft says one thing and the database does another.
+- **An entity with an untranslated policy** (a `# policies:` or `# UNTRANSLATED policy` comment in its block) is **skipped**. The draft is narrower on purpose there, and a failure would be the expected disagreement. Port the policy, delete the comment, and run again to check it.
+- **An entity the database refuses the draft's test rows for** (a column the draft lost, an identity column, a foreign key to `auth.users` that the world's ids don't satisfy, a check the draft doesn't have) is **skipped**, with the database's own message: its checks would fail for a reason that isn't about access. The same goes for a check that only fails because another entity's rows were refused.
+
+The report is grouped by entity, in plain words, and never prints SQL:
+
+```
+Differential check of svetra.yaml against a copy built from supabase/migrations.
+  Products   agrees    24 checks
+  Orders     skipped   the draft is narrower than the database: a policy was left untranslated
+  Profiles   skipped   the database refused the draft's test rows: ...
+
+Products disagrees on 2 checks:
+  anon can see Products a  (the draft says allowed, the database says denied)
+```
+
+Exit codes: `0` every checked entity agrees, `1` at least one check disagrees, `2` it couldn't run (Docker or the image missing, no `pg_dump`, a draft that doesn't validate, the database unreachable). It doesn't write a file.
 
 ## Not in this version
 
