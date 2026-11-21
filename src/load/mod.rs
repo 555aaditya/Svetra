@@ -24,6 +24,7 @@ pub const ENTITY_KEYS: &[&str] = &[
     "unique",
     "indexes",
     "private",
+    "audit",
     "was",
 ];
 pub const FIELD_KEYS: &[&str] = &[
@@ -42,7 +43,7 @@ pub const FIELD_KEYS: &[&str] = &[
 ];
 pub const POLICY_KEYS: &[&str] = &["on", "allow", "when", "check", "only", "restrictive", "as"];
 pub const HOLE_KEYS: &[&str] = &[
-    "kind", "input", "output", "reads", "writes", "grants", "as", "when",
+    "kind", "input", "output", "reads", "writes", "grants", "as", "when", "audit",
 ];
 pub const TYPE_NAMES: &[&str] = &[
     "text",
@@ -410,6 +411,7 @@ impl Cx {
             unique: Vec::new(),
             indexes: Vec::new(),
             private: false,
+            audit: false,
             was: None,
         };
         if let Some(v) = self.need(&k, "fields", &path, name) {
@@ -453,6 +455,9 @@ impl Cx {
         }
         if let Some(v) = k.get("private") {
             entity.private = self.boolean(v, &format!("{path}.private"));
+        }
+        if let Some(v) = k.get("audit") {
+            entity.audit = self.boolean(v, &format!("{path}.audit"));
         }
         Some(entity)
     }
