@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **`svetra doctor` reads sign-in settings and storage buckets, and is called ready for the first time.** Auth settings come from `supabase/config.toml` (or, before `compile` has written one, from `svetra.yaml`): `email_unconfirmed`, `weak_password`, `anonymous_sign_ins`, `open_signup` (a note), `admin_no_mfa`, `mfa_off` and `redirect_open`, each with a plain-English fix. The redirect keys (`site_url`, `additional_redirect_urls`) are not verified against a config made by `supabase init`, and the fix says so. A `config.toml` doctor can't read is listed under "Not checked", never an error. `public_bucket` is a warning for each row of `storage.buckets` with `public = true`; doctor's query adds a `buckets` key, and `check`'s query and output are unchanged. "Auth settings" and "Storage buckets" no longer always sit under "Not checked", so a full clean run (database given, git, a `svetra.yaml`, a readable `config.toml`) now ends with "No critical findings in everything doctor can check" and `ready: true`. Spec: `docs/doctor.md`.
+- **A `doctor` tool in `svetra mcp`.** The same inputs as the CLI (`dir`, and one of `db`, `local`, `migrations`, with `scratch`, `strict`, `schemas`) and the same JSON as `svetra doctor --json`, plus a one-sentence `summary`. The Svetra skill tells agents to run it before saying an app is ready. Spec: `docs/agents.md`.
+
 ## 0.8.3 (2026-11-22)
 
 A pre-launch checklist (`svetra doctor`), `infer` that follows real apps (profile tables, `on delete`, role checks) and can check its draft against a copy of the database, `audit: true` on entities and holes, and two fixes to the generated tests found by studying an app written by others.
