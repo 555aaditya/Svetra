@@ -503,7 +503,6 @@ These come later, if real use asks for them:
 - Storage-engine selection
 - Migrations between graph revisions (planned for `svetra diff` and `patch`)
 - Multiple files and imports
-- Hole kinds other than `function`, such as webhook recipes
 - Audit retention and export, logging refused calls, and alerting
 - Hole kinds other than `function` and `schedule`: triggers and webhooks are specified in [automations.md](automations.md)
 - The sign-in methods listed under [Authentication](#authentication) as not in version 0.1
