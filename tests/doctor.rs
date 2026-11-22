@@ -107,12 +107,23 @@ impl Drop for Project {
     }
 }
 
-/// `(kind, object, severity)` of every finding.
+/// `(kind, object, severity)` of every finding outside `auth`, which has its own tests: a
+/// project with a `config.toml` and no `auth:` section always gets Supabase's defaults.
 fn found(v: &Value) -> Vec<(String, String, String)> {
+    found_in(v, |a| a != "auth")
+}
+
+/// `found`, but only the findings of `area`.
+fn found_area(v: &Value, area: &str) -> Vec<(String, String, String)> {
+    found_in(v, |a| a == area)
+}
+
+fn found_in(v: &Value, keep: impl Fn(&str) -> bool) -> Vec<(String, String, String)> {
     v["findings"]
         .as_array()
         .unwrap()
         .iter()
+        .filter(|f| keep(f["area"].as_str().unwrap()))
         .map(|f| {
             (
                 f["kind"].as_str().unwrap().to_string(),
@@ -536,7 +547,7 @@ fn backups_are_a_reminder_when_the_project_looks_hosted() {
         .iter()
         .map(|r| r["id"].as_str().unwrap())
         .collect();
-    assert_eq!(ids, ["backups", "restore", "own_copy"]);
+    assert_eq!(ids, ["backups", "restore", "own_copy", "admin_mfa"]);
     assert_eq!(found(&v), [], "reminders are never findings");
     let q = Project::new("no-reminders").init();
     assert_eq!(q.json().1["reminders"], serde_json::json!([]));
