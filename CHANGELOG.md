@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Scheduled holes: `kind: schedule` runs a hole on the database's clock (milestone M4b, first part).** A hole with `schedule: "0 3 * * *"` (five-field cron, UTC, numbers, lists, ranges and steps) has no caller: it takes `reads`, `writes` and `grants` but not `input`, `output`, `as`, `when` or `audit` (`SVT020`, with a hint naming the keys each kind takes). It compiles to the usual role and body function plus a pg_cron job `svetra_<name>` that calls the body with `p_caller` null behind an advisory lock, and no function in `public` and nothing in `src/svetra.gen.ts`. Jobs named `svetra_%` that the design no longer declares are unscheduled. A bad expression is `SVT037` and `grants` on a schedule is `SVT040` (a warning). The generated tests check that no API role can run it, that the job exists once with the declared schedule, that no stale job is left and that the clock is UTC. `explain`, `context`, `view`, `diff` and `plan` say what starts it; changing a schedule is breaking. The Supabase stand-in has a stub `cron` schema. New example `jobs`. The pg_cron facts were checked on a local Supabase (docs/automations.md). Spec: `docs/format.md`, `docs/automations.md`.
+
 ## 0.8.3 (2026-11-22)
 
 A pre-launch checklist (`svetra doctor`), `infer` that follows real apps (profile tables, `on delete`, role checks) and can check its draft against a copy of the database, `audit: true` on entities and holes, and two fixes to the generated tests found by studying an app written by others.
