@@ -602,10 +602,7 @@ pub fn doctor_query(schemas: &[String]) -> String {
         "'buckets', case when to_regclass('storage.buckets') is null then '[]'::json else \
 replace(replace(replace((xpath('/row/j/text()', query_to_xml('{inner}', true, true, '')))[1]::text, '&lt;', '<'), '&gt;', '>'), '&amp;', '&')::json end"
     );
-    format!(
-        "select json_build_object({}, {buckets})",
-        keys(schemas)
-    )
+    format!("select json_build_object({}, {buckets})", keys(schemas))
 }
 
 /// `check`'s query plus the keys `svetra infer` needs (docs/infer.md, What it reads): columns,

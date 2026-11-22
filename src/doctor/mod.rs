@@ -344,7 +344,9 @@ pub fn run(dir: &Path, source: Option<&Source>, schemas: &[String]) -> Result<Re
                 file: f.object.clone(),
                 line: None,
             }));
-        report.findings.extend(check.buckets.iter().filter_map(public_bucket));
+        report
+            .findings
+            .extend(check.buckets.iter().filter_map(public_bucket));
         report.migrations = check.migrations;
     }
     let data = report.findings.len();

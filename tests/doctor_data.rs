@@ -256,7 +256,10 @@ fn a_clean_database_is_still_never_called_ready() {
     let (code, v) = p.json(&["--migrations"]);
     assert_eq!(code, 0, "{v}");
     assert_eq!(v["ready"], false, "no config.toml and no svetra.yaml");
-    assert!(v["not_checked"].to_string().contains("Auth settings"), "{v}");
+    assert!(
+        v["not_checked"].to_string().contains("Auth settings"),
+        "{v}"
+    );
     assert!(
         !v["not_checked"].to_string().contains("\"Database\""),
         "{v}"

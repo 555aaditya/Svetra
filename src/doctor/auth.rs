@@ -252,7 +252,7 @@ pub fn check(dir: &Path) -> Auth {
             Ok(s) => s,
             Err(line) => {
                 auth.not_checked = Some(format!(
-                    "{} has a sign-in setting doctor did not understand (line {line}), so those settings were not read.",
+                    "{} was not understood (line {line}: a sign-in setting has a value doctor can't read), so its settings were not read.",
                     project::CONFIG
                 ));
                 return auth;
@@ -286,7 +286,9 @@ pub fn check(dir: &Path) -> Auth {
         let mut f = find(file, l_email, "email_unconfirmed", Severity::Warning);
         f.message = "People can sign up with an email address they don't own, so anyone can claim anyone's address.".into();
         f.fix = if from_config {
-            format!("set `enable_confirmations = true` under [auth.email] (or `confirm_email: true` in {DESIGN}){tail}.")
+            format!(
+                "set `enable_confirmations = true` under [auth.email] (or `confirm_email: true` in {DESIGN}){tail}."
+            )
         } else {
             "set `confirm_email: true` and compile.".into()
         };
@@ -306,13 +308,16 @@ pub fn check(dir: &Path) -> Auth {
     if settings.anonymous {
         let mut f = find(file, l_anon, "anonymous_sign_ins", Severity::Warning);
         f.message = "Anyone can get a signed-in account without giving an email. Every rule that allows signed-in people now allows them.".into();
-        f.fix = format!("set `enable_anonymous_sign_ins = false` unless your app needs guests{tail}.");
+        f.fix =
+            format!("set `enable_anonymous_sign_ins = false` unless your app needs guests{tail}.");
         auth.findings.push(f);
     }
     if settings.signup {
         let mut f = find(file, l_signup, "open_signup", Severity::Info);
         f.message = "Anyone on the internet can create an account. Fine for a public app; for a private one, set `enable_signup = false` and invite people.".into();
-        f.fix = format!("if the app is private, set `enable_signup = false` (or `signup: invite_only` in {DESIGN}){tail}.");
+        f.fix = format!(
+            "if the app is private, set `enable_signup = false` (or `signup: invite_only` in {DESIGN}){tail}."
+        );
         auth.findings.push(f);
     }
     if let Some(c) = &config {
@@ -326,8 +331,7 @@ pub fn check(dir: &Path) -> Auth {
 
 fn from_config(c: &Config) -> Result<Settings, usize> {
     let b = |t: &str, k: &str, default: bool| -> Result<(bool, Option<usize>), usize> {
-        Ok(c.bool(t, k)?
-            .map_or((default, None), |(v, l)| (v, Some(l))))
+        Ok(c.bool(t, k)?.map_or((default, None), |(v, l)| (v, Some(l))))
     };
     let (email, l_email) = b("auth.email", "enabled", true)?;
     let (confirmations, l_conf) = b("auth.email", "enable_confirmations", false)?;
@@ -367,12 +371,13 @@ fn admin_no_mfa(doc: &Document, out: &mut Vec<Finding>) {
 }
 
 fn mfa_off(doc: &Document, c: &Config, out: &mut Vec<Finding>) {
-    let off = ["enroll_enabled", "verify_enabled"]
-        .iter()
-        .find_map(|k| match c.get("auth.mfa.totp", k) {
-            Some((Val::Bool(false), l)) => Some(l),
-            _ => None,
-        });
+    let off =
+        ["enroll_enabled", "verify_enabled"]
+            .iter()
+            .find_map(|k| match c.get("auth.mfa.totp", k) {
+                Some((Val::Bool(false), l)) => Some(l),
+                _ => None,
+            });
     let Some(line) = off else { return };
     for r in doc.roles.iter().filter(|r| r.mfa) {
         let mut f = find(project::CONFIG, Some(line), "mfa_off", Severity::Warning);
@@ -408,10 +413,14 @@ fn redirect_open(c: &Config, out: &mut Vec<Finding>) {
         } else {
             continue;
         };
-        let mut f = find(project::CONFIG, Some(line), "redirect_open", Severity::Warning);
-        f.message = format!(
-            "Sign-in links may send people to addresses you don't control: {url} ({why})."
+        let mut f = find(
+            project::CONFIG,
+            Some(line),
+            "redirect_open",
+            Severity::Warning,
         );
+        f.message =
+            format!("Sign-in links may send people to addresses you don't control: {url} ({why}).");
         f.fix = format!(
             "list only your own production addresses, {DASHBOARD}. UNVERIFIED: doctor reads the key names site_url and additional_redirect_urls from memory of the Supabase CLI's config.toml, not from a file `supabase init` made."
         );
@@ -431,10 +440,14 @@ mod tests {
             Some(Val::Str("http://x#y".into()))
         );
         assert_eq!(
-            c.get("auth", "additional_redirect_urls").map(|(v, _)| v.clone()),
+            c.get("auth", "additional_redirect_urls")
+                .map(|(v, _)| v.clone()),
             Some(Val::List(vec!["a".into(), "b".into()]))
         );
-        assert_eq!(c.bool("auth.email", "enable_confirmations"), Ok(Some((false, 11))));
+        assert_eq!(
+            c.bool("auth.email", "enable_confirmations"),
+            Ok(Some((false, 11)))
+        );
     }
 
     #[test]
