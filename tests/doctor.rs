@@ -113,11 +113,6 @@ fn found(v: &Value) -> Vec<(String, String, String)> {
     found_in(v, |a| a != "auth")
 }
 
-/// `found`, but only the findings of `area`.
-fn found_area(v: &Value, area: &str) -> Vec<(String, String, String)> {
-    found_in(v, |a| a == area)
-}
-
 fn found_in(v: &Value, keep: impl Fn(&str) -> bool) -> Vec<(String, String, String)> {
     v["findings"]
         .as_array()

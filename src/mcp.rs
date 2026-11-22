@@ -105,6 +105,19 @@ fn tools() -> Value {
             },
             "additionalProperties": false
         } },
+        { "name": "doctor", "description": "The pre-launch checklist for a Supabase project folder: what is open in the database (check's findings), secret keys in code, a committed .env, risky sign-in settings, public storage buckets, generated files that drifted, and what to back up. Needs no svetra.yaml and never writes. Give at most one database source: db, local or migrations; without one the database is listed under not_checked. Run it before telling anyone an app is ready. Findings are results, not errors: read counts and ready (true only for a full, clean run).", "inputSchema": {
+            "type": "object",
+            "properties": {
+                "dir": { "type": "string", "description": "The project folder. Default: the server's working directory" },
+                "db": { "type": "string", "description": "Connection string, read through psql" },
+                "local": { "type": "boolean", "description": "true: the database `supabase start` runs" },
+                "migrations": { "description": "A folder of migrations, or true for dir/supabase/migrations. Built in a throwaway database (Docker, or `scratch`)", "oneOf": [{ "type": "string" }, { "type": "boolean" }] },
+                "scratch": { "type": "string", "description": "With migrations: an empty database to build them in, instead of Docker" },
+                "strict": { "type": "boolean", "description": "With migrations: a migration that fails to apply is an error" },
+                "schemas": { "type": "array", "items": { "type": "string" }, "description": "Schemas the API exposes. Default: [\"public\"]" }
+            },
+            "additionalProperties": false
+        } },
     ])
 }
 
@@ -216,6 +229,7 @@ fn call(name: &str, args: &Value) -> Option<Value> {
             text(out, false)
         }
         "check" => check(args),
+        "doctor" => doctor(args),
         _ => return None,
     })
 }
@@ -250,17 +264,10 @@ fn check(args: &Value) -> Value {
     if migrations.is_none() && (scratch.is_some() || strict) {
         return err("scratch and strict go with migrations.");
     }
-    let schemas: Vec<String> = match args.get("schemas").and_then(Value::as_array) {
-        Some(a) => a
-            .iter()
-            .filter_map(|s| s.as_str().map(|s| s.trim().to_string()))
-            .filter(|s| !s.is_empty())
-            .collect(),
-        None => vec!["public".to_string()],
+    let schemas = match schemas(args) {
+        Ok(s) => s,
+        Err(e) => return e,
     };
-    if schemas.is_empty() {
-        return err("schemas must name at least one schema, such as [\"public\"].");
-    }
     let source = match (migrations, db, snapshot) {
         (Some(dir), _, _) => crate::inspect::Source::Migrations { dir, scratch },
         (None, Some(url), _) => crate::inspect::Source::Db(url),
@@ -288,6 +295,107 @@ fn check(args: &Value) -> Value {
     }
     out["summary"] = json!(summary(&report, &out["counts"], &schemas));
     text(out, false)
+}
+
+/// The `schemas` input, default `["public"]`; a tool error when it names none.
+fn schemas(args: &Value) -> Result<Vec<String>, Value> {
+    let schemas: Vec<String> = match args.get("schemas").and_then(Value::as_array) {
+        Some(a) => a
+            .iter()
+            .filter_map(|s| s.as_str().map(|s| s.trim().to_string()))
+            .filter(|s| !s.is_empty())
+            .collect(),
+        None => vec!["public".to_string()],
+    };
+    if schemas.is_empty() {
+        return Err(text(
+            json!({ "error": "schemas must name at least one schema, such as [\"public\"]." }),
+            true,
+        ));
+    }
+    Ok(schemas)
+}
+
+/// The `doctor` tool (docs/agents.md): the CLI's `--json` document plus a `summary`.
+fn doctor(args: &Value) -> Value {
+    let err = |m: &str| text(json!({ "error": m }), true);
+    let string = |k: &str| args.get(k).and_then(Value::as_str).map(str::to_string);
+    let flag = |k: &str| args.get(k).and_then(Value::as_bool).unwrap_or(false);
+    let dir = string("dir").unwrap_or_else(|| ".".to_string());
+    let migrations = match args.get("migrations") {
+        Some(Value::String(d)) if !d.is_empty() => Some(d.clone()),
+        Some(Value::Bool(true)) => Some(format!("{dir}/supabase/migrations")),
+        _ => None,
+    };
+    let (local, scratch, strict) = (flag("local"), string("scratch"), flag("strict"));
+    let db = string("db");
+    let given = [db.is_some(), local, migrations.is_some()];
+    if given.iter().filter(|g| **g).count() > 1 {
+        return err("Pass at most one of db, local and migrations.");
+    }
+    if migrations.is_none() && (scratch.is_some() || strict) {
+        return err("scratch and strict go with migrations.");
+    }
+    let schemas = match schemas(args) {
+        Ok(s) => s,
+        Err(e) => return e,
+    };
+    let source = match (migrations, local, db) {
+        (Some(dir), _, _) => Some(crate::inspect::Source::Migrations { dir, scratch }),
+        (None, true, _) => Some(crate::inspect::Source::Db(
+            "postgresql://postgres:postgres@127.0.0.1:54322/postgres".to_string(),
+        )),
+        (None, false, Some(url)) => Some(crate::inspect::Source::Db(url)),
+        _ => None,
+    };
+    let report = match crate::doctor::run(Path::new(&dir), source.as_ref(), &schemas) {
+        Ok(r) => r,
+        Err(crate::inspect::CheckError::Usage(m) | crate::inspect::CheckError::Fail(m)) => {
+            return err(&m);
+        }
+    };
+    let mut out: Value = serde_json::from_str(&report.json()).unwrap_or(Value::Null);
+    if let Some(o) = report
+        .migrations
+        .as_ref()
+        .filter(|o| strict && !o.failed.is_empty())
+    {
+        out["error"] = json!(format!(
+            "{} of {} migrations could not be applied. Fix them, or drop strict to accept partial findings.",
+            o.failed.len(),
+            o.files
+        ));
+        return text(out, true);
+    }
+    out["summary"] = json!(doctor_summary(&report));
+    text(out, false)
+}
+
+/// One plain-English sentence for `doctor`: the counts and the verdict. Names no database.
+fn doctor_summary(r: &crate::doctor::Report) -> String {
+    use crate::doctor::Severity;
+    let plural = |n: usize, w: &str| format!("{n} {w}{}", if n == 1 { "" } else { "s" });
+    let c = r.count(Severity::Critical);
+    let mut out = format!(
+        "{c} critical, {}, {}.",
+        plural(r.count(Severity::Warning), "warning"),
+        plural(r.count(Severity::Info), "note")
+    );
+    out += &if c > 0 {
+        format!(
+            " Fix the {} first. Not ready.",
+            plural(c, "critical finding")
+        )
+    } else if r.ready() {
+        " No critical findings in everything doctor can check; the reminders are yours.".to_string()
+    } else {
+        let n = r.not_checked.len();
+        format!(
+            " No critical findings, but {n} {} not checked. Not a clearance.",
+            if n == 1 { "part was" } else { "parts were" }
+        )
+    };
+    out
 }
 
 /// One plain-English sentence with the counts; the source is redacted.
