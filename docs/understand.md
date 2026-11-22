@@ -34,9 +34,9 @@ The reader may never have written code, so:
 1. **What your app stores.** One block per entity: its fields in plain words, and which are required.
 2. **Rules that always hold.** The declared constraints and uniqueness, in English.
 3. **Who can see and change what.** Per entity: who can see, create, change and delete, then what **nobody** can do directly.
-4. **Custom code.** Per hole: what it takes, what it returns, who can call it ("who can call it: signed-in people, only when the owner of the source is them", from `as` and `when`), and what it can read and change.
+4. **Custom code.** Per hole: what it takes, what it returns, who can call it ("who can call it: signed-in people, only when the owner of the source is them", from `as` and `when`), and what it can read and change. A scheduled hole says what starts it instead ("runs by itself every day at 03:00 (UTC). Nobody can run it from the app."), and has no takes, returns or who-can-call lines. Common cron forms are spelled out (every day at 03:00, every 15 minutes, every Monday at 09:00, on the 1st of each month at 00:00); any other valid expression is shown as written, in quotes. A scheduled hole that gives roles adds "Nobody is asked first: it happens by itself." Details: [automations.md](automations.md).
 5. **Worth knowing.** Warnings and info from `validate`, in plain words.
-6. **Before going live.** Only with an `auth` section: what to set up outside Svetra (see [Signing in](#signing-in)).
+6. **Before going live.** What to set up outside Svetra: with an `auth` section, see [Signing in](#signing-in); and, once, when any hole runs on a schedule, that it needs the pg_cron extension, which the update turns on, and where to switch it on if the project refuses.
 
 ### Field descriptions
 
@@ -188,6 +188,7 @@ hole transfer: (source Account.id, destination Account.id, amount Transaction.am
 ```
 
 - `context` marks an audited entity with an `audit ` prefix (`audit Note: …`, after `private ` if both) and ends an audited hole's line with `; audit`.
+- A scheduled hole reads `hole expire_invites: schedule "0 3 * * *"; reads Invite; writes Invite`.
 
 **The size target:** `context` should be no larger than `svetra.yaml` itself, and much smaller than the generated code. Measured on the fixtures:
 
