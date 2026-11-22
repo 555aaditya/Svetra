@@ -4,6 +4,7 @@
 //! database source, `check`'s findings under the area `data`. Nothing here touches the network,
 //! writes a file, or prints a secret's value: a finding names a file, a line and a kind of key.
 
+pub mod auth;
 pub mod backups;
 pub mod files;
 pub mod generated;
@@ -39,7 +40,7 @@ pub struct Finding {
     /// Stable id, such as `service_key_exposed`.
     pub kind: &'static str,
     pub severity: Severity,
-    /// `data`, `keys`, `backups` or `generated`.
+    /// `data`, `storage`, `keys`, `auth`, `backups` or `generated`.
     pub area: &'static str,
     pub message: String,
     pub fix: String,
@@ -77,9 +78,11 @@ pub struct Report {
     pub migrations: Option<Outcome>,
 }
 
-const AREAS: [(&str, &str); 4] = [
+const AREAS: [(&str, &str); 6] = [
     ("data", "Data exposure"),
+    ("storage", "Storage buckets"),
     ("keys", "Leaked keys"),
+    ("auth", "Auth settings"),
     ("backups", "Backups and recovery"),
     ("generated", "Generated files"),
 ];
@@ -214,7 +217,7 @@ impl Report {
                     "message": f.message,
                     "fix": f.fix,
                 });
-                if f.area != "data" {
+                if f.area != "data" && f.area != "storage" {
                     v["file"] = json!(f.file);
                 }
                 if let Some(l) = f.line {
@@ -285,7 +288,9 @@ pub fn run(dir: &Path, source: Option<&Source>, schemas: &[String]) -> Result<Re
             dir.display()
         )));
     }
-    let checked = source.map(|s| inspect::run(s, schemas)).transpose()?;
+    let checked = source
+        .map(|s| inspect::run_query(s, schemas, &inspect::doctor_query(schemas)))
+        .transpose()?;
     let files = files::walk(dir);
     let mut git = files::Git::open(dir);
     if let Some(g) = git.as_mut() {
@@ -339,10 +344,16 @@ pub fn run(dir: &Path, source: Option<&Source>, schemas: &[String]) -> Result<Re
                 file: f.object.clone(),
                 line: None,
             }));
+        report.findings.extend(check.buckets.iter().filter_map(public_bucket));
         report.migrations = check.migrations;
     }
     let data = report.findings.len();
     report.findings.extend(keys::check(&files, git.as_ref()));
+    let auth = auth::check(dir);
+    report.findings.extend(auth.findings);
+    if let Some(why) = auth.not_checked {
+        report.not_checked.push(("Auth settings", why));
+    }
     match generated::check(dir) {
         Some(found) => {
             report.has_design = true;
@@ -365,27 +376,46 @@ pub fn run(dir: &Path, source: Option<&Source>, schemas: &[String]) -> Result<Re
             .map(|(id, m)| (*id, m.to_string()))
             .collect();
     }
+    if auth.admin_reminder && !report.reminders.is_empty() {
+        report.reminders.push((
+            "admin_mfa",
+            "Admin accounts: turn on a second factor (Authentication, Multi-factor) for every account that can reach all your data. Without a svetra.yaml, doctor can't tell who your admins are.".to_string(),
+        ));
+    }
     if git.is_none() {
         report.not_checked.push((
             "Git",
             "this folder isn't a git repository, so doctor can't tell which files are committed and treats every secret as if its file were".to_string(),
         ));
     }
-    report.not_checked.push((
-        "Auth settings",
-        "this version of doctor doesn't read supabase/config.toml's sign-in settings".to_string(),
-    ));
-    report.not_checked.push((
-        "Storage buckets",
-        "this version of doctor doesn't read storage.buckets".to_string(),
-    ));
     if report.database.is_none() {
+        report.not_checked.push((
+            "Storage buckets",
+            "no database given, so storage.buckets was not read".to_string(),
+        ));
         report.not_checked.push((
             "Database",
             "no database was read: data exposure is not checked".to_string(),
         ));
     }
     Ok(report)
+}
+
+/// `public_bucket`: a row of `storage.buckets` with `public = true`.
+fn public_bucket(b: &Value) -> Option<Finding> {
+    if b["public"].as_bool() != Some(true) {
+        return None;
+    }
+    let name = b["name"].as_str().or(b["id"].as_str()).unwrap_or_default();
+    Some(Finding {
+        kind: "public_bucket",
+        severity: Severity::Warning,
+        area: "storage",
+        message: format!("Every file in the bucket {name} can be opened by anyone with its link. Fine for logos and profile pictures; a leak for invoices and uploads."),
+        fix: "make the bucket private and hand out time-limited signed links, or check that every file in it is meant for everyone.".into(),
+        file: format!("storage.buckets.{name}"),
+        line: None,
+    })
 }
 
 /// The `Database:` line: what was read, and how.
