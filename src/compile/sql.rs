@@ -309,13 +309,14 @@ fn param_type(t: &ParamType, entities: &HashMap<&str, &Entity>) -> String {
     }
 }
 
-/// One hole (docs/compiler.md, Holes): a role holding exactly the declared access, the body
-/// function that runs as that role behind the `when` guard, and the function the API calls.
 /// The pg_cron job of a scheduled hole.
 pub fn job_name(hole: &str) -> String {
     format!("svetra_{hole}")
 }
 
+/// One hole (docs/compiler.md, Holes): a role holding exactly the declared access, the body
+/// function that runs as that role behind the `when` guard, and the function the API calls
+/// (a scheduled hole has no such function: a pg_cron job calls the body instead).
 fn hole(
     h: &Hole,
     doc: &Document,
