@@ -345,7 +345,7 @@ holes:
 | `schedule` | yes | Five-field cron: minute, hour, day of month, month, day of week, in UTC. Each field is `*`, a number, a range (`1-5`), a list (`1,15`) or a step (`*/15`, `10-30/5`). Day of week is `0` to `7` (`0` and `7` are Sunday). Names such as `mon` are not allowed. A bad expression is `SVT037` |
 | `reads`, `writes`, `grants` | no | As for `function` |
 
-Not allowed: `input`, `output`, `as` and `when`, because nobody passes or receives them (`SVT020`). Write a guard in the body. The body is written as for any hole, and `p_caller` is always `null`. It runs as the hole's own role, with the access `reads`, `writes` and `grants` declare. A schedule with `grants` gives or takes away roles with no person behind it, so it gets `SVT040`. A body should be safe to run twice and to run late: a failed run is not retried and a run missed while the database was down is not made up. The generated SQL, which needs pg_cron, is in [compiler.md](compiler.md#holes).
+Not allowed: `input`, `output`, `as` and `when`, because nobody passes or receives them, and `audit`, because an audited hole logs a call by a person and a schedule has none (`SVT020`). Write a guard in the body. The body is written as for any hole, and `p_caller` is always `null`. It runs as the hole's own role, with the access `reads`, `writes` and `grants` declare. A schedule with `grants` gives or takes away roles with no person behind it, so it gets `SVT040`. A body should be safe to run twice and to run late: a failed run is not retried and a run missed while the database was down is not made up. The generated SQL, which needs pg_cron, is in [compiler.md](compiler.md#holes).
 
 ## Audit
 

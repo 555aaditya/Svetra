@@ -91,7 +91,7 @@ holes:
 | `schedule` | yes | Five-field cron: minute, hour, day of month, month, day of week. UTC. Lists, ranges and steps are allowed (`*/15`, `1-5`, `1,15`). Names such as `mon` are not, so a field means one thing |
 | `reads`, `writes`, `grants` | no | As for `function` |
 
-Not allowed, because nobody passes or receives them: `input`, `output`, `as`, `when`. Using one is `SVT020`, and the hint says why. A guard on a scheduled hole is written in the body (`if not exists (...) then return; end if;`), where its author can see it.
+Not allowed, because nobody passes or receives them: `input`, `output`, `as`, `when`; and `audit`, because an audited hole records a call by a person (decision of the first build PR; changes to audited entities a schedule makes are still logged, with no actor). Using one is `SVT020`, and the hint says why. A guard on a scheduled hole is written in the body (`if not exists (...) then return; end if;`), where its author can see it.
 
 ### What Svetra generates
 
