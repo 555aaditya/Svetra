@@ -244,6 +244,7 @@ fn guard(e: &Entity, doc: &Document, entities: &HashMap<&str, &Entity>) -> Optio
         entities,
         params: false,
         old: true,
+        row: None,
     };
     // Whether a policy covers the person: their database role, and the policy's `when` on the old row.
     // A null counts as not covering, so a missing value can never free a field.
@@ -314,6 +315,25 @@ pub fn job_name(hole: &str) -> String {
     format!("svetra_{hole}")
 }
 
+/// The Postgres trigger of a triggered hole for one event (`Insert`, `Update` or `Delete`).
+pub fn trigger_name(hole: &str, event: Action) -> String {
+    format!("svetra_{hole}_{}", event_word(event))
+}
+
+/// The SQL word of a trigger event, lower case.
+pub fn event_word(event: Action) -> &'static str {
+    match event {
+        Action::Insert => "insert",
+        Action::Update => "update",
+        _ => "delete",
+    }
+}
+
+/// The function a triggered hole's triggers call, which calls the body.
+pub fn fire_name(hole: &str) -> String {
+    format!("{hole}__fire")
+}
+
 /// One hole (docs/compiler.md, Holes): a role holding exactly the declared access, the body
 /// function that runs as that role behind the `when` guard, and the function the API calls
 /// (a scheduled hole has no such function: a pg_cron job calls the body instead).
@@ -378,11 +398,19 @@ fn hole(
         .output
         .as_ref()
         .map_or("void".into(), |t| param_type(t, entities));
-    let inputs: Vec<(String, String)> = h
-        .input
-        .iter()
-        .map(|p| (p.name.clone(), param_type(&p.ty, entities)))
-        .collect();
+    // A triggered hole takes the changed row, before and after, as its inputs.
+    let row_type = match &h.kind {
+        HoleKind::Trigger(t) => Some(table(&t.on.name)),
+        _ => None,
+    };
+    let inputs: Vec<(String, String)> = match &row_type {
+        Some(row) => vec![("old".into(), row.clone()), ("new".into(), row.clone())],
+        None => h
+            .input
+            .iter()
+            .map(|p| (p.name.clone(), param_type(&p.ty, entities)))
+            .collect(),
+    };
     let types: Vec<&str> = inputs.iter().map(|(_, t)| t.as_str()).collect();
     let inner_sig = format!(
         "\"svetra_holes\".{}(uuid{})",
@@ -392,13 +420,15 @@ fn hole(
     let inner_params: Vec<String> = std::iter::once("p_caller uuid".to_string())
         .chain(inputs.iter().map(|(n, t)| format!("p_{n} {t}")))
         .collect();
-    let guard = h.when.as_deref().map(|w| {
+    // A trigger's `when` is the trigger's own WHEN clause, so the body has no guard.
+    let guard = h.when.as_deref().filter(|_| row_type.is_none()).map(|w| {
         let fields = crate::typeck::hole_entity(h, entities);
         let cx = Ctx {
             entity: &fields,
             entities,
             params: true,
             old: false,
+            row: None,
         };
         expr_sql(&expr::parse(w).expect("validated expression"), &cx)
     });
@@ -426,12 +456,12 @@ fn hole(
     out.push(format!(
         "grant execute on function {inner_sig} to current_user;"
     ));
-    if let HoleKind::Schedule(sched) = &h.kind {
+    if h.kind != HoleKind::Function {
         // No function in `public`: nothing in the API can run it. Supabase also lets
         // service_role run new functions, and the stand-in has no such role.
-        out.push(format!(
-            "do $$ begin if exists (select from pg_roles where rolname = 'service_role') then revoke all on function {inner_sig} from service_role; end if; end $$;"
-        ));
+        out.push(revoke_service_role(&inner_sig));
+    }
+    if let HoleKind::Schedule(sched) = &h.kind {
         out.push(format!(
             "select cron.schedule({}, {},\n  $job$select {}(null)\n    where pg_try_advisory_xact_lock(hashtext({}))$job$);",
             lit(&job_name(&h.name)),
@@ -439,6 +469,10 @@ fn hole(
             inner_sig.trim_end_matches("(uuid)"),
             lit(&job_name(&h.name)),
         ));
+        return out.join("\n") + "\n";
+    }
+    if let HoleKind::Trigger(t) = &h.kind {
+        out.extend(triggers(h, t, entities));
         return out.join("\n") + "\n";
     }
     let outer_sig = format!("\"public\".{}({})", q(&h.name), types.join(", "));
@@ -488,6 +522,67 @@ fn hole(
     out.join("\n") + "\n"
 }
 
+fn revoke_service_role(sig: &str) -> String {
+    format!(
+        "do $$ begin if exists (select from pg_roles where rolname = 'service_role') then revoke all on function {sig} from service_role; end if; end $$;"
+    )
+}
+
+/// The condition of a triggered hole's trigger for one event, as SQL for its `WHEN` clause: bare
+/// fields are the row after the change (`new`, or `old` for a delete) and `old.<field>` the row
+/// before. `None` when the hole has no `when`.
+pub fn trigger_when(
+    h: &Hole,
+    t: &Trigger,
+    event: Action,
+    entities: &HashMap<&str, &Entity>,
+) -> Option<String> {
+    let on = entities
+        .get(t.on.name.as_str())
+        .expect("validated trigger entity");
+    let cx = Ctx {
+        entity: on,
+        entities,
+        params: false,
+        old: false,
+        row: Some(if event == Action::Delete {
+            "old"
+        } else {
+            "new"
+        }),
+    };
+    h.when
+        .as_deref()
+        .map(|w| expr_sql(&expr::parse(w).expect("validated expression"), &cx))
+}
+
+/// A triggered hole's trigger function and its triggers, one per event (docs/compiler.md,
+/// Triggered holes). The trigger function is `security definer` so that whoever made the change
+/// fires it without being able to run anything in `svetra_holes`.
+fn triggers(h: &Hole, t: &Trigger, entities: &HashMap<&str, &Entity>) -> Vec<String> {
+    let fire = format!("\"svetra_holes\".{}", q(&fire_name(&h.name)));
+    let mut out = vec![
+        format!(
+            "create function {fire}()\n  returns trigger language plpgsql security definer set search_path = ''\n  as $svetra$\nbegin\n  if pg_trigger_depth() > 3 then\n    raise exception '{} is part of a trigger loop' using errcode = '54001';\n  end if;\n  perform {}((select auth.uid()),\n    case when tg_op = 'INSERT' then null else old end,\n    case when tg_op = 'DELETE' then null else new end);\n  return null;\nend\n$svetra$;",
+            h.name,
+            format!("\"svetra_holes\".{}", q(&h.name))
+        ),
+        format!("revoke all on function {fire}() from public, anon, authenticated;"),
+        revoke_service_role(&format!("{fire}()")),
+    ];
+    for event in &t.events {
+        let when = trigger_when(h, t, *event, entities);
+        out.push(format!(
+            "create trigger {} after {} on {}\n  for each row{}\n  execute function {fire}();",
+            q(&trigger_name(&h.name, *event)),
+            event_word(*event),
+            table(&t.on.name),
+            when.map_or(String::new(), |w| format!(" when ({w})"))
+        ));
+    }
+    out
+}
+
 /// Row-level security on every table, so a table with no policy denies everyone.
 /// Private entities also lose every grant, so the generated API can't reach them at all.
 fn access(e: &Entity) -> Vec<String> {
@@ -514,6 +609,7 @@ fn policy(p: &Policy, entities: &HashMap<&str, &Entity>) -> Vec<String> {
         entities,
         params: false,
         old: false,
+        row: None,
     };
     let cond = expr_sql(&expr::parse(&p.when).expect("validated expression"), &cx);
     // The condition on the row after an update: `check`, or `when` when there is none.
@@ -612,6 +708,7 @@ fn create_table(e: &Entity, entities: &HashMap<&str, &Entity>) -> String {
         entities,
         params: false,
         old: false,
+        row: None,
     };
     for c in &e.constraints {
         let parsed = expr::parse(&c.expr).expect("validated expression");
