@@ -240,6 +240,8 @@ pub struct Hole {
     pub when: Option<String>,
     /// Conditions over the inputs, each of which must hold: bad input is refused, not unauthorised.
     pub require: Vec<String>,
+    /// The input that is the caller's retry key: a repeat of a call with it returns the first answer.
+    pub idempotent: Option<String>,
     /// Every call that runs is recorded in the audit log.
     pub audit: bool,
 }
