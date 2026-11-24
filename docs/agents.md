@@ -26,7 +26,7 @@ Sets a project up for agents. `DIR` defaults to the current folder. It writes:
 
 `SKILL.md` teaches the agent one loop, plus the rules that keep it safe. Its content is fixed by this section:
 
-1. **Design first.** Turn the person's request into `svetra.yaml`: entities, fields, policies, roles, `auth`, and holes only for logic that can't be a policy. Ask at most three questions, each with a recommended default.
+1. **Design first.** Turn the person's request into `svetra.yaml`: entities, fields, policies, roles, `auth`, and holes only for logic that can't be a policy. Ask at most three questions, each with a recommended default. A new design is a new file; a change to an existing one goes through `patch` with the `revision` from `context` (a `conflict` means read again and redo), and every destructive and wider line in its answer goes to the person before going on. A `rename` doesn't rewrite references to the old name: `set` each one in the same call.
 2. **Validate after every edit,** with the `validate` tool, or `svetra validate --json`. Fix every error using its `remediation.hint` before going on. Don't move on with errors.
 3. **Plan a change,** when `svetra.yaml` already exists in git: call `plan`. Show the person every destructive line and every wider-access line, in their words, and get an explicit yes before running `svetra plan --accept <kinds>`. Declare renames with `was:`, never by removing and adding.
 4. **Compile,** with the `compile` tool. Never edit the generated files (`supabase/schemas/svetra.sql`, `src/svetra.gen.ts`, `supabase/tests/svetra.test.sql`), or the keys Svetra owns in `supabase/config.toml`.
@@ -53,9 +53,10 @@ An MCP server over stdio: JSON-RPC 2.0, one message per line. It supports `initi
 | `validate` | `svetra validate --json` | The diagnostics JSON, exactly as the CLI prints it |
 | `compile` | `svetra compile`, or `--check` with `check: true` | `{"written": [...], "notes": [...]}`, or `{"stale": [...]}` with `check`. On errors, the diagnostics |
 | `explain` | `svetra explain` | `{"text": "..."}` |
-| `context` | `svetra context` | `{"text": "..."}` |
+| `context` | `svetra context` | `{"text": "...", "revision": "..."}` (`explain` and `graph` carry the `revision` too) |
 | `graph` | `svetra graph` | `{"mermaid": "..."}` |
 | `plan` | `svetra plan --json`, read-only: compares `file` with `from`, or with `file` as committed in git `HEAD` | The plan: each change's `kind`, `data` (safe, breaking, destructive), `access` (wider, narrower), message, hint and `because`; `needs_yes`; `renames`. Never writes the rename migration: that's `svetra plan --accept`, after the person agrees |
+| `patch` | `svetra patch --json`: checked `set`, `remove` and `rename` edits on dot-separated paths, all or nothing, with `expected_revision` and `dry_run` (see [patch.md](patch.md)) | `{"applied", "revision", "problems", "notes", "changes", "needs_yes"}`, or `{"conflict": true, ...}`. Refusals and conflicts are results; only input that can't be read is a tool error |
 | `check` | `svetra check --json`: what is open in an existing database or in migrations (see below) | The findings JSON as the CLI prints it (with a `migrations` object for migrations), plus a `summary` |
 | `doctor` | `svetra doctor --json`: the pre-launch checklist for a project folder (see below) | The doctor JSON as the CLI prints it (`findings`, `counts`, `reminders`, `not_checked`, `ready`, and `migrations` for migrations), plus a `summary` |
 
@@ -99,6 +100,5 @@ At most one of `db`, `local` and `migrations`. With none, the database is listed
 
 ## Not in version 0.1
 
-- `svetra patch`, so the agent changes the design with checked edits instead of rewriting the file: specified in [patch.md](patch.md), M6. (`diff` and `plan` exist already.)
 - Tools that edit `svetra.yaml` directly.
 - Setup files for other agents. Claude Code reads `SKILL.md` and the project's `.mcp.json`. Cursor (`.cursor/mcp.json` and rules) and Codex (its `config.toml` and `AGENTS.md`) can run `svetra mcp` today if added by hand; `init` writing their files comes later.
