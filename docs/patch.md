@@ -2,7 +2,7 @@
 
 This document specifies `svetra patch`, the way an agent changes `svetra.yaml`. Instead of rewriting the file, the agent sends a short list of edits. Svetra applies all of them, checks the result, and writes the file **only if the result is valid**. A bad edit fails before anything is written, and says which edit and why.
 
-**Status: being built.** The decisions at the end took the recommendations (P2, editing the text in place, confirmed by the maintainer on 2026-11-24).
+**Status: built in 0.9 (unreleased).** The decisions at the end took the recommendations (P2, editing the text in place, confirmed by the maintainer on 2026-11-24).
 
 **Done when:** an agent adds a field, renames another and removes an entity in one call; the file keeps its comments and key order; a stale call, based on an older file, is refused and says so; and a call that would leave an invalid design writes nothing.
 
@@ -65,7 +65,7 @@ Why three, and not `add_field`, `change_type`, `add_policy` and so on: every one
 All edits are applied to the file's text in memory, then the **whole result** goes through the same checks as `svetra validate`. If any edit can't be applied, or the result has an error, **nothing is written** and the answer lists every problem found:
 
 - An edit that can't apply: the path doesn't exist for `remove` or `rename`, or its parent is a list or a scalar where a map is needed, or `rename` to a name that's already there. It is reported with its position in the edit list (`ops[2]`) and a hint, and the other edits are still tried so one call lists everything wrong.
-- An error in the result: the usual diagnostic, with its code, its position **in the file as it would be written**, and its hint. Warnings and info are shown and don't stop the write.
+- An error in the result: the usual diagnostic, with its code, its position **in the file as it would be written**, and its hint. Warnings and info that the edits bring are shown, as `notes`, and don't stop the write; ones the file already had are not repeated.
 
 The edit that caused a diagnostic isn't traced back; the position says where in the new file, and a `--dry-run` lets the agent see the file it would get.
 
