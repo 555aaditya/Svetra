@@ -112,3 +112,61 @@ It is written by the public function, which is owned by the migration's role, so
 
 The table grows by one row per call. Pruning, and a time window after which a key may be reused, are left out until real use shows what a window should be. `explain` says so.
 
+## 3. Not building: rate limits
+
+The Tracker listed rate limits with this milestone. This proposal leaves them out, for four reasons:
+
+1. **They need an identity.** A limit per person works for signed-in callers, but the callers most worth limiting are logged-out ones, and in the database they are all `null`.
+2. **They cost a write on every call.** A counter table, or a scan of one, turns every read-like hole into a write, and the table needs pruning.
+3. **The edge does it better.** Supabase and the host in front of it count requests before they cost a database connection. A limit inside the transaction protects the data from nothing the edge doesn't already stop.
+4. **A limit would be an unmeasured claim.** Svetra only states what the access tests can prove. "At most 10 calls a minute" would need its own clock, and tests that depend on one.
+
+If design partners hit a real case, the first step is a `doctor` finding that says "this hole is callable by anyone and writes", not a counter.
+
+## Diagnostics
+
+| Code | Severity | Meaning | Action |
+|---|---|---|---|
+| `SVT041` | error | A hole with `idempotent` is callable by `anon` or `anyone`, or its key input isn't typed `uuid` or `text`, or names an input the hole doesn't have | `fix_hole` |
+
+Codes continue after the automations proposal's `SVT037` to `SVT040`, which are reserved there and may land first; the numbers here are assigned in the order the PRs merge. A `require` that doesn't type-check is `SVT003`, as for `when`.
+
+## In explain, view and diff
+
+- **explain,** one sentence per hole: "The amount must be above 0, and the source and destination must differ. A call repeated with the same request id returns the first answer."
+- **diff and plan:** adding `require` or `idempotent` is **narrower** access (a call is refused that wasn't, or a repeat does nothing), so safe. **Removing** either is reported as a changed rule and not as wider access, because neither one decides who may see or change a row. The audit change kinds (`add_audit`, `remove_audit`) are the pattern.
+- **context:** a hole with either gets a one-word mark, as an audited hole does.
+
+## Proof
+
+The generated access tests already call each hole as each person and treat `42501` as "refused" and anything else as "got past the guard". `22023` is anything else, so **no existing check changes**.
+
+New checks, written as sentences like the others:
+
+- **`require`:** for each expression, as the first person the guard lets through, call the hole with inputs the evaluator says violate that expression and expect `22023`. Inputs that depend on rows the test world doesn't have are skipped and listed, not guessed.
+- **`idempotent`:** for a hole whose body the tests can run safely (no `writes`), a repeat of the same call returns the first answer and a repeat with other inputs is refused. For a hole that writes, the tests prove the table's privileges instead (nobody but the migration's role can read or write `hole_keys`), because bodies aren't tested.
+- **Deliberate breakages,** in `tests/pg/breakages/`, each failing exactly the expected checks: `require` dropped from the function, `hole_keys` granted to `authenticated`, the guard removed from the replay path.
+
+## Not in this version
+
+- Rate limits (above).
+- Retention and expiry of idempotency keys.
+- A key that is a hash of the whole input, for clients that can't send a key.
+- `require` messages written by the author. The expression is the message, so it can't drift from the rule.
+- Mirroring `require` in Zod.
+- `require` on scheduled, triggered and webhook holes. Webhooks already have `dedupe` ([automations](automations.md)); the other two have no caller to be wrong.
+
+## Build plan
+
+Two PRs after this one, each small, each with spec text moved into `format.md` and `compiler.md` first:
+
+1. **`require`:** loader and JSON Schema, type-check, the guard statements, `explain`, `context` and `diff`, tests and a golden, the breakage fixture.
+2. **`idempotent`:** loader and `SVT041`, `hole_keys`, the guard function, the replay path, the same follow-through, and a check on real Supabase.
+
+## Done when
+
+- A design with one hole using `require` and one using `idempotent` validates, compiles, applies to PostgreSQL 16 and to a real local Supabase, and `scripts/pg-check.sh` and `scripts/supabase-check.sh` pass.
+- The access tests fail, with the expected check names and no others, for each breakage above.
+- A hole with neither key compiles to the same bytes as before (the existing goldens don't change).
+- `explain` and `context` say it in plain words, and `diff` reports the change.
+- `docs/format.md` and `docs/compiler.md` describe it, and this file is deleted or reduced to a pointer.
