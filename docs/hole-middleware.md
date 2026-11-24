@@ -15,7 +15,7 @@ A hole body is the one hand-written part of a Svetra app, so it is where an agen
 
 ## 1. Input validation: `require`
 
-**Status:** built, with the spec moved to [format.md](format.md#requirements) and [compiler.md](compiler.md#holes). The generated access tests for it (below, Proof) are not built yet.
+**Status:** built, with the spec moved to [format.md](format.md#requirements) and [compiler.md](compiler.md#holes), and its generated access tests ([compiler.md](compiler.md#holes-in-the-access-tests)).
 
 ### The gap
 
@@ -145,7 +145,7 @@ The generated access tests already call each hole as each person and treat `4250
 
 New checks, written as sentences like the others:
 
-- **`require`:** for each expression, as the first person the guard lets through, call the hole with inputs the evaluator says violate that expression and expect `22023`. Inputs that depend on rows the test world doesn't have are skipped and listed, not guessed.
+- **`require`** (built): for each expression, as the first person the guard lets through, call the hole with an input the evaluator says breaks that expression (and none before it) and expect `22023` with the expression's message. Values come from the expression's own literals, the other inputs, and null. Where none works, the check is skipped and says so, not guessed.
 - **`idempotent`:** for a hole whose body the tests can run safely (no `writes`), a repeat of the same call returns the first answer and a repeat with other inputs is refused. For a hole that writes, the tests prove the table's privileges instead (nobody but the migration's role can read or write `hole_keys`), because bodies aren't tested.
 - **Deliberate breakages,** in `tests/pg/breakages/`, each failing exactly the expected checks: `require` dropped from the function, `hole_keys` granted to `authenticated`, the guard removed from the replay path.
 
@@ -163,7 +163,7 @@ New checks, written as sentences like the others:
 Two PRs after this one, each small, each with spec text moved into `format.md` and `compiler.md` first:
 
 1. **`require`:** loader and JSON Schema, type-check, the guard statements, `explain`, `context` and `diff`, tests and a golden, the breakage fixture.
-   - **Built.** Left for a follow-up: the generated checks that call each hole with inputs that break each condition, and the breakage fixture. They need inputs chosen from the literals in the condition (each one, one below, one above, and null), which is its own piece of work.
+   - **Built,** including the generated checks and two breakages (`tests/pg/breakages/validated.*`).
 2. **`idempotent`:** loader and `SVT041`, `hole_keys`, the guard function, the replay path, the same follow-through, and a check on real Supabase.
 
 ## Done when
