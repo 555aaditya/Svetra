@@ -51,6 +51,7 @@ pub fn check(doc: &Document) -> Vec<Diagnostic> {
     }
     ck.policies(doc);
     ck.holes(doc);
+    ck.trigger_loops(doc);
     ck.roles(doc);
     ck.access(doc);
     ck.anon_only(doc);
@@ -529,28 +530,38 @@ impl<'a> Checker<'a> {
             for r in h.reads.iter().chain(&h.writes) {
                 self.reference(r, &hp);
             }
-            if let HoleKind::Schedule(s) = &h.kind {
-                if let Err(why) = crate::cron::validate(&s.cron) {
-                    self.d(
-                        Code::Svt037,
-                        format!("{hp}.schedule"),
-                        s.pos,
-                        format!("The schedule `{}` of hole `{}` isn't valid: {why}.", s.cron, h.name),
-                        "Write five fields in UTC, with numbers only: minute hour day-of-month month day-of-week, such as \"0 3 * * *\" or \"*/15 * * * *\".",
-                    );
+            match &h.kind {
+                HoleKind::Schedule(s) => {
+                    if let Err(why) = crate::cron::validate(&s.cron) {
+                        self.d(
+                            Code::Svt037,
+                            format!("{hp}.schedule"),
+                            s.pos,
+                            format!("The schedule `{}` of hole `{}` isn't valid: {why}.", s.cron, h.name),
+                            "Write five fields in UTC, with numbers only: minute hour day-of-month month day-of-week, such as \"0 3 * * *\" or \"*/15 * * * *\".",
+                        );
+                    }
                 }
-                if let Some(g) = h.grants.first() {
-                    self.d(
-                        Code::Svt040,
-                        format!("{hp}.grants"),
-                        g.pos,
-                        format!(
-                            "Hole `{}` runs on a schedule and grants roles, so roles are given or taken away with nobody asked.",
-                            h.name
-                        ),
-                        "Check that this is meant. If a person should decide, make it a `function` hole instead.",
-                    );
+                HoleKind::Trigger(t) => {
+                    self.reference(&t.on, &format!("{hp}.on"));
                 }
+                HoleKind::Function => {}
+            }
+            if let Some(g) = h.grants.first().filter(|_| h.kind != HoleKind::Function) {
+                let starts = match h.kind {
+                    HoleKind::Schedule(_) => "runs on a schedule",
+                    _ => "runs when a row changes",
+                };
+                self.d(
+                    Code::Svt040,
+                    format!("{hp}.grants"),
+                    g.pos,
+                    format!(
+                        "Hole `{}` {starts} and grants roles, so roles are given or taken away with nobody asked.",
+                        h.name
+                    ),
+                    "Check that this is meant. If a person should decide, make it a `function` hole instead.",
+                );
             }
             for g in &h.grants {
                 if !doc.roles.iter().any(|r| r.name == g.name) {
@@ -600,6 +611,84 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// SVT038: trigger holes that fire each other, or themselves. A hole's body can't be read, so
+    /// writing an entity counts as inserting, updating and deleting it: an edge runs from a
+    /// trigger hole to every trigger hole on an entity it writes. Each cycle is reported once, at
+    /// its first hole in file order, as the shortest cycle through that hole.
+    fn trigger_loops(&mut self, doc: &Document) {
+        let triggers: Vec<(&Hole, &Trigger)> = doc
+            .holes
+            .iter()
+            .filter_map(|h| match &h.kind {
+                HoleKind::Trigger(t) => Some((h, t)),
+                _ => None,
+            })
+            .collect();
+        let next = |i: usize| -> Vec<usize> {
+            (0..triggers.len())
+                .filter(|&j| {
+                    triggers[i]
+                        .0
+                        .writes
+                        .iter()
+                        .any(|w| w.name == triggers[j].1.on.name)
+                })
+                .collect()
+        };
+        let mut reported: Vec<usize> = Vec::new();
+        for start in 0..triggers.len() {
+            if reported.contains(&start) {
+                continue;
+            }
+            // Breadth first, so the cycle named is the shortest one through `start`.
+            let mut paths: Vec<Vec<usize>> = vec![vec![start]];
+            let mut seen = vec![start];
+            let mut cycle = None;
+            'search: while !paths.is_empty() {
+                let mut grown = Vec::new();
+                for path in &paths {
+                    let last = path[path.len() - 1];
+                    for n in next(last) {
+                        if n == start {
+                            cycle = Some(path.clone());
+                            break 'search;
+                        }
+                        if !seen.contains(&n) {
+                            seen.push(n);
+                            let mut p = path.clone();
+                            p.push(n);
+                            grown.push(p);
+                        }
+                    }
+                }
+                paths = grown;
+            }
+            let Some(cycle) = cycle else { continue };
+            reported.extend(&cycle);
+            let (h, _) = triggers[start];
+            let mut names: Vec<&str> = cycle.iter().map(|&i| triggers[i].0.name.as_str()).collect();
+            names.push(&triggers[start].0.name);
+            let message = if cycle.len() == 1 {
+                format!(
+                    "Hole `{}` runs when {} rows change and writes {}, so its own change fires it again, forever.",
+                    h.name, triggers[start].1.on.name, triggers[start].1.on.name
+                )
+            } else {
+                format!(
+                    "Trigger holes loop: {}. Each writes an entity the next one runs on, so the first change never stops.",
+                    names.join(" -> ")
+                )
+            };
+            self.d(
+                Code::Svt038,
+                format!("holes.{}.writes", h.name),
+                h.pos,
+                message,
+                "Write to another entity, or merge the holes into one so it doesn't write what fires it. Svetra can't read a body, so narrowing `events` doesn't help.",
+            );
+        }
+    }
+
     /// SVT003: constraints and policy conditions must type-check as booleans in their scope.
     fn expressions(&mut self, doc: &Document) {
         let entities = self.entities.clone();
@@ -639,6 +728,26 @@ impl<'a> Checker<'a> {
         }
         for h in &doc.holes {
             let Some(when) = &h.when else { continue };
+            if let HoleKind::Trigger(t) = &h.kind {
+                // The entity may not exist (SVT002, reported with the hole).
+                let Some(e) = entities.get(t.on.name.as_str()) else {
+                    continue;
+                };
+                let only_update = t.events == [Action::Update];
+                let scope =
+                    typeck::Scope::new(e, &entities, false, &doc.roles).for_trigger(only_update);
+                if let Err(problem) = typeck::check(when, &scope) {
+                    let (code, msg) = problem.split();
+                    self.d(
+                        code,
+                        format!("holes.{}.when", h.name),
+                        h.pos,
+                        msg,
+                        "Use only fields of the entity, and `old.<field>` for the row before when `events` is [update]. See Triggered holes in docs/format.md.",
+                    );
+                }
+                continue;
+            }
             let inputs = typeck::hole_entity(h, &entities);
             let scope = typeck::Scope::new(&inputs, &entities, true, &doc.roles);
             if let Err(problem) = typeck::check(when, &scope) {
