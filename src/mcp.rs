@@ -92,6 +92,22 @@ fn tools() -> Value {
             "properties": { "file": file, "from": { "type": "string", "description": "Path to the design the database has. Default: file as committed in git HEAD" } },
             "additionalProperties": false
         } },
+        { "name": "patch", "description": "Change svetra.yaml with checked edits instead of rewriting the file. ops is a list of {op: set, path, value} (create or replace a value, making the maps on the way), {op: remove, path} and {op: rename, path, to} (an entity or field rename also writes `was`, so plan keeps the data; references to the old name are not rewritten, so set each one in the same call, after the rename). A path is dot-separated map keys such as entities.Booking.fields.notes. All edits apply together, comments and key order stay, and the result is validated: if anything fails, nothing is written and every problem comes back. Pass expected_revision, the revision from `context`, so an edit based on a stale file is refused with conflict: true; read again and redo. The answer lists every change as safe, breaking or destructive and whose access widens or narrows: show the destructive and wider lines to the person before relying on it. Refusals and conflicts are results, not tool errors.", "inputSchema": {
+            "type": "object",
+            "properties": {
+                "file": file,
+                "ops": { "type": "array", "description": "The edits, in order, each to the result of the one before", "items": { "type": "object", "properties": {
+                    "op": { "type": "string", "enum": ["set", "remove", "rename"] },
+                    "path": { "type": "string", "description": "Dot-separated map keys, such as policies.own_rows.when" },
+                    "value": { "description": "With set: any JSON value" },
+                    "to": { "type": "string", "description": "With rename: the new name" }
+                }, "required": ["op", "path"], "additionalProperties": false } },
+                "expected_revision": { "type": "string", "description": "The file's revision when you read it (from context). A different revision means it changed: nothing is applied" },
+                "dry_run": { "type": "boolean", "description": "Check and classify the edits without writing" }
+            },
+            "required": ["ops"],
+            "additionalProperties": false
+        } },
         { "name": "check", "description": "What is open in an existing Supabase database or in its migrations: tables without row-level security, policies open to everyone, views that skip it, risky functions. Needs no svetra.yaml and never writes. Give exactly one of db, local, snapshot or migrations. Returns findings with a fix each, counts, and a summary. Findings are results, not errors: read counts.", "inputSchema": {
             "type": "object",
             "properties": {
@@ -188,11 +204,35 @@ fn call(name: &str, args: &Value) -> Option<Value> {
                 "context" => json!({ "text": crate::understand::context::context(&doc) }),
                 _ => json!({ "mermaid": crate::understand::graph::graph(&doc) }),
             };
+            // What a `patch` call's `expected_revision` takes.
+            out["revision"] = json!(crate::compile::revision(&src));
             // Drawn despite errors: say so, with the errors to fix.
             if errors {
                 out["diagnostics"] = diagnostics(file, &diags)["diagnostics"].clone();
             }
             text(out, false)
+        }
+        "patch" => {
+            let Some(ops) = args.get("ops") else {
+                return Some(text(
+                    json!({ "error": "patch needs `ops`: a list of {op, path, value | to} edits" }),
+                    true,
+                ));
+            };
+            let edits = match crate::patch::parse_ops(&ops.to_string()) {
+                Ok(e) => e,
+                Err(e) => return Some(text(json!({ "error": e }), true)),
+            };
+            let expected = args.get("expected_revision").and_then(Value::as_str);
+            let dry_run = args
+                .get("dry_run")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            match crate::patch::run(Path::new(file), &edits, expected, dry_run) {
+                Ok(r) => text(crate::patch::json(&r), false),
+                Err(e) if e.starts_with("cannot read") => unreadable(e),
+                Err(e) => text(json!({ "error": e }), true),
+            }
         }
         "plan" => {
             let src = match project::read(Path::new(file)) {
