@@ -49,6 +49,9 @@ pub struct Scope<'a> {
     /// Policies may read one reference away and use `auth.user`; constraints may not.
     pub policy: bool,
     pub roles: &'a [RoleDef],
+    /// A triggered hole's `when`: fields are the row after the change, nothing else is
+    /// readable, and `old.<field>` is the row before when this is `Some(true)`.
+    trigger: Option<bool>,
     /// Set when the error came from `has_role`, so it's reported as SVT006 rather than SVT003.
     role_error: std::cell::Cell<bool>,
 }
@@ -65,8 +68,17 @@ impl<'a> Scope<'a> {
             entities,
             policy,
             roles,
+            trigger: None,
             role_error: std::cell::Cell::new(false),
         }
+    }
+
+    /// The scope of a triggered hole's `when`: a trigger's `WHEN` clause reads only the row, so
+    /// no `auth.user`, no `has_role` and no other entity. `old` says whether `old.<field>`, the
+    /// row before the change, exists (it does only for an update).
+    pub fn for_trigger(mut self, old: bool) -> Self {
+        self.trigger = Some(old);
+        self
     }
 }
 
@@ -181,6 +193,22 @@ impl Scope<'_> {
                 };
                 Ok((field_ty(&field.ty), values))
             }
+            [a, b] if a == "old" && self.trigger.is_some() => {
+                if self.trigger != Some(true) {
+                    return Err(format!(
+                        "`old.{b}` can only be used when `events` is exactly [update]: an insert has no row before, and a delete's fields already mean the row that was deleted."
+                    ));
+                }
+                let field = self.field(self.entity, b)?;
+                let values = match &field.ty {
+                    FieldType::Enum(v) => Some(v.as_slice()),
+                    _ => None,
+                };
+                Ok((field_ty(&field.ty), values))
+            }
+            [a, b] if a == "auth" && b == "user" && self.trigger.is_some() => Err(
+                "A trigger's `when` can't use `auth.user`: the change may not come from a signed-in person, and a WHEN clause can't look anyone up.".into(),
+            ),
             [a, b] if a == "auth" && b == "user" => {
                 if self.policy {
                     Ok((Ty::Id, None))
@@ -188,6 +216,10 @@ impl Scope<'_> {
                     Err("`auth.user` can only be used in policies.".into())
                 }
             }
+            [a, b] if self.trigger.is_some() => Err(format!(
+                "A trigger's `when` can only use fields of {}, not `{a}.{b}`: a WHEN clause can't read other tables.",
+                self.entity.name
+            )),
             [a, b] => {
                 if !self.policy {
                     return Err(format!(
@@ -275,6 +307,12 @@ impl Scope<'_> {
             return Err(format!(
                 "Unknown function `{name}`; the only function is has_role."
             ));
+        }
+        if self.trigger.is_some() {
+            return Err(
+                "A trigger's `when` can't use `has_role`: a WHEN clause can't look anyone up."
+                    .into(),
+            );
         }
         if !self.policy {
             return Err("`has_role` can only be used in policies.".into());

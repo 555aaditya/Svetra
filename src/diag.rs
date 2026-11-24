@@ -39,6 +39,7 @@ pub enum Code {
     Svt035,
     Svt036,
     Svt037,
+    Svt038,
     Svt040,
 }
 
@@ -76,6 +77,7 @@ impl Code {
             Code::Svt035 => ("SVT035", Error, "policy", "remove_only"),
             Code::Svt036 => ("SVT036", Warning, "policy", "free_or_limit"),
             Code::Svt037 => ("SVT037", Error, "hole", "fix_schedule"),
+            Code::Svt038 => ("SVT038", Error, "hole", "break_loop"),
             Code::Svt040 => ("SVT040", Warning, "hole", "confirm_grants"),
         }
     }

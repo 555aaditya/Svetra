@@ -45,13 +45,16 @@ pub const POLICY_KEYS: &[&str] = &["on", "allow", "when", "check", "only", "rest
 /// Every key any kind of hole takes. Each kind takes its own subset (below).
 pub const HOLE_KEYS: &[&str] = &[
     "kind", "input", "output", "reads", "writes", "grants", "as", "when", "audit", "schedule",
+    "on", "events",
 ];
 pub const FUNCTION_HOLE_KEYS: &[&str] = &[
     "kind", "input", "output", "reads", "writes", "grants", "as", "when", "audit",
 ];
 pub const SCHEDULE_HOLE_KEYS: &[&str] = &["kind", "schedule", "reads", "writes", "grants"];
+pub const TRIGGER_HOLE_KEYS: &[&str] =
+    &["kind", "on", "events", "when", "reads", "writes", "grants"];
 /// The hole kinds, in the order the hints list them.
-pub const HOLE_KINDS: &[&str] = &["function", "schedule"];
+pub const HOLE_KINDS: &[&str] = &["function", "schedule", "trigger"];
 pub const TYPE_NAMES: &[&str] = &[
     "text",
     "int",

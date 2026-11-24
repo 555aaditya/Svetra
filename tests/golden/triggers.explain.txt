@@ -1,0 +1,51 @@
+Shop
+
+What your app stores
+  Customers
+    - the signed-in person who owns it (required)
+    - name: text (required)
+  Orders
+    - the signed-in person who owns it (required)
+    - the customer it belongs to (required)
+    - status: one of open, paid or shipped (starts as open)
+    - total: an amount of money, up to 16 digits before the point and 2 after (required)
+  Notifications
+    - the signed-in person who owns it (required)
+    - message: text (required)
+
+Signing in
+  - People sign in with email (a password or an emailed link).
+  - Anyone can create an account.
+  - People confirm their email address before they can sign in.
+  - Passwords need at least 10 characters.
+
+Who can see and change what
+  Customers
+    - Signed-in people can see a customer when its owner is them.
+    - Signed-in people can create a customer when its owner is them.
+    - Nobody can see customers any other way.
+    - Nobody can change or delete customers directly.
+  Orders
+    - Signed-in people can see an order when its owner is them.
+    - Signed-in people can create an order when its owner is them.
+    - Signed-in people can change an order when its owner is them.
+    - Signed-in people can delete an order when its owner is them.
+    - Nobody can see orders any other way.
+    - Changing an order also runs notify_paid, which changes notifications.
+    - Creating or deleting an order also runs note_order_change, which changes notifications.
+  Notifications
+    - Signed-in people can see a notification when its owner is them.
+    - Nobody can see notifications any other way.
+    - Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change.
+
+Custom code
+  notify_paid
+    - runs by itself after an order is changed, only when its status becomes paid. Nobody can run it directly.
+    - can read: orders, customers. Can change: notifications, whoever made the change.
+  note_order_change
+    - runs by itself after an order is created or deleted, only when its total is more than 0. Nobody can run it directly.
+    - can read: orders. Can change: notifications, whoever made the change.
+
+Before going live
+  - Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.
+  - Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in.

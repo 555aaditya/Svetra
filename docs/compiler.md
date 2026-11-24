@@ -355,6 +355,36 @@ select cron.unschedule(jobid) from cron.job
 
 Access tests for each scheduled hole: its role's table privileges as above; `anon`, `authenticated` and `service_role` (when it exists) can't execute `svetra_holes.<name>`; no function `<name>` exists in `public`; `cron.job` has exactly one job `svetra_<name>` with the declared schedule that calls `svetra_holes.<name>`; and, once for the file, no `svetra_` job exists that the design doesn't declare, and `cron.timezone` is UTC. The tests read `cron.job` as the migration's role. What a body does, and that pg_cron fires on time, aren't tested.
 
+### Triggered holes
+
+A hole with `kind: trigger` gets the role and the body function above, with the signature `svetra_holes.<name>(p_caller uuid, p_old "public"."<table>", p_new "public"."<table>")` and no `when` guard (the trigger's `WHEN` clause is the guard). Like a scheduled hole, it gets no `public` function, nothing in `src/svetra.gen.ts` and no call checks. In place of the job the `-- Holes` section has a trigger function and one trigger per event:
+
+```sql
+create function "svetra_holes"."notify_paid__fire"() returns trigger
+  language plpgsql security definer set search_path = ''
+  as $svetra$
+begin
+  if pg_trigger_depth() > 3 then
+    raise exception 'notify_paid is part of a trigger loop' using errcode = '54001';
+  end if;
+  perform "svetra_holes"."notify_paid"((select auth.uid()),
+    case when tg_op = 'INSERT' then null else old end,
+    case when tg_op = 'DELETE' then null else new end);
+  return null;
+end
+$svetra$;
+revoke all on function "svetra_holes"."notify_paid__fire"() from public, anon, authenticated;
+create trigger "svetra_notify_paid_update" after update on "public"."order"
+  for each row when (new."status" = 'paid' and old."status" <> 'paid')
+  execute function "svetra_holes"."notify_paid__fire"();
+```
+
+- **The trigger function** is owned by the migration's role and is `security definer`: that is what lets a person who can't execute anything in `svetra_holes` fire it (checked on PostgreSQL 16 and a local Supabase, [automations.md](automations.md#what-supabase-supports)). It is the only caller of the body function, which the migration's role may execute and no API role may. Both functions are revoked from `public`, `anon` and `authenticated`, and from `service_role` when that role exists.
+- **One trigger per event**, named `svetra_<name>_<event>`, always `after`, `for each row`, so each can use the right row in its `WHEN`. Bare fields in `when` become `new."col"` (`old."col"` for `delete`), and `old.<field>` becomes `old."col"`. `is null` and `is not null` stand in for `== null`, as everywhere. Where the Svetra expression is `!=` the SQL is `<>`.
+- **The depth limit** raises SQLSTATE `54001` when triggers nest more than three deep, a backstop for loops `SVT038` can't see.
+
+Access tests for each trigger hole: its role's table privileges as above; `anon`, `authenticated` and `service_role` (when it exists) can't execute the body or the trigger function; no function `<name>` exists in `public`; `pg_trigger` has exactly one enabled `after`, `for each row` trigger per declared event on the declared table, each calling the trigger function, and no other `svetra_<name>_` trigger; each trigger's definition contains the compiled `when`; the body function is `security definer`, owned by the hole's role, with an empty `search_path`; the hole's role is refused an insert into an entity it doesn't write; and, where the design lets a person insert a row into the entity, inserting one as that person fires the hole. What a body does isn't tested.
+
 ## Access tests
 
 `supabase/tests/svetra.test.sql` checks that the **database** enforces what `svetra.yaml` says, as real users. Run it against a local Supabase with `supabase test db`.

@@ -1,0 +1,2 @@
+not ok 1 - no one calling the API can run notify_paid, or the function that fires it
+# Looks like you failed 1 test of 164

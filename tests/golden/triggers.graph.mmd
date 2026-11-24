@@ -1,0 +1,21 @@
+flowchart LR
+  person(("👤 Signed-in person"))
+  e_Customer["Customer<br/>owner: user!<br/>name: text!"]
+  e_Order["Order<br/>owner: user!<br/>customer: → Customer!<br/>status: enum<br/>total: money!"]
+  e_Notification["Notification<br/>owner: user!<br/>message: text!"]
+  h_notify_paid(["⚙️ notify_paid"])
+  h_note_order_change(["⚙️ note_order_change"])
+  e_Customer -- owner --> person
+  e_Order -- owner --> person
+  e_Order -- customer --> e_Customer
+  e_Notification -- owner --> person
+  person -. "sees, creates" .-> e_Customer
+  person -. "sees, creates, changes, deletes" .-> e_Order
+  person -. "sees" .-> e_Notification
+  e_Order -. fires .-> h_notify_paid
+  h_notify_paid -. reads .-> e_Order
+  h_notify_paid -. reads .-> e_Customer
+  h_notify_paid == changes ==> e_Notification
+  e_Order -. fires .-> h_note_order_change
+  h_note_order_change -. reads .-> e_Order
+  h_note_order_change == changes ==> e_Notification

@@ -138,6 +138,27 @@ pub fn context(doc: &Document) -> String {
             .collect();
         let mut line = match &h.kind {
             HoleKind::Schedule(s) => format!("hole {}: schedule \"{}\"", h.name, s.cron),
+            HoleKind::Trigger(t) => {
+                let events: Vec<&str> = t
+                    .events
+                    .iter()
+                    .map(|a| match a {
+                        Action::Insert => "insert",
+                        Action::Update => "update",
+                        _ => "delete",
+                    })
+                    .collect();
+                let when = h
+                    .when
+                    .as_ref()
+                    .map_or(String::new(), |w| format!(" when {w}"));
+                format!(
+                    "hole {}: trigger {} {}{when}",
+                    h.name,
+                    t.on.name,
+                    events.join(",")
+                )
+            }
             HoleKind::Function => format!(
                 "hole {}: ({}) -> {}",
                 h.name,
@@ -165,7 +186,11 @@ pub fn context(doc: &Document) -> String {
             Role::Anon => line += "; as anon",
             Role::Anyone => line += "; as anyone",
         }
-        if let Some(w) = &h.when {
+        if let Some(w) = h
+            .when
+            .as_ref()
+            .filter(|_| !matches!(h.kind, HoleKind::Trigger(_)))
+        {
             line += &format!("; when {w}");
         }
         if h.audit {

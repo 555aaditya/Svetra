@@ -144,8 +144,9 @@ Where each path form is allowed:
 |---|---|---|---|---|
 | Entity constraint | yes | no: a SQL `check` can't read other tables | no | no |
 | Policy `when` | yes | yes | yes | yes |
+| Trigger hole `when` | yes, the row after the change | no | no | no |
 
-Using a form where it isn't allowed is `SVT003`.
+A trigger hole's `when` also has `old.<field>`, the row before the change, when its `events` is `[update]` ([Triggered holes](#triggered-holes)). Using a form where it isn't allowed is `SVT003`.
 
 ## Policies
 
@@ -282,7 +283,7 @@ The keys below are those of `kind: function`. Each kind takes its own keys, and 
 
 | Key | Required | Meaning |
 |---|---|---|
-| `kind` | yes | `function` (called by a person) or `schedule` (run by the database's clock, see [Scheduled holes](#scheduled-holes)) |
+| `kind` | yes | `function` (called by a person), `schedule` (run by the database's clock, see [Scheduled holes](#scheduled-holes)) or `trigger` (run when a row changes, see [Triggered holes](#triggered-holes)) |
 | `input` | no | Map of parameter name to type. See below |
 | `output` | no | An entity name, an `Entity.field`, or a type. Omit it for no return value |
 | `reads` | no | Entities the hole may read |
@@ -347,6 +348,40 @@ holes:
 
 Not allowed: `input`, `output`, `as` and `when`, because nobody passes or receives them, and `audit`, because an audited hole logs a call by a person and a schedule has none (`SVT020`). Write a guard in the body. The body is written as for any hole, and `p_caller` is always `null`. It runs as the hole's own role, with the access `reads`, `writes` and `grants` declare. A schedule with `grants` gives or takes away roles with no person behind it, so it gets `SVT040`. A body should be safe to run twice and to run late: a failed run is not retried and a run missed while the database was down is not made up. The generated SQL, which needs pg_cron, is in [compiler.md](compiler.md#holes).
 
+### Triggered holes
+
+A hole with `kind: trigger` runs after a row of one entity is inserted, updated or deleted, in the same transaction as the change. Nobody can call it from the app: it has no function in `public` and nothing in `src/svetra.gen.ts`.
+
+```yaml
+holes:
+  notify_paid:
+    kind: trigger
+    on: Order
+    events: [update]
+    when: "status == 'paid' and old.status != 'paid'"
+    reads: [Order, Customer]
+    writes: [Notification]
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `kind` | yes | `trigger` |
+| `on` | yes | The entity whose rows fire it. Must exist (`SVT002`) |
+| `events` | yes | A non-empty list of `insert`, `update` and `delete` (`SVT029` otherwise) |
+| `when` | no | A condition on the row that decides whether the body runs. Default: always |
+| `reads`, `writes`, `grants` | no | As for `function` |
+
+Not allowed: `input`, `output`, `as` (the row is the input and a row change starts it) and `audit` (an audited hole logs a call by a person, and nobody calls a trigger), all `SVT020`.
+
+- **The row in the body.** `p_new` is the row after the change (`null` on delete) and `p_old` the row before (`null` on insert), both typed as the entity's row. `p_caller` is the person whose change fired it, from the session's `auth.uid()`, and `null` for the service role, a job or a migration. It is information, never a permission check.
+- **`when`** becomes the trigger's own `WHEN (...)` clause. Fields are written bare and mean the row after the change (the deleted row for `delete`). `old.<field>` means the row before, and is allowed only when `events` is exactly `[update]`. No other entity, no `auth.user` and no `has_role`: a `WHEN` clause can't run a subquery. These are `SVT003`, as is a non-boolean result.
+- **Timing** is always after the row is written, one call per row. A change that raises in the body is rolled back with the hole's work.
+- **It runs as the hole's own role,** not the person who made the change. It touches only what `reads`, `writes` and `grants` declare.
+- **Loops.** Trigger holes that write each other's entity, or their own, loop: that is `SVT038`, which names the cycle. At run time a trigger nested more than three deep raises `54001`.
+- **`grants`** on a trigger gives or takes away roles with no person asked, so it gets `SVT040`.
+
+The generated SQL is in [compiler.md](compiler.md#triggered-holes), and the design in [automations.md](automations.md#triggered-holes).
+
 ## Audit
 
 `audit: true` on an entity or a hole records what happened in one append-only table, `svetra.audit_log`. It answers "who changed this, and when" from the database itself, so it holds for every client, not only Svetra's.
@@ -392,10 +427,11 @@ Not allowed: `input`, `output`, `as` and `when`, because nobody passes or receiv
 | `SVT036` | warning | A person is covered, on some row, by two permissive update policies that disagree about a field: one has an `only` that leaves it out and another frees it, so the first one's limit has no effect for that person | `free_or_limit` |
 | `SVT031` | info | In `svetra plan`: `was` names a rename that's already applied, because the design the database has already uses the new name. Remove it | `remove_was` |
 | `SVT037` | error | A `schedule` isn't a valid five-field cron expression: wrong number of fields, a value out of range, or a name where a number is needed. The message says which field | `fix_schedule` |
-| `SVT040` | warning | A `schedule` hole has `grants`: a role is given or taken away with no person calling it | `confirm_grants` |
+| `SVT038` | error | Trigger holes form a loop: one writes an entity whose trigger hole (or its own) fires on it. The message names the cycle | `break_loop` |
+| `SVT040` | warning | A `schedule` or `trigger` hole has `grants`: a role is given or taken away with no person calling it | `confirm_grants` |
 | `SVT001` | error | Entity exposed through the API has no policy. Mark it `private: true` or add a policy | `add_policy` |
 | `SVT002` | error | Reference to an entity or field that doesn't exist | `fix_reference` |
-| `SVT003` | error | Expression has a type error, or uses a path form not allowed where it appears | `fix_expression` |
+| `SVT003` | error | Expression has a type error, or uses a path form not allowed where it appears, such as `old.` outside an update trigger | `fix_expression` |
 | `SVT004` | warning | Entity has no write path: no policy allows `insert` or `update`, and no hole lists it in `writes` | `add_write_path` |
 | `SVT005` | error | Field whose name suggests money (`amount`, `price`, `balance`, `cost`, `total`, `fee`) uses `float` | `use_money` |
 | `SVT006` | error | `has_role` names an undeclared role, has the wrong number of arguments, or its scope argument doesn't point at the role's scope entity; or a role's `scope` entity doesn't have a `uuid` primary key; or a hole's `grants` names an undeclared role | `fix_role` |
@@ -504,6 +540,6 @@ These come later, if real use asks for them:
 - Migrations between graph revisions (planned for `svetra diff` and `patch`)
 - Multiple files and imports
 - Audit retention and export, logging refused calls, and alerting
-- Hole kinds other than `function` and `schedule`: triggers and webhooks are specified in [automations.md](automations.md)
+- Hole kinds other than `function`, `schedule` and `trigger`: webhooks are specified in [automations.md](automations.md)
 - Input validation (`require`) and retry keys (`idempotent`) on holes: proposed in [hole-middleware.md](hole-middleware.md)
 - The sign-in methods listed under [Authentication](#authentication) as not in version 0.1

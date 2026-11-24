@@ -3,7 +3,7 @@ use svetra::compile::access_tests::tests;
 use svetra::load::load;
 use svetra::understand::view::{json, model, page};
 
-const EXAMPLES: [(&str, &str); 7] = [
+const EXAMPLES: [(&str, &str); 8] = [
     ("finledger", include_str!("fixtures/finledger.yaml")),
     ("posts", include_str!("fixtures/posts.yaml")),
     ("bookings", include_str!("fixtures/bookings.yaml")),
@@ -11,6 +11,7 @@ const EXAMPLES: [(&str, &str); 7] = [
     ("teams", include_str!("fixtures/teams.yaml")),
     ("approvals", include_str!("fixtures/approvals.yaml")),
     ("jobs", include_str!("fixtures/jobs.yaml")),
+    ("triggers", include_str!("fixtures/triggers.yaml")),
 ];
 
 fn doc(src: &str) -> svetra::model::Document {

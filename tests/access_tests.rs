@@ -45,6 +45,10 @@ fn access_tests_match_golden_files() {
             include_str!("fixtures/jobs.yaml"),
             include_str!("golden/jobs.test.sql"),
         ),
+        (
+            include_str!("fixtures/triggers.yaml"),
+            include_str!("golden/triggers.test.sql"),
+        ),
     ] {
         assert_eq!(generate(src), golden);
     }

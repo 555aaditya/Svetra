@@ -14,6 +14,9 @@ pub struct Ctx<'a> {
     pub params: bool,
     /// A trigger's `old` row: fields are `old."col"`, and a one-hop path starts from `old`.
     pub old: bool,
+    /// A triggered hole's `WHEN` clause: the row after the change is `new` (`old` for a delete),
+    /// and `old.<field>` is the row before.
+    pub row: Option<&'a str>,
 }
 
 pub fn sql(e: &Expr, cx: &Ctx) -> String {
@@ -105,7 +108,8 @@ fn path(p: &[String], cx: &Ctx) -> String {
     match p {
         [f] if cx.params => format!("p_{f}"),
         [f] if cx.old => format!("old.{}", q(f)),
-        [f] => q(f),
+        [f] => cx.row.map_or_else(|| q(f), |r| format!("{r}.{}", q(f))),
+        [a, f] if a == "old" && cx.row.is_some() => format!("old.{}", q(f)),
         [a, b] if a == "auth" && b == "user" && cx.params => "p_caller".into(),
         [a, b] if a == "auth" && b == "user" => "(select auth.uid())".into(),
         [r, f] => {
@@ -154,6 +158,7 @@ mod tests {
             entities: &entities,
             params: false,
             old: false,
+            row: None,
         };
         sql(&parse(src).unwrap(), &cx)
     }

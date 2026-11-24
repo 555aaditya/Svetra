@@ -1,0 +1,2 @@
+not ok 6 - notify_paid fires on update only when status == 'paid' and old.status != 'paid'
+# Looks like you failed 1 test of 164

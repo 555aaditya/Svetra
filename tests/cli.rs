@@ -135,6 +135,7 @@ fn explain_matches_golden_files() {
         "teams",
         "approvals",
         "jobs",
+        "triggers",
     ] {
         let out = svetra(&["explain", &format!("tests/fixtures/{name}.yaml")]);
         assert_eq!(out.status.code(), Some(0));
@@ -153,6 +154,7 @@ fn explain_never_uses_jargon() {
         "teams",
         "approvals",
         "jobs",
+        "triggers",
     ] {
         let text = String::from_utf8_lossy(
             &svetra(&["explain", &format!("tests/fixtures/{name}.yaml")]).stdout,
@@ -232,6 +234,7 @@ fn graph_and_context_match_golden_files() {
         "teams",
         "approvals",
         "jobs",
+        "triggers",
     ] {
         for (cmd, ext) in [("graph", "graph.mmd"), ("context", "context.txt")] {
             let out = svetra(&[cmd, &format!("tests/fixtures/{name}.yaml")]);
@@ -261,6 +264,7 @@ fn context_is_smaller_than_the_yaml() {
         "teams",
         "approvals",
         "jobs",
+        "triggers",
     ] {
         let yaml = std::fs::read_to_string(format!("tests/fixtures/{name}.yaml")).unwrap();
         let out = svetra(&["context", &format!("tests/fixtures/{name}.yaml")]);
