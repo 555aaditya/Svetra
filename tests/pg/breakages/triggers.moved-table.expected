@@ -1,0 +1,5 @@
+not ok 14 - note_order_change runs after a row of Order is deleted, once per row
+not ok 15 - note_order_change fires on delete only when total > 0
+not ok 19 - svetra_note_order_change_delete is switched off while the test data goes in
+not ok 163 - svetra_note_order_change_delete is switched on again
+# Looks like you failed 4 tests of 164
