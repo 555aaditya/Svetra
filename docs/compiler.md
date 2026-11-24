@@ -335,6 +335,12 @@ For each hole:
   - a call with inputs that point at the `a` rows, and one with inputs that point at the `b` rows
   - each is expected to be refused (`42501`) or let through, as the evaluator works out from `when`
   - **"let through" means the guard passed,** whatever the body then does, so the check doesn't depend on hand-written code
+- **Each `require` condition,** one call per condition, by someone `when` lets through, that breaks that condition and keeps the ones before it. It is expected to be refused as bad input (`22023`) with the condition's own message, `<hole>: <condition>`. The input that breaks it comes from the rules as written, and is tried one input at a time:
+  - the value of another input, for a condition between two inputs (`source != destination`)
+  - each number in the condition, and one above and one below it; each text in the condition, and a different text; each of true and false
+  - nothing (null), last
+  - Only inputs the condition reads directly are tried, and not one that `when` or an earlier condition reads through (`source.owner`), because the rules can't follow it. A condition with no such call is skipped, and the skip says so.
+  - The helper that tells `22023` from `42501` (`svetra_test.call_input`) is written only for a design that has a `require`, so other test files are unchanged.
 
 ## Access tests
 
