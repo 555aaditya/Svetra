@@ -1,0 +1,70 @@
+svetra: "0.1"
+system: Shop
+
+auth:
+  sign_in: [email]
+
+entities:
+  Customer:
+    fields:
+      id: { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      name: { type: text, required: true }
+  Order:
+    fields:
+      id: { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      customer: { type: ref, entity: Customer, required: true }
+      status: { type: enum, values: [open, paid, shipped], default: open }
+      total: { type: money, precision: 18, scale: 2, required: true }
+  Notification:
+    fields:
+      id: { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      message: { type: text, required: true }
+
+policies:
+  owner_reads_customers:
+    on: Customer
+    allow: [select]
+    when: "owner == auth.user"
+  owner_adds_customers:
+    on: Customer
+    allow: [insert]
+    when: "owner == auth.user"
+  owner_reads_orders:
+    on: Order
+    allow: [select]
+    when: "owner == auth.user"
+  owner_places_orders:
+    on: Order
+    allow: [insert]
+    when: "owner == auth.user"
+  owner_changes_orders:
+    on: Order
+    allow: [update]
+    when: "owner == auth.user"
+  owner_deletes_orders:
+    on: Order
+    allow: [delete]
+    when: "owner == auth.user"
+  owner_reads_notifications:
+    on: Notification
+    allow: [select]
+    when: "owner == auth.user"
+
+holes:
+  notify_paid:
+    kind: trigger
+    on: Order
+    events: [update]
+    when: "status == 'paid' and old.status != 'paid'"
+    reads: [Order, Customer]
+    writes: [Notification]
+  note_order_change:
+    kind: trigger
+    on: Order
+    events: [insert, delete]
+    when: "total > 0"
+    reads: [Order]
+    writes: [Notification]
