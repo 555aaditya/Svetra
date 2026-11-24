@@ -106,6 +106,9 @@ pub fn graph(doc: &Document) -> String {
         }
     }
     for h in &doc.holes {
+        if let HoleKind::Trigger(t) = &h.kind {
+            out += &format!("  e_{} -. fires .-> h_{}\n", t.on.name, h.name);
+        }
         for r in &h.reads {
             out += &format!("  h_{} -. reads .-> e_{}\n", h.name, r.name);
         }
