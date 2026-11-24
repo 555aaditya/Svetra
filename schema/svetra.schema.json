@@ -343,11 +343,29 @@
       ],
       "properties": {
         "kind": {
-          "description": "function: called by a person. schedule: run by the database's clock, with only kind, schedule, reads, writes and grants.",
+          "description": "function: called by a person. schedule: run by the database's clock, with only kind, schedule, reads, writes and grants. trigger: run when a row of an entity is inserted, updated or deleted, with only kind, on, events, when, reads, writes and grants.",
           "enum": [
             "function",
-            "schedule"
+            "schedule",
+            "trigger"
           ]
+        },
+        "on": {
+          "description": "For kind: trigger. The entity whose rows fire it.",
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        },
+        "events": {
+          "description": "For kind: trigger. The changes that fire it: insert, update, delete.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "insert",
+              "update",
+              "delete"
+            ]
+          }
         },
         "schedule": {
           "description": "For kind: schedule. Five-field cron in UTC: minute hour day-of-month month day-of-week, such as \"0 3 * * *\".",
@@ -396,7 +414,7 @@
           ]
         },
         "when": {
-          "description": "A condition over the inputs that must hold for the call to run, such as \"source.owner == auth.user\".",
+          "description": "A condition over the inputs that must hold for the call to run, such as \"source.owner == auth.user\". For kind: trigger, a condition on the changed row that decides whether it runs, such as \"status == 'paid' and old.status != 'paid'\" (old. only when events is [update]).",
           "type": "string"
         },
         "audit": {

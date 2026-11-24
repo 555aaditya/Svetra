@@ -134,6 +134,48 @@ impl Cx {
         Some(out)
     }
 
+    /// The `events` of a triggered hole: a non-empty list of insert, update and delete.
+    fn events(&mut self, node: &Node, path: &str) -> Option<Vec<Action>> {
+        let names = self.name_list(node, path);
+        let mut out = Vec::new();
+        for n in &names {
+            let a = match n.name.as_str() {
+                "insert" => Action::Insert,
+                "update" => Action::Update,
+                "delete" => Action::Delete,
+                other => {
+                    let at = Node {
+                        value: Value::Null,
+                        line: n.pos.line,
+                        col: n.pos.col,
+                    };
+                    self.report(
+                        Code::Svt029,
+                        path,
+                        &at,
+                        format!("`{other}` is not an event a trigger fires on."),
+                        "Use insert, update or delete.",
+                    );
+                    continue;
+                }
+            };
+            if !out.contains(&a) {
+                out.push(a);
+            }
+        }
+        if out.is_empty() && names.is_empty() {
+            self.report(
+                Code::Svt029,
+                path,
+                node,
+                "`events` must list at least one event.".into(),
+                "For example: events: [update].",
+            );
+            return None;
+        }
+        Some(out)
+    }
+
     pub(super) fn hole(&mut self, name: &Node, body: &Node) -> Option<Hole> {
         let hname = self.string(name, "holes")?;
         let path = format!("holes.{hname}");
@@ -152,6 +194,7 @@ impl Cx {
         let allowed = match kind_name.as_str() {
             "function" => super::FUNCTION_HOLE_KEYS,
             "schedule" => super::SCHEDULE_HOLE_KEYS,
+            "trigger" => super::TRIGGER_HOLE_KEYS,
             other => {
                 self.report(
                     Code::Svt023,
@@ -183,15 +226,30 @@ impl Cx {
             }
         }
         let k = self.keys(&mine, &path, allowed);
-        let kind = if kind_name == "schedule" {
-            let node = self.need(&k, "schedule", &path, name)?;
-            let cron = self.string(node, &format!("{path}.schedule"))?;
-            HoleKind::Schedule(Schedule {
-                cron,
-                pos: pos(node),
-            })
-        } else {
-            HoleKind::Function
+        let kind = match kind_name.as_str() {
+            "schedule" => {
+                let node = self.need(&k, "schedule", &path, name)?;
+                let cron = self.string(node, &format!("{path}.schedule"))?;
+                HoleKind::Schedule(Schedule {
+                    cron,
+                    pos: pos(node),
+                })
+            }
+            "trigger" => {
+                let on = self.need(&k, "on", &path, name);
+                let events = self.need(&k, "events", &path, name);
+                let (on, events) = (on?, events?);
+                let on_ref = NameRef {
+                    name: self.string(on, &format!("{path}.on"))?,
+                    pos: pos(on),
+                };
+                HoleKind::Trigger(Trigger {
+                    on: on_ref,
+                    events: self.events(events, &format!("{path}.events"))?,
+                    pos: pos(events),
+                })
+            }
+            _ => HoleKind::Function,
         };
         let mut hole = Hole {
             name: hname,
@@ -309,11 +367,22 @@ fn why_not(kind: &str, key: &str) -> &'static str {
         ("schedule", "input" | "output") => {
             "nobody passes or receives it, because the clock runs it."
         }
+        ("trigger", "input" | "output") => {
+            "the changed row is the input: the body gets it as `p_old` and `p_new`."
+        }
         ("schedule", "as") => "nobody calls it, because the clock runs it.",
+        ("trigger", "as") => "nobody calls it, because a change to a row runs it.",
         ("schedule", "when") => {
             "there is no call to guard. Write the check in the body, such as `if not exists (...) then return; end if;`."
         }
-        ("function", "schedule") => "only `kind: schedule` runs on a clock.",
+        ("schedule", "audit") => "an audited hole records a call by a person, and nobody calls it.",
+        ("trigger", "audit") => {
+            "an audited hole records a call by a person, and nobody calls it. Changes to an audited entity are logged anyway."
+        }
+        ("function" | "trigger", "schedule") => "only `kind: schedule` runs on a clock.",
+        ("function" | "schedule", "on" | "events") => {
+            "only `kind: trigger` runs when a row changes."
+        }
         _ => "this kind doesn't take it.",
     }
 }
