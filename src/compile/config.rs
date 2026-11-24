@@ -71,14 +71,14 @@ pub fn settings(doc: &Document, existing: &str) -> Vec<Setting> {
 }
 
 /// A table header line, `[name]`, outside comments. Arrays of tables (`[[name]]`) don't count.
-fn header(line: &str) -> Option<&str> {
+pub(crate) fn header(line: &str) -> Option<&str> {
     let t = line.trim();
     (t.starts_with('[') && !t.starts_with("[[") && t.ends_with(']'))
         .then(|| t[1..t.len() - 1].trim())
 }
 
 /// A `key = value` line, returning the key and the raw value.
-fn entry(line: &str) -> Option<(&str, &str)> {
+pub(crate) fn entry(line: &str) -> Option<(&str, &str)> {
     let t = line.trim();
     if t.starts_with('#') {
         return None;

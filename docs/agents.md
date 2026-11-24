@@ -46,7 +46,7 @@ And these rules:
 svetra mcp
 ```
 
-An MCP server over stdio: JSON-RPC 2.0, one message per line. It supports `initialize`, `tools/list` and `tools/call`, and answers `ping`. Every tool except `check` takes a `file` (default `svetra.yaml`, relative to the server's working directory) and returns JSON text the agent can act on, never terminal formatting.
+An MCP server over stdio: JSON-RPC 2.0, one message per line. It supports `initialize`, `tools/list` and `tools/call`, and answers `ping`. Every tool except `check` and `doctor` takes a `file` (default `svetra.yaml`, relative to the server's working directory) and returns JSON text the agent can act on, never terminal formatting.
 
 | Tool | Does | Returns |
 |---|---|---|
@@ -57,6 +57,7 @@ An MCP server over stdio: JSON-RPC 2.0, one message per line. It supports `initi
 | `graph` | `svetra graph` | `{"mermaid": "..."}` |
 | `plan` | `svetra plan --json`, read-only: compares `file` with `from`, or with `file` as committed in git `HEAD` | The plan: each change's `kind`, `data` (safe, breaking, destructive), `access` (wider, narrower), message, hint and `because`; `needs_yes`; `renames`. Never writes the rename migration: that's `svetra plan --accept`, after the person agrees |
 | `check` | `svetra check --json`: what is open in an existing database or in migrations (see below) | The findings JSON as the CLI prints it (with a `migrations` object for migrations), plus a `summary` |
+| `doctor` | `svetra doctor --json`: the pre-launch checklist for a project folder (see below) | The doctor JSON as the CLI prints it (`findings`, `counts`, `reminders`, `not_checked`, `ready`, and `migrations` for migrations), plus a `summary` |
 
 `explain` returns the diagnostics as a tool error when the file has errors. `context` and `graph` do too, except when the only errors are SVT001 or SVT005: then they return their output plus a `diagnostics` list, so the agent can see the design while it fixes it.
 
@@ -75,6 +76,22 @@ Answers "what is open in this database, or in these migrations?" for apps built 
 | `schemas` | the schemas the API exposes. Default `["public"]` | `--schema` |
 
 The result is the JSON of `svetra check --json` (`findings` and `counts`, plus `migrations` for migrations) with one more key, `summary`: a sentence with the counts, such as "2 critical, 3 warnings, 1 note in public (the database)", and for migrations how many applied. Passwords in a connection string are never echoed: `summary` and every error name the database only through the same redaction as the CLI. Findings never make the call an error: the agent reads `counts`. The result is a tool error, with one sentence saying what to do, when the call can't run: no source or more than one, `scratch` or `strict` without `migrations`, an unreadable snapshot, a database or Docker that can't be reached, or (with `strict`) a migration that failed to apply. Nothing is exit-coded: where the CLI exits 1 for a critical finding, the tool returns it as a normal result.
+
+### The `doctor` tool
+
+Answers "is this project ready to launch?" for apps built with or without Svetra: `check`'s findings on a database, plus leaked keys, auth settings, public storage buckets, generated files and backups, read from the project folder ([doctor.md](doctor.md)). It needs no `svetra.yaml`, never writes and makes no network call. Inputs, all optional:
+
+| Input | Is | Same as |
+|---|---|---|
+| `dir` | the project folder, relative to the server's working directory. Default `.` | `DIR` |
+| `db` | a connection string, read through `psql` | `--db URL` |
+| `local` | `true` for the database `supabase start` runs | `--local` |
+| `migrations` | a folder of migrations, or `true` for `dir/supabase/migrations` | `--migrations [DIR]` |
+| `scratch` | with `migrations`: an empty database to build them in, instead of Docker | `--scratch URL` |
+| `strict` | with `migrations`: also fail when any migration could not be applied | `--strict` |
+| `schemas` | the schemas the API exposes. Default `["public"]` | `--schema` |
+
+At most one of `db`, `local` and `migrations`. With none, the database is listed under `not_checked`. The result is the JSON of `svetra doctor --json` with one more key, `summary`: one sentence with the counts and the verdict ("1 critical, 2 warnings, 0 notes. Fix the 1 critical finding first. Not ready."). Passwords are never echoed, and no secret's value is in any finding. Findings never make the call an error: the agent reads `counts` and `ready`, which is true only for a full, clean run. The result is a tool error, with one sentence, when the call can't run: more than one source, `scratch` or `strict` without `migrations`, `dir` not a folder, a database or Docker that can't be reached, or (with `strict`) a migration that failed to apply.
 
 - **No editing tools:** agents already edit files. Svetra's job is to check and compile what they wrote, and keeping it read-and-compile only keeps the server small and safe.
 - **Errors:** a tool that can't run, such as a missing file, returns an MCP tool error with one sentence saying what to do, never a stack trace.

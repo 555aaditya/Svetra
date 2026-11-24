@@ -112,7 +112,7 @@ supabase test db                 # the tests, run on your database as real users
 | `check` | Finds leaks in a database you already have, no `svetra.yaml` needed |
 | `new` | Starts a project from a template (notes, blog, bookings, teams, approvals); `new --list` describes them ([spec](docs/new.md)) |
 | `infer` | Drafts a `svetra.yaml` (entities, fields and owner-column and `true` policies, with `check`'s findings as comments) from a database you already have, never wider than the database; whatever it can't translate stays an `UNTRANSLATED` comment. `infer --check-draft` runs the draft's access tests on a throwaway copy of the original database and lists where they disagree ([spec](docs/infer.md)) |
-| `doctor` | The pre-launch checklist for a project folder: service keys and other secrets in code, committed `.env` files, secrets in `supabase/config.toml`, generated files out of date, and with `--db`, `--local` or `--migrations` everything `check` finds. Never prints a secret's value, never says "ready" while a part is unchecked ([spec](docs/doctor.md)) |
+| `doctor` | The pre-launch checklist for a project folder: service keys and other secrets in code, committed `.env` files, secrets in `supabase/config.toml`, risky sign-in settings, generated files out of date, and with `--db`, `--local` or `--migrations` everything `check` finds, plus public storage buckets. Also the `doctor` tool of `svetra mcp`. Never prints a secret's value, never says "ready" while a part is unchecked ([spec](docs/doctor.md)) |
 | `mcp`, `init` | Serves all of this to your agent; sets up a project |
 
 ## What works today: `svetra validate`
@@ -196,7 +196,7 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 | Start fast | `svetra new` with templates ([spec](docs/new.md)) | **Done** |
 | Change safely | `svetra diff` and `svetra plan`: classify every change as safe, breaking or destructive, show whose access widens, and keep renamed data ([spec](docs/change.md)) | **Done** |
 | Existing apps | `svetra check` finds the leaks in an app you've already built ([spec](docs/check.md)); `svetra infer` drafts its `svetra.yaml` | `check` **Done**; `infer` planned |
-| Pre-launch checklist | `svetra doctor`: `check` plus leaked keys, auth settings, public buckets, backups and stale generated files, in one command ([spec](docs/doctor.md)) | Folder checks and data exposure **Done**; auth settings and buckets planned |
+| Pre-launch checklist | `svetra doctor`: `check` plus leaked keys, auth settings, public buckets, backups and stale generated files, in one command ([spec](docs/doctor.md)) | **Done** (the command and the MCP tool) |
 | Feature packs | `svetra add teams`, `svetra remove stripe` | Planned |
 
 ## Contributing
