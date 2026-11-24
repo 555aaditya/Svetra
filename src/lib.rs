@@ -11,6 +11,7 @@ pub mod load;
 pub mod mcp;
 pub mod migrations;
 pub mod model;
+pub mod patch;
 pub mod project;
 pub mod report;
 pub mod typeck;

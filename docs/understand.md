@@ -187,6 +187,7 @@ policy owner_reads_own_transactions: Transaction select authenticated when sourc
 hole transfer: (source Account.id, destination Account.id, amount Transaction.amount) -> Transaction; reads Account; writes Account, Transaction
 ```
 
+- `context` starts with the file's **revision**: `FinLedger (svetra 0.1), revision 3f9a1c2e8b7d`. It is the first 12 hex digits of the SHA-256 of the file, the number `compile` writes in its header, and what `svetra patch --expected-revision` compares ([patch.md](patch.md)). The MCP tool returns it as `revision`, next to the text.
 - `context` marks an audited entity with an `audit ` prefix (`audit Note: …`, after `private ` if both) and ends an audited hole's line with `; audit`.
 - A scheduled hole reads `hole expire_invites: schedule "0 3 * * *"; reads Invite; writes Invite`.
 - A triggered hole reads `hole notify_paid: trigger Order update when status == 'paid' and old.status != 'paid'; reads Order, Customer; writes Notification`.

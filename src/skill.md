@@ -9,11 +9,13 @@ description: Design and change a Supabase app through svetra.yaml, the one file 
 
 This project's data layer is designed in `svetra.yaml`. Svetra checks it, compiles it into Postgres with row-level security on every table, TypeScript and Zod types, sign-in settings and access tests, and explains it in plain English. **You design with the person; Svetra makes it safe; you build the rest.**
 
-Use the `svetra` MCP tools (`validate`, `compile`, `explain`, `context`, `graph`, `check`, `doctor`). If they aren't available, run the same commands with `npx -y svetra <command>`; add `--json` to `validate`.
+Use the `svetra` MCP tools (`validate`, `compile`, `explain`, `context`, `graph`, `plan`, `patch`, `check`, `doctor`). If they aren't available, run the same commands with `npx -y svetra <command>`; add `--json` to `validate`.
 
 ## The loop
 
 1. **Design first.** Turn the request into a change to `svetra.yaml`: entities, fields, policies, roles, `auth`, and holes only for logic that a policy can't express. Ask at most three questions, each with a recommended default, and only when the answer changes the design.
+   - **A new design:** write the file.
+   - **A change to one that exists:** call `context` and note its `revision`, then send the change with the `patch` tool (`npx -y svetra patch --expected-revision <rev>` with the edits on stdin): `set`, `remove` and `rename` on dot-separated paths such as `entities.Booking.fields.notes`. It applies all or nothing, keeps comments and order, and validates the result. Read its answer: show every **destructive** and **wider** line to the person before going on. On `conflict`, the file changed since you read it: call `context` again and redo the edits. A `rename` also writes `was`, but it doesn't rewrite references to the old name: `set` each one in the same call, after the rename.
 2. **Validate after every edit.** Fix every error using its `remediation.hint` before doing anything else. Never move on with errors. Warnings and info are worth reading: they usually point at a real gap.
 3. **Plan a change** to an app that already exists (`svetra.yaml` is committed in git): call `plan` before compiling.
    - Tell the person every **destructive** line (data that would be deleted) and every **wider** line (people who'd see or change more), in their words.
