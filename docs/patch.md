@@ -2,7 +2,7 @@
 
 This document specifies `svetra patch`, the way an agent changes `svetra.yaml`. Instead of rewriting the file, the agent sends a short list of edits. Svetra applies all of them, checks the result, and writes the file **only if the result is valid**. A bad edit fails before anything is written, and says which edit and why.
 
-**Status: draft, not built.** The decisions at the end are open; each has a recommendation, and the text below follows the recommendations.
+**Status: being built.** The decisions at the end took the recommendations (P2, editing the text in place, confirmed by the maintainer on 2026-11-24).
 
 **Done when:** an agent adds a field, renames another and removes an entity in one call; the file keeps its comments and key order; a stale call, based on an older file, is refused and says so; and a call that would leave an invalid design writes nothing.
 
@@ -43,7 +43,9 @@ Three operations, all on a **path** into the file: dot-separated names, exactly 
 | `{"op": "remove", "path": P}` | Delete the key at `P` and everything under it. An error when `P` isn't there |
 | `{"op": "rename", "path": P, "to": N}` | Rename the key at `P` to `N` and, for an entity or a field, add `was: <old name>`, so `plan` sees a rename and keeps the data ([change.md](change.md)). Other keys (a policy, a hole, a role) are renamed with no `was`: they carry no data |
 
-`V` is any JSON value; a JSON object becomes a map, an array a list, and a string stays a string. It is written in the form the file already uses around it (see Keeping the file).
+`V` is any JSON value; a JSON object becomes a map, an array a list, and a string stays a string. It is written in the form the file already uses around it (see Keeping the file). **Paths go through maps only:** a segment that lands on a list or a scalar is an error, and a list is replaced whole (`set holes.close.reads ["Order"]`).
+
+**`rename` changes the key and nothing else.** References to the old name (a `ref` field's `entity`, a policy's `on`, a hole's `reads`, an expression that uses the field) are not rewritten. The result is validated as a whole, so every reference left behind is reported, and the agent fixes each with a `set` in the same call, after the `rename`. An existing `was` is kept, not replaced: it names what the database has.
 
 Edits apply **in order, to the result of the one before**, so `set` an entity and then `set` a policy on it works in one call.
 
@@ -69,7 +71,7 @@ The edit that caused a diagnostic isn't traced back; the position says where in 
 
 ## What the answer shows
 
-On success, the answer is the same classification `svetra diff` gives, between the file as it was and as it is now: each change as safe, breaking or destructive, and which access widens or narrows, in words. **Patch never refuses a destructive or wider change.** That gate stays in `plan` and in the person's yes, as `compile` stays free to write ([change.md](change.md), C3); the patch only makes sure the agent sees the line in the same answer that applies it. It also gives the new revision.
+On success, the answer is the same classification `svetra diff` gives, between the file as it was and as it is now (left out, and said so, when the file as it was doesn't validate, since there is then nothing sound to compare): each change as safe, breaking or destructive, and which access widens or narrows, in words. **Patch never refuses a destructive or wider change.** That gate stays in `plan` and in the person's yes, as `compile` stays free to write ([change.md](change.md), C3); the patch only makes sure the agent sees the line in the same answer that applies it. It also gives the new revision.
 
 ```
 svetra patch: 4 edits applied to svetra.yaml (revision 3f9a1c2e8b7d -> 9d0c47aa1b22)
@@ -117,7 +119,10 @@ A person reads `svetra.yaml` in review, so a patch must change **only what the e
 - **`set` on a key that doesn't exist** adds it after the last key of its parent, indented like its siblings. In a parent written in flow style (`{ type: text }`), the key is added inside the braces and the parent stays on its line.
 - **`remove`** deletes the key's lines, and the comment lines directly above it with no blank line between. In flow style it removes just the entry.
 - **`rename`** changes the key's text only. The `was` key is added as a new key, as above.
-- **A value that is a map or a list** is written in block style under a block parent and in flow style under a flow parent. Strings are quoted only when YAML needs it, or when they contain `: `, `#` or a leading special character.
+- **A new map value follows its siblings.** If the first sibling that is a map is written in flow style (`{ type: text }`), the new one is too; if it is written in block style, so is the new one. With no sibling to follow, a map whose values are all scalars or lists is written in flow style, and any other map in block style. Under a flow parent everything is flow.
+- **A list is always written in flow style** (`[a, b]`), as the format's own examples do.
+- **Strings are plain when they are a simple name or dotted name** (`text`, `Account.id`) **and quoted otherwise**, so an expression is always `"quoted"`. A string that looks like a number, boolean or null is quoted, so it stays a string.
+- **A flow map or list that runs over several lines** is edited like any other flow collection: the new entry goes just after the last one. Block scalars (`|`, `>`) are not used by the format and are replaced whole.
 - **Nothing is written when the result equals the original** (applied: true, no changes, same revision).
 
 ## Agents
@@ -140,7 +145,7 @@ A person reads `svetra.yaml` in review, so a patch must change **only what the e
 | # | Question | Recommendation |
 |---|---|---|
 | P1 | One generic `set` / `remove` / `rename` on paths, or named operations (`add_field`, `change_type`, ...)? | **Three generic ones.** Fewer things to learn and to keep in sync; paths are already how every diagnostic speaks |
-| P2 | Edit the text in place (keeps comments, the diff stays small), or load and write the file back (simpler, loses comments and formatting)? | **In place.** A reviewed file that is reformatted on every agent edit is worse than the extra code. Needs end positions the parser doesn't report yet: its nodes carry only a start line and column today, so spans have to come from the indentation and the next sibling |
+| P2 | Edit the text in place (keeps comments, the diff stays small), or load and write the file back (simpler, loses comments and formatting)? | **In place** (decided). A reviewed file that is reformatted on every agent edit is worse than the extra code. The parser reports only start positions, so the end of an entry comes from indentation (block style) or from scanning to the matching bracket (flow style) |
 | P3 | Should `patch` refuse a destructive or wider change until it's accepted, as `plan` does? | **No.** It reports them in the same answer. The gate stays at `plan`, where the person's yes already lives |
 | P4 | Is `expected_revision` required? | **Optional**, so a person can use `patch` by hand. The skill always passes it |
 | P5 | Should a successful patch also run `compile`? | **No.** One command, one effect. The skill's loop already runs `compile` next |
