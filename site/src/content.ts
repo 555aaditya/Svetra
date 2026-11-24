@@ -107,6 +107,7 @@ export const roadmap = [
   { when: "Nov 20", what: "svetra check separates a contact form that anyone may add to from a table anyone may change, and explains policies written for the backend, after an audit on 300 public repos, in v0.8.1", done: true },
   { when: "Nov 21", what: "The generated tests try an owner who also holds a role, and an owner and a reference changed together: a gap the mutation study had misjudged, found with a Z3 model of the policies, now caught on a real Supabase, in v0.8.2", done: true },
   { when: "Nov 22", what: "svetra doctor checks a project folder for leaked keys and a database for open data; infer reads profile tables and role checks and can verify its draft; audit: true records who did what; two generator gaps an outside app exposed are closed, in v0.8.3", done: true },
+  { when: "Nov 24", what: "Holes can run on a schedule (a pg_cron job) or when a row changes (a trigger, with loop checks); svetra patch makes checked edits to the design; a GitHub Action runs svetra plan on pull requests; doctor reads sign-in settings and storage buckets, in v0.8.4", done: true },
   { when: "Next", what: "A recorded design conversation · svetra view: an interactive map of who can see what", done: false },
   { when: "Early 2027", what: "Measured: tokens and safety with and without Svetra · how many broken rules the access tests catch", done: false },
   { when: "Later", what: "Existing apps: svetra infer and svetra check · safe changes with svetra plan", done: false },
