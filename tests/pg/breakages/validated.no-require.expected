@@ -1,0 +1,2 @@
+not ok 70 - alice calling relabel with label '100%' is refused as bad input: label != null and label != '100%'
+# Looks like you failed 1 test of 84
