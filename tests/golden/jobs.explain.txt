@@ -1,0 +1,31 @@
+Invites
+
+What your app stores
+  Invites
+    - the signed-in person who owns it (required)
+    - email: text (required)
+    - status: one of pending, accepted or expired (starts as pending)
+    - expires at: a date and time (required)
+
+Signing in
+  - People sign in with email (a password or an emailed link).
+  - Anyone can create an account.
+  - People confirm their email address before they can sign in.
+  - Passwords need at least 10 characters.
+
+Who can see and change what
+  Invites
+    - Signed-in people can see an invite when its owner is them.
+    - Signed-in people can create an invite when its owner is them.
+    - Nobody can see invites any other way.
+    - Nobody can change or delete invites directly. Only custom code can change them: expire_invites.
+
+Custom code
+  expire_invites
+    - runs by itself every day at 03:00 (UTC). Nobody can run it from the app.
+    - can read: invites. Can change: invites.
+
+Before going live
+  - Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.
+  - Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in.
+  - Code that runs by itself on a schedule needs Supabase's pg_cron extension. The update turns it on; if your project refuses, switch it on under Database, Extensions in the Supabase dashboard.

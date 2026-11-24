@@ -278,9 +278,11 @@ Rules, all reported as `SVT008`:
 
 A hole is a place where custom code is allowed, usually written by the user's agent. The compiler generates the signature, types and validation, so only the logic is written by hand.
 
+The keys below are those of `kind: function`. Each kind takes its own keys, and a key the kind doesn't take is `SVT020`, with a hint that lists the keys it does. The design for the other kinds, which run with no caller, is in [automations.md](automations.md).
+
 | Key | Required | Meaning |
 |---|---|---|
-| `kind` | yes | `function`, the only kind in 0.1 |
+| `kind` | yes | `function` (called by a person) or `schedule` (run by the database's clock, see [Scheduled holes](#scheduled-holes)) |
 | `input` | no | Map of parameter name to type. See below |
 | `output` | no | An entity name, an `Entity.field`, or a type. Omit it for no return value |
 | `reads` | no | Entities the hole may read |
@@ -324,6 +326,27 @@ holes:
     when: "source.owner == auth.user"
 ```
 
+### Scheduled holes
+
+A hole with `kind: schedule` runs on the database's clock, not when a person calls it. Nobody can call it from the app: it has no function in `public` and nothing in `src/svetra.gen.ts`.
+
+```yaml
+holes:
+  expire_invites:
+    kind: schedule
+    schedule: "0 3 * * *"        # every day at 03:00 UTC
+    reads: [Invite]
+    writes: [Invite]
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `kind` | yes | `schedule` |
+| `schedule` | yes | Five-field cron: minute, hour, day of month, month, day of week, in UTC. Each field is `*`, a number, a range (`1-5`), a list (`1,15`) or a step (`*/15`, `10-30/5`). Day of week is `0` to `7` (`0` and `7` are Sunday). Names such as `mon` are not allowed. A bad expression is `SVT037` |
+| `reads`, `writes`, `grants` | no | As for `function` |
+
+Not allowed: `input`, `output`, `as` and `when`, because nobody passes or receives them, and `audit`, because an audited hole logs a call by a person and a schedule has none (`SVT020`). Write a guard in the body. The body is written as for any hole, and `p_caller` is always `null`. It runs as the hole's own role, with the access `reads`, `writes` and `grants` declare. A schedule with `grants` gives or takes away roles with no person behind it, so it gets `SVT040`. A body should be safe to run twice and to run late: a failed run is not retried and a run missed while the database was down is not made up. The generated SQL, which needs pg_cron, is in [compiler.md](compiler.md#holes).
+
 ## Audit
 
 `audit: true` on an entity or a hole records what happened in one append-only table, `svetra.audit_log`. It answers "who changed this, and when" from the database itself, so it holds for every client, not only Svetra's.
@@ -351,7 +374,7 @@ holes:
 | Code | Severity | Rule | Remediation action |
 |---|---|---|---|
 | `SVT019` | error | The file is not valid YAML | `fix_syntax` |
-| `SVT020` | error | Unknown key | `remove_key` |
+| `SVT020` | error | Unknown key, or a key the hole's `kind` doesn't take | `remove_key` |
 | `SVT021` | error | Name breaks its naming pattern | `rename` |
 | `SVT022` | error | Entity has no primary field, or more than one | `set_primary` |
 | `SVT023` | error | Unknown type, or a missing or invalid type option, including `on_delete` on a field that isn't a `ref`, an unknown value, or `set_null` on a required field | `fix_type` |
@@ -368,6 +391,8 @@ holes:
 | `SVT035` | error | A policy has `only` but doesn't allow `update`: only an update changes fields | `remove_only` |
 | `SVT036` | warning | A person is covered, on some row, by two permissive update policies that disagree about a field: one has an `only` that leaves it out and another frees it, so the first one's limit has no effect for that person | `free_or_limit` |
 | `SVT031` | info | In `svetra plan`: `was` names a rename that's already applied, because the design the database has already uses the new name. Remove it | `remove_was` |
+| `SVT037` | error | A `schedule` isn't a valid five-field cron expression: wrong number of fields, a value out of range, or a name where a number is needed. The message says which field | `fix_schedule` |
+| `SVT040` | warning | A `schedule` hole has `grants`: a role is given or taken away with no person calling it | `confirm_grants` |
 | `SVT001` | error | Entity exposed through the API has no policy. Mark it `private: true` or add a policy | `add_policy` |
 | `SVT002` | error | Reference to an entity or field that doesn't exist | `fix_reference` |
 | `SVT003` | error | Expression has a type error, or uses a path form not allowed where it appears | `fix_expression` |
@@ -402,7 +427,7 @@ With `--json`, each diagnostic has this shape:
 
 - **The JSON output** wraps the diagnostics with the file name and an overall verdict: `{"file": "svetra.yaml", "valid": false, "diagnostics": [ ... ]}`. Diagnostics are sorted by position.
 - **`line` and `column`** are both 1-based, as in editors.
-- **`category`** is one of `syntax`, `naming`, `type`, `reference`, `expression`, `policy`, `role`, `money`, `index` and `version`.
+- **`category`** is one of `syntax`, `naming`, `type`, `reference`, `expression`, `policy`, `role`, `money`, `index`, `hole` and `version`.
 - **`retryable` is always `false`** for validation, because repeating the same call with the same file gives the same result. Fix the file instead.
 - **Exit codes:**
   - `0`: the file is valid. Warnings and info are allowed.
@@ -478,7 +503,7 @@ These come later, if real use asks for them:
 - Storage-engine selection
 - Migrations between graph revisions (planned for `svetra diff` and `patch`)
 - Multiple files and imports
-- Hole kinds other than `function`, such as webhook recipes
 - Audit retention and export, logging refused calls, and alerting
+- Hole kinds other than `function` and `schedule`: triggers and webhooks are specified in [automations.md](automations.md)
 - Input validation (`require`) and retry keys (`idempotent`) on holes: proposed in [hole-middleware.md](hole-middleware.md)
 - The sign-in methods listed under [Authentication](#authentication) as not in version 0.1

@@ -343,7 +343,15 @@
       ],
       "properties": {
         "kind": {
-          "const": "function"
+          "description": "function: called by a person. schedule: run by the database's clock, with only kind, schedule, reads, writes and grants.",
+          "enum": [
+            "function",
+            "schedule"
+          ]
+        },
+        "schedule": {
+          "description": "For kind: schedule. Five-field cron in UTC: minute hour day-of-month month day-of-week, such as \"0 3 * * *\".",
+          "type": "string"
         },
         "input": {
           "type": "object",

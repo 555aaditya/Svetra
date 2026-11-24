@@ -335,6 +335,26 @@ For each hole:
   - each is expected to be refused (`42501`) or let through, as the evaluator works out from `when`
   - **"let through" means the guard passed,** whatever the body then does, so the check doesn't depend on hand-written code
 
+### Scheduled holes
+
+A hole with `kind: schedule` gets the role and the body function above, with `p_caller` always `null` and no `when` guard. It gets **no** `public` function, no entry in `src/svetra.gen.ts` and no call checks. The body function is revoked from `public`, `anon` and `authenticated` by name, and from `service_role` too when that role exists. In its place the `-- Holes` section has:
+
+```sql
+do $$ begin if to_regnamespace('cron') is null then create extension pg_cron; end if; end $$;
+select cron.schedule('svetra_expire_invites', '0 3 * * *',
+  $job$select "svetra_holes"."expire_invites"(null)
+    where pg_try_advisory_xact_lock(hashtext('svetra_expire_invites'))$job$);
+select cron.unschedule(jobid) from cron.job
+  where jobname like 'svetra\_%' and jobname not in ('svetra_expire_invites');
+```
+
+- **The job** is named `svetra_<name>`. Scheduling again under the same name replaces it, so re-applying the schema is safe. It runs as the migration's role, which is the only role that can execute the body function; the body then runs as the hole's role. Times are UTC (pg_cron's `cron.timezone`).
+- **The lock** makes a second run do nothing while one is still going. pg_cron never overlaps a job with itself, so it matters only for a job made by hand.
+- **The cleanup** unschedules every `svetra_` job the design doesn't declare, and never a job with another name. It is emitted only when the design has a scheduled hole, so a project without one never needs pg_cron.
+- **The stand-in** (`src/standin/base.sql`) has a stub `cron` schema with `job`, `schedule` and `unschedule`, so the same file applies on plain PostgreSQL.
+
+Access tests for each scheduled hole: its role's table privileges as above; `anon`, `authenticated` and `service_role` (when it exists) can't execute `svetra_holes.<name>`; no function `<name>` exists in `public`; `cron.job` has exactly one job `svetra_<name>` with the declared schedule that calls `svetra_holes.<name>`; and, once for the file, no `svetra_` job exists that the design doesn't declare, and `cron.timezone` is UTC. The tests read `cron.job` as the migration's role. What a body does, and that pg_cron fires on time, aren't tested.
+
 ## Access tests
 
 `supabase/tests/svetra.test.sql` checks that the **database** enforces what `svetra.yaml` says, as real users. Run it against a local Supabase with `supabase test db`.

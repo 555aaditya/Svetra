@@ -1798,6 +1798,42 @@ pub fn analyse(doc: &Document) -> Analysis {
                 ));
             }
         }
+        // A scheduled hole has no caller: the clock runs it, as the migration's role.
+        if let HoleKind::Schedule(sched) = &h.kind {
+            let job = super::sql::job_name(&h.name);
+            let call = format!("\"svetra_holes\".{}(null)", q(&h.name));
+            checks.push(format!(
+                "select is((select count(*) from pg_roles r, pg_proc p join pg_namespace n on n.oid = p.pronamespace where r.rolname in ('anon', 'authenticated', 'service_role') and n.nspname = 'svetra_holes' and p.proname = {} and has_function_privilege(r.rolname, p.oid, 'execute')), 0::bigint, {});",
+                lit(&h.name),
+                lit(&format!(
+                    "no one calling the API can run {}, or pass it a caller",
+                    h.name
+                ))
+            ));
+            checks.push(format!(
+                "select is((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = {}), 0::bigint, {});",
+                lit(&h.name),
+                lit(&format!("{} has no function the app can call", h.name))
+            ));
+            checks.push(format!(
+                "select is((select count(*) from cron.job where jobname = {}), 1::bigint, {});",
+                lit(&job),
+                lit(&format!("{} has exactly one scheduled job", h.name))
+            ));
+            checks.push(format!(
+                "select is((select schedule from cron.job where jobname = {}), {}, {});",
+                lit(&job),
+                lit(&sched.cron),
+                lit(&format!("{} runs on the schedule {}", h.name, sched.cron))
+            ));
+            checks.push(format!(
+                "select ok(coalesce((select position({} in command) from cron.job where jobname = {}), 0) > 0, {});",
+                lit(&call),
+                lit(&job),
+                lit(&format!("the job of {} runs {}", h.name, h.name))
+            ));
+            continue;
+        }
         // Only the declared callers reach the hole, and only through its public function: the
         // inner one takes the caller's id as an argument, so calling it directly could forge it.
         for (role, who, may) in [
@@ -1895,6 +1931,24 @@ pub fn analyse(doc: &Document) -> Analysis {
                 });
             }
         }
+    }
+
+    // Once for the file: no job Svetra made is left over from a removed hole, and the clock is UTC.
+    let jobs: Vec<String> = doc
+        .holes
+        .iter()
+        .filter(|h| matches!(h.kind, HoleKind::Schedule(_)))
+        .map(|h| lit(&super::sql::job_name(&h.name)))
+        .collect();
+    if !jobs.is_empty() {
+        checks.push(format!(
+            "select is((select count(*) from cron.job where jobname like 'svetra\\_%' and jobname not in ({})), 0::bigint, 'no scheduled job is left over from code that was removed');",
+            jobs.join(", ")
+        ));
+        checks.push(
+            "select ok(coalesce(current_setting('cron.timezone', true), 'UTC') in ('UTC', 'GMT'), 'scheduled times are in UTC');"
+                .into(),
+        );
     }
 
     let names: Vec<&str> = people.iter().map(|p| p.name.as_str()).collect();

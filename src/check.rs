@@ -529,6 +529,29 @@ impl<'a> Checker<'a> {
             for r in h.reads.iter().chain(&h.writes) {
                 self.reference(r, &hp);
             }
+            if let HoleKind::Schedule(s) = &h.kind {
+                if let Err(why) = crate::cron::validate(&s.cron) {
+                    self.d(
+                        Code::Svt037,
+                        format!("{hp}.schedule"),
+                        s.pos,
+                        format!("The schedule `{}` of hole `{}` isn't valid: {why}.", s.cron, h.name),
+                        "Write five fields in UTC, with numbers only: minute hour day-of-month month day-of-week, such as \"0 3 * * *\" or \"*/15 * * * *\".",
+                    );
+                }
+                if let Some(g) = h.grants.first() {
+                    self.d(
+                        Code::Svt040,
+                        format!("{hp}.grants"),
+                        g.pos,
+                        format!(
+                            "Hole `{}` runs on a schedule and grants roles, so roles are given or taken away with nobody asked.",
+                            h.name
+                        ),
+                        "Check that this is meant. If a person should decide, make it a `function` hole instead.",
+                    );
+                }
+            }
             for g in &h.grants {
                 if !doc.roles.iter().any(|r| r.name == g.name) {
                     let msg = format!(

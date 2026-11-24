@@ -678,6 +678,14 @@ fn audit_change(path: String, on: bool, what: &str) -> Change {
     }
 }
 
+/// What starts a hole: a scheduled one is told apart by its cron expression.
+fn starts(h: &Hole) -> Option<&str> {
+    match &h.kind {
+        HoleKind::Schedule(s) => Some(&s.cron),
+        HoleKind::Function => None,
+    }
+}
+
 fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
     for h in &new.holes {
         let path = format!("holes.{}", h.name);
@@ -691,7 +699,14 @@ fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
             ));
         }
         match old.holes.iter().find(|x| x.name == h.name) {
-            None => changes.push(change("add_hole", path, Data::Safe, format!("add custom code {}", h.name))),
+            None => changes.push(change("add_hole", path, Data::Safe, match starts(h) {
+                Some(_) => format!("add custom code {}, which runs by itself on a schedule", h.name),
+                None => format!("add custom code {}", h.name),
+            })),
+            Some(x) if starts(x) != starts(h) => changes.push(hint(
+                change("change_schedule", path, Data::Breaking, format!("custom code {} starts differently: it runs at other times, or is now called by people or by the clock instead", h.name)),
+                "Check what the body does at the new times, and update any app code that called it.",
+            )),
             Some(x) if signature(x) != signature(h) => changes.push(hint(
                 change("change_hole", path, Data::Breaking, format!("custom code {} takes or returns something different: app code calling it must change", h.name)),
                 "Update the app's calls, using the new typed function in src/svetra.gen.ts.",
@@ -701,15 +716,26 @@ fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
     }
     for x in &old.holes {
         if !new.holes.iter().any(|h| h.name == x.name) {
-            changes.push(hint(
-                change(
-                    "remove_hole",
-                    format!("holes.{}", x.name),
-                    Data::Breaking,
-                    format!("remove custom code {}: app code calling it fails", x.name),
+            changes.push(match starts(x) {
+                Some(_) => hint(
+                    change(
+                        "remove_hole",
+                        format!("holes.{}", x.name),
+                        Data::Breaking,
+                        format!("remove custom code {}: it stops running on its schedule", x.name),
+                    ),
+                    &format!("The generated schema unschedules its job while another scheduled hole remains. If it was the last, run select cron.unschedule('svetra_{}'); by hand.", x.name),
                 ),
-                "Remove the app's calls first.",
-            ));
+                None => hint(
+                    change(
+                        "remove_hole",
+                        format!("holes.{}", x.name),
+                        Data::Breaking,
+                        format!("remove custom code {}: app code calling it fails", x.name),
+                    ),
+                    "Remove the app's calls first.",
+                ),
+            });
         }
     }
 }

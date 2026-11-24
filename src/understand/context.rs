@@ -136,12 +136,15 @@ pub fn context(doc: &Document) -> String {
             .iter()
             .map(|p| format!("{} {}", p.name, param(&p.ty)))
             .collect();
-        let mut line = format!(
-            "hole {}: ({}) -> {}",
-            h.name,
-            params.join(", "),
-            h.output.as_ref().map_or("none".into(), param)
-        );
+        let mut line = match &h.kind {
+            HoleKind::Schedule(s) => format!("hole {}: schedule \"{}\"", h.name, s.cron),
+            HoleKind::Function => format!(
+                "hole {}: ({}) -> {}",
+                h.name,
+                params.join(", "),
+                h.output.as_ref().map_or("none".into(), param)
+            ),
+        };
         let names = |rs: &[NameRef]| {
             rs.iter()
                 .map(|r| r.name.as_str())

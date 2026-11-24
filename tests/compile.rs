@@ -243,3 +243,13 @@ fn an_unaudited_hole_has_the_plain_wrapper() {
     let sql = compile(include_str!("fixtures/posts.yaml"));
     assert!(sql.contains("as $svetra$ begin perform"));
 }
+
+/// A scheduled hole: a pg_cron job, no function in `public`, nothing in the TypeScript client.
+/// Checked on PostgreSQL 16 by `scripts/pg-check.sh` and on a real local Supabase by
+/// `scripts/supabase-check.sh`.
+#[test]
+fn jobs_sql_and_types_match_golden_files() {
+    let src = include_str!("fixtures/jobs.yaml");
+    assert_eq!(compile(src), include_str!("golden/jobs.sql"));
+    assert_eq!(types(src), include_str!("golden/jobs.ts"));
+}
