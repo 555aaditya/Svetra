@@ -202,6 +202,18 @@ pub enum HoleKind {
     Function,
     /// Run by the database's clock.
     Schedule(Schedule),
+    /// Run when a row of an entity is inserted, updated or deleted.
+    Trigger(Trigger),
+}
+
+/// A triggered hole: the entity whose rows fire it and the events that do. Its `when` is the
+/// hole's `when`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Trigger {
+    pub on: NameRef,
+    /// Insert, update and delete only, in the order written, with no repeats.
+    pub events: Vec<Action>,
+    pub pos: Pos,
 }
 
 /// A scheduled hole's cron expression, as written, with its position.
@@ -222,7 +234,7 @@ pub struct Hole {
     pub writes: Vec<NameRef>,
     /// Roles the hole may give and take away, by writing `svetra.role_grants`.
     pub grants: Vec<NameRef>,
-    /// Who may call it, as for policies. A `schedule` has no caller, and this stays the default.
+    /// Who may call it, as for policies. A `schedule` or `trigger` has no caller, and this stays the default.
     pub role: Role,
     /// A condition over the inputs that must hold for the call to run.
     pub when: Option<String>,
