@@ -44,7 +44,15 @@ Anything not confirmed from the docs or the pinned CLI in this environment is ma
 | Edge Functions are Deno files in `supabase/functions/<name>/index.ts`, deployed with `supabase functions deploy`, with secrets from `supabase secrets set` read through `Deno.env` | Believed true, **UNVERIFIED** here |
 | An Edge Function gets `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in its environment | Believed true, **UNVERIFIED** |
 | `[functions.<name>] verify_jwt = false` in `supabase/config.toml` lets a caller with no Supabase token reach the function | Believed true, **UNVERIFIED** |
-| Postgres triggers work as in plain PostgreSQL | True; CI already runs PostgreSQL 16 |
+| Postgres triggers work as in plain PostgreSQL | **Confirmed** on the local Supabase (PostgreSQL 17.11) and on PostgreSQL 16, with identical results in every row below |
+| The role that fires a trigger needs no `execute` on the trigger function, and no `usage` on its schema | **Confirmed.** With `execute` revoked from `public`, `anon`, `authenticated` and `service_role`, and `anon` without `usage` on `svetra_holes`, an `anon` insert, update and delete fired the trigger. Postgres checks `execute` once, when the trigger is created, for the role creating it. Calling the trigger function or the body directly as `anon` is refused (`permission denied for schema svetra_holes`) |
+| The trigger function must be `security definer` | **Confirmed.** The trigger function runs as its owner only when it is `security definer`. As `security invoker` it runs as the person who made the change, and its call of the body then fails for `anon` (`permission denied for schema svetra_holes`). With `security definer` owned by the migration's role (`postgres` on Supabase, which isn't a superuser) the body ran as `svetra_hole_<name>` (`current_user` inside it), whichever role made the change |
+| `old` and `new` in a trigger's `WHEN` | **Confirmed.** `INSERT trigger's WHEN condition cannot reference OLD values` and `DELETE trigger's WHEN condition cannot reference NEW values` are errors, and a subquery is refused (`cannot use subquery in trigger WHEN condition`). In an update trigger both work, with `old.x is distinct from ...` |
+| `p_old` and `p_new` | **Confirmed.** Insert: `p_old` is null. Update: both rows. Delete: `p_new` is null. They are the entity's row type |
+| What fires, and how often | **Confirmed.** One call per row: an update of 4 rows made 4 calls. An update whose `WHEN` is false makes none. `insert ... on conflict do update` fires the insert trigger for a new row and the update trigger for a conflicting one, and never both for one row. `truncate` fires nothing |
+| `p_caller` from `auth.uid()` inside a `security definer` trigger function | **Confirmed** on Supabase's `auth.uid()`: it read the session's `request.jwt.claims` (and the older `request.jwt.claim.sub`) and gave the person's id for `authenticated`. With no claims set it gave null |
+| The change is rolled back when the body raises | **Confirmed.** An `anon` insert whose body raised left no row |
+| `pg_trigger_depth()` | **Confirmed.** It is 1 in a trigger function fired by a plain statement, and 1 more for each trigger fired from inside a trigger. A body that updated its own `on` entity ran at depth 1, 2 and 3, and the trigger function raised `54001` at depth 4 (`pg_trigger_depth() > 3`), which rolled the whole statement back |
 
 `pg_cron` and Edge Functions can't run on the plain-PostgreSQL stand-in of `scripts/pg-check.sh`. So tests come in two layers: the SQL shape on the stand-in (with a stub `cron` schema, like the existing Supabase stand-in), and real behaviour only in `scripts/supabase-check.sh`.
 
@@ -171,7 +179,7 @@ The expression parser knows the row after a change (`check`). `old.` is the one 
 
 1. **The role** `svetra_hole_<name>` and its grants.
 2. **The body function** `svetra_holes.<name>(p_caller uuid, p_old "public"."order", p_new "public"."order")`, with the usual attributes and no guard: the `WHEN` clause did that.
-3. **A trigger function** `svetra_holes.<name>__fire()`, owned by `postgres` and `security definer`. It refuses when `pg_trigger_depth() > 3` (see [loops](#loops)), passes `auth.uid()` as `p_caller`, and calls the body function.
+3. **A trigger function** `svetra_holes.<name>__fire()`, owned by the migration's role (`postgres` on Supabase) and `security definer`, with `set search_path = ''`. It refuses when `pg_trigger_depth() > 3` (see [loops](#loops)), passes `auth.uid()` as `p_caller`, and calls the body function.
 4. **The triggers**, one per event:
    ```sql
    create trigger svetra_notify_paid_update
@@ -181,7 +189,7 @@ The expression parser knows the row after a change (`check`). `old.` is the one 
      execute function svetra_holes.notify_paid__fire();
    ```
    Always `for each row`: a statement trigger has no single row to give the body.
-5. **Privileges.** Execute on both functions is revoked from `public`, `anon`, `authenticated` and `service_role` by name and granted to nobody who isn't the owner. In Postgres, the role that fires a trigger doesn't need execute on its function. **UNVERIFIED on Supabase:** the access tests must confirm it there.
+5. **Privileges.** Execute on both functions is revoked from `public`, `anon`, `authenticated` and `service_role` by name and granted to nobody who isn't the owner, except that the migration's role keeps execute on the body (the trigger function calls it as that role). The role that fires a trigger needs no execute on its function (confirmed on Supabase and PostgreSQL 16, see the table above), so nobody in the API needs, or has, a way to call either function.
 
 No function in `public`, nothing in `src/svetra.gen.ts`.
 
