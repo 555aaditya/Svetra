@@ -41,6 +41,7 @@ pub enum Code {
     Svt037,
     Svt038,
     Svt040,
+    Svt041,
 }
 
 impl Code {
@@ -79,6 +80,7 @@ impl Code {
             Code::Svt037 => ("SVT037", Error, "hole", "fix_schedule"),
             Code::Svt038 => ("SVT038", Error, "hole", "break_loop"),
             Code::Svt040 => ("SVT040", Warning, "hole", "confirm_grants"),
+            Code::Svt041 => ("SVT041", Error, "hole", "fix_hole"),
         }
     }
 
