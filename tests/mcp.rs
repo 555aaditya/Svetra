@@ -82,7 +82,8 @@ fn handshake_lists_the_tools() {
     assert_eq!(
         names,
         [
-            "validate", "compile", "explain", "context", "graph", "plan", "check", "doctor"
+            "validate", "compile", "explain", "context", "graph", "plan", "patch", "check",
+            "doctor"
         ]
     );
     assert_eq!(replies[2]["result"], json!({}));
@@ -415,5 +416,60 @@ fn doctor_builds_migrations_and_reports_data_findings_with_a_summary() {
             .iter()
             .any(|f| f["area"] == "data"),
         "{got}"
+    );
+}
+
+#[test]
+fn patch_applies_edits_and_refusals_and_conflicts_are_results() {
+    let yaml = include_str!("fixtures/finledger.yaml");
+    let dir = project("patch", yaml);
+    let replies = session(
+        &dir,
+        &[
+            call(1, "context", json!({})),
+            call(
+                2,
+                "patch",
+                json!({ "ops": [{ "op": "set", "path": "entities.Account.fields.nickname", "value": { "type": "text" } }],
+                        "expected_revision": "000000000000" }),
+            ),
+            call(
+                3,
+                "patch",
+                json!({ "ops": [{ "op": "remove", "path": "entities.Nope" }] }),
+            ),
+            call(
+                4,
+                "patch",
+                json!({ "ops": [{ "op": "set", "path": "entities.Account.fields.nickname", "value": { "type": "text" } }] }),
+            ),
+            call(5, "patch", json!({ "ops": "nope" })),
+            call(6, "patch", json!({})),
+        ],
+    );
+    let (context, _) = result(&replies[0]);
+    assert_eq!(
+        context["revision"],
+        svetra::compile::revision(yaml),
+        "context carries the revision"
+    );
+    let (conflict, is_error) = result(&replies[1]);
+    assert!(!is_error, "a conflict is a result");
+    assert_eq!(conflict["conflict"], true);
+    let (refused, is_error) = result(&replies[2]);
+    assert!(!is_error, "a refusal is a result");
+    assert_eq!(refused["applied"], false);
+    assert_eq!(refused["problems"][0]["at"], "ops[0]");
+    let (applied, is_error) = result(&replies[3]);
+    assert!(!is_error);
+    assert_eq!(applied["applied"], true);
+    assert!(
+        std::fs::read_to_string(dir.join("svetra.yaml"))
+            .unwrap()
+            .contains("nickname")
+    );
+    assert!(
+        result(&replies[4]).1 && result(&replies[5]).1,
+        "bad input is a tool error"
     );
 }
