@@ -314,6 +314,33 @@ Each hole compiles to two functions, plus a role that holds exactly its declared
 
 **The stub body** returns nothing useful and says so: `raise exception 'transfer is not written yet: edit supabase/holes/transfer.sql';`. A hole with a stub still compiles, applies and passes the access tests, because the guard runs before it.
 
+### Retry keys
+
+When any hole has `idempotent`, the `-- Holes` section starts with the key table (after `-- Guards` has created the `svetra` schema), in the same stance as the audit log: row-level security with no policy, no grants for the API roles, a schema Supabase doesn't expose, and no grant to any hole's role.
+
+```sql
+create table "svetra"."hole_keys" (
+  "hole"   text   not null,
+  "caller" uuid   not null,
+  "key"    text   not null,
+  "inputs" jsonb  not null,
+  "result" jsonb,
+  primary key ("hole", "caller", "key")
+);
+alter table "svetra"."hole_keys" enable row level security;
+revoke all on table "svetra"."hole_keys" from public, anon, authenticated;
+```
+
+A hole with `idempotent` differs from other holes in two places, and a hole without it compiles exactly as before:
+
+- **`svetra_holes.<name>_allowed(p_caller, p_<input>, …) returns boolean`,** only when the hole also has `when`: the `when` condition, written once, owned by the hole's role (so it reads with the hole's access) and executable by the migration's role only. The body function's guard calls it, and so does the public function on a repeat.
+- **The public function** gets variables `v_inputs jsonb` (`jsonb_build_object` of every input) and `v_key`, and becomes, in order:
+  1. look up `(<hole>, auth.uid(), <key input>::text)` in `hole_keys`;
+  2. **on a hit:** if the hole has `when` and `_allowed(...)` isn't true, raise `42501`; if the stored `inputs` differ from `v_inputs`, raise `22023` with `<hole>: request was already used with different inputs`; otherwise return the stored `result` as the hole's type (`jsonb_populate_record` for an entity, a cast of the text value for a scalar, nothing for a hole with no `output`), and do nothing else;
+  3. **on a miss:** the audit record if the hole has `audit` (a repeat is not recorded again), the call to the body function, then the insert into `hole_keys` with `to_jsonb(<result>)`, then the return.
+
+  The primary key settles two first calls that arrive together: the second insert fails and its work rolls back.
+
 **`--check`** compares the schema including the current bodies, so an edited body that hasn't been compiled shows up as out of date.
 
 ### Holes in TypeScript
@@ -335,6 +362,7 @@ For each hole:
   - a call with inputs that point at the `a` rows, and one with inputs that point at the `b` rows
   - each is expected to be refused (`42501`) or let through, as the evaluator works out from `when`
   - **"let through" means the guard passed,** whatever the body then does, so the check doesn't depend on hand-written code
+- **Retry keys:** for a hole with `idempotent`, the key table is closed to the app and to every hole: `anon`, `authenticated` and each hole's role have no privilege on `"svetra"."hole_keys"`. That a repeat returns the first answer is **not** generated, because it needs a body that runs; it is checked by hand on the `retries` fixture (`tests/pg/retries_assert.sql`).
 - **Each `require` condition,** one call per condition, by someone `when` lets through, that breaks that condition and keeps the ones before it. It is expected to be refused as bad input (`22023`) with the condition's own message, `<hole>: <condition>`. The input that breaks it comes from the rules as written, and is tried one input at a time:
   - the value of another input, for a condition between two inputs (`source != destination`)
   - each number in the condition, and one above and one below it; each text in the condition, and a different text; each of true and false
