@@ -269,3 +269,66 @@ fn a_user_primary_key_can_be_taken_over_or_given_away() {
     // Two stored rows, two targets for each of the persons without a row, one for the others.
     assert!(own.contains("select plan(127);"));
 }
+
+/// Checked on PostgreSQL 16 by `scripts/pg-check.sh`, with two breakages
+/// (`tests/pg/breakages/validated.*`) that each fail exactly one of its checks.
+#[test]
+fn require_checks_match_the_golden_file() {
+    assert_eq!(
+        generate(include_str!("fixtures/validated.yaml")),
+        include_str!("golden/validated.test.sql")
+    );
+}
+
+#[test]
+fn each_require_condition_gets_a_call_that_breaks_it() {
+    let out = generate(include_str!("fixtures/validated.yaml"));
+    // The value comes from the condition's own literal: 0 for `> 0`, one past it for `<= 10000`.
+    assert!(out.contains("'deposit: amount > 0', 'alice calling deposit with amount 0 is refused"));
+    assert!(out.contains(
+        "'deposit: amount <= 10000', 'alice calling deposit with amount 10001 is refused"
+    ));
+    assert!(out.contains("'relabel: label != null and label != ''100%'''"));
+    assert!(!out.contains("select skip("));
+}
+
+#[test]
+fn the_helper_is_only_written_for_a_design_that_uses_require() {
+    assert!(generate(include_str!("fixtures/validated.yaml")).contains("svetra_test.call_input"));
+    for src in [
+        include_str!("fixtures/finledger.yaml"),
+        include_str!("fixtures/audited.yaml"),
+    ] {
+        assert!(!generate(src).contains("call_input"));
+    }
+}
+
+/// A condition no allowed call can break is skipped and says so, not guessed at.
+#[test]
+fn a_condition_that_cannot_be_broken_past_the_guard_is_skipped() {
+    let src = include_str!("fixtures/validated.yaml").replace(
+        "    when: \"wallet.owner == auth.user\"\n    require:\n      - \"amount > 0\"",
+        "    when: \"amount > 100000\"\n    require:\n      - \"amount > 0\"",
+    );
+    let out = generate(&src);
+    assert!(
+        out.contains(
+            "deposit: no call found that gets past who may call it and breaks `amount > 0`, so it isn''t tried"
+        ),
+        "{out}"
+    );
+}
+
+/// `source != destination`: the value that breaks it is the other input's, not a literal.
+#[test]
+fn a_condition_between_two_inputs_is_broken_with_the_others_value() {
+    let src = include_str!("fixtures/finledger.yaml").replace(
+        "    when: \"source.owner == auth.user\"\n",
+        "    when: \"source.owner == auth.user\"\n    require:\n      - \"source != destination\"\n",
+    );
+    let out = generate(&src);
+    assert!(
+        out.contains("with destination the same as source is refused as bad input"),
+        "{out}"
+    );
+}

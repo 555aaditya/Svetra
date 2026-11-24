@@ -1114,6 +1114,24 @@ begin
 end $$;
 "#;
 
+/// Only a design with `require` gets it, so the other test files are unchanged.
+const INPUT_HELPER: &str = r#"-- Call a hole as one person, then undo it. A refusal for bad input (SQLSTATE 22023) returns its
+-- message; refused (42501) and anything else return what `call` does.
+create function svetra_test.call_input(p_role text, p_user uuid, p_sql text, p_aal text default 'aal1') returns text
+language plpgsql as $$
+begin
+  begin
+    perform set_config('role', p_role, true);
+    perform set_config('request.jwt.claim.sub', coalesce(p_user::text, ''), true);
+    perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', p_role, 'aal', p_aal)::text, true);
+    execute p_sql;
+    raise exception 'svetra_undo';
+  exception when others then
+    return case when sqlstate = '42501' then 'refused' when sqlstate = '22023' then sqlerrm else 'let through' end;
+  end;
+end $$;
+"#;
+
 /// The whole test file for a validated document.
 pub fn tests(doc: &Document) -> String {
     analyse(doc).text
@@ -2049,6 +2067,7 @@ pub fn analyse(doc: &Document) -> Analysis {
                 });
             }
         }
+        require_checks(&world, &people, h, ei, &mut checks);
     }
 
     // Once for the file: no job Svetra made is left over from a removed hole, and the clock is UTC.
@@ -2181,12 +2200,17 @@ pub fn analyse(doc: &Document) -> Analysis {
             early.join("\n")
         )
     };
+    let input_helper = if doc.holes.iter().any(|h| !h.require.is_empty()) {
+        INPUT_HELPER
+    } else {
+        ""
+    };
     let text = format!(
         "-- Access tests: run with `supabase test db`. Every check runs as a real user, never the\n\
          -- service key, and the whole file rolls back. People: {}.\n\
          begin;\n\
          create extension if not exists pgtap;\n\
-         {HELPER}{trigger_helper}\n\
+         {HELPER}{trigger_helper}{input_helper}\n\
          select plan({});\n\n\
          {early_section}\
          -- Test data, inserted as the database owner\n{}\n\n\
@@ -2234,6 +2258,224 @@ fn past(event: Action) -> &'static str {
         Action::Insert => "inserted",
         Action::Update => "updated",
         _ => "deleted",
+    }
+}
+
+/// A value to try for one input of a hole: what the rules see, the SQL to send, and words.
+struct Try {
+    val: Val,
+    sql: String,
+    words: String,
+}
+
+fn sql_of(v: &Val) -> String {
+    match v {
+        Val::Null => "null".into(),
+        Val::Bool(b) => b.to_string(),
+        Val::Num(n) => format!("{n}"),
+        Val::Text(s) | Val::Date(s) => lit(s),
+        Val::Time(t) => lit(&format!("{t}Z")),
+    }
+}
+
+fn words_of(v: &Val) -> String {
+    match v {
+        Val::Null => "nothing".into(),
+        Val::Bool(b) => b.to_string(),
+        Val::Num(n) => format!("{n}"),
+        Val::Text(s) | Val::Date(s) | Val::Time(s) => format!("'{s}'"),
+    }
+}
+
+/// The literals a condition mentions, in order of appearance.
+fn literals(e: &Expr, out: &mut Vec<Val>) {
+    match e {
+        Expr::Num(n) => out.push(Val::Num(*n)),
+        Expr::Str(s) => out.push(Val::Text(s.clone())),
+        Expr::Bool(b) => out.push(Val::Bool(*b)),
+        Expr::Neg(x) | Expr::Not(x) => literals(x, out),
+        Expr::Bin(_, a, b) => {
+            literals(a, out);
+            literals(b, out);
+        }
+        Expr::In(x, items) => {
+            literals(x, out);
+            items.iter().for_each(|i| literals(i, out));
+        }
+        Expr::Call(_, args) => args.iter().for_each(|a| literals(a, out)),
+        Expr::Null | Expr::Path(_) => {}
+    }
+}
+
+/// Whether the expression reads `field` as itself (`amount`), or through it (`source.owner`).
+fn reads_input(e: &Expr, field: &str) -> (bool, bool) {
+    match e {
+        Expr::Path(p) => (p.len() == 1 && p[0] == field, p.len() == 2 && p[0] == field),
+        Expr::Neg(x) | Expr::Not(x) => reads_input(x, field),
+        Expr::Bin(_, a, b) => {
+            let (x, y) = (reads_input(a, field), reads_input(b, field));
+            (x.0 || y.0, x.1 || y.1)
+        }
+        Expr::In(x, items) => items.iter().fold(reads_input(x, field), |acc, i| {
+            let r = reads_input(i, field);
+            (acc.0 || r.0, acc.1 || r.1)
+        }),
+        Expr::Call(_, args) => args.iter().fold((false, false), |acc, a| {
+            let r = reads_input(a, field);
+            (acc.0 || r.0, acc.1 || r.1)
+        }),
+        _ => (false, false),
+    }
+}
+
+/// The same type, comparing a reference by the entity it points at and not by where it was written.
+fn same_type(a: &FieldType, b: &FieldType) -> bool {
+    match (a, b) {
+        (FieldType::Ref(x), FieldType::Ref(y)) => x.name == y.name,
+        _ => a == b,
+    }
+}
+
+/// Values to try for `field`, most telling first: another input's value (for `a != b`), each
+/// literal of the condition and its neighbours, then nothing.
+fn tries(world: &World, ei: usize, field: &Field, cond: &Expr) -> Vec<Try> {
+    let mut out = Vec::new();
+    let mut seen: Vec<Val> = Vec::new();
+    let mut add = |out: &mut Vec<Try>, val: Val, sql: String, words: String| {
+        if !seen.contains(&val) {
+            seen.push(val.clone());
+            out.push(Try { val, sql, words });
+        }
+    };
+    for g in &world.entities[ei].fields {
+        if g.name != field.name && same_type(&g.ty, &field.ty) && reads_input(cond, &g.name).0 {
+            let (sql, val) = world.value(ei, g, 0);
+            add(&mut out, val, sql, format!("the same as {}", g.name));
+        }
+    }
+    let mut lits = Vec::new();
+    literals(cond, &mut lits);
+    let numeric = matches!(
+        field.ty,
+        FieldType::Int | FieldType::Float | FieldType::Decimal { .. } | FieldType::Money { .. }
+    );
+    let texty = matches!(field.ty, FieldType::Text | FieldType::Enum(_));
+    for l in lits {
+        let vals = match (&l, numeric, texty, &field.ty) {
+            (Val::Num(n), true, _, _) => vec![Val::Num(*n), Val::Num(n + 1.0), Val::Num(n - 1.0)],
+            (Val::Text(s), _, true, _) => {
+                vec![Val::Text(s.clone()), Val::Text(format!("{s} svetra"))]
+            }
+            (Val::Bool(b), _, _, FieldType::Bool) => vec![Val::Bool(*b), Val::Bool(!*b)],
+            _ => vec![],
+        };
+        for v in vals {
+            add(&mut out, v.clone(), sql_of(&v), words_of(&v));
+        }
+    }
+    add(&mut out, Val::Null, "null".into(), "nothing".into());
+    out
+}
+
+/// Whether `p` may call `h` as far as `as` goes.
+fn may_call(h: &Hole, p: &Person) -> bool {
+    match h.role {
+        Role::Anyone => true,
+        Role::Anon => p.id.is_none(),
+        Role::Authenticated => p.id.is_some(),
+    }
+}
+
+/// For each `require` condition of `h`: one call, by someone `when` lets through, that breaks that
+/// condition and keeps the ones before it, which must be refused as bad input with the condition's
+/// own message. The values come from the condition's literals, so the proof is about the rules
+/// as written. A condition no such call can be found for is skipped, and says so.
+fn require_checks(world: &World, people: &[Person], h: &Hole, ei: usize, checks: &mut Vec<String>) {
+    let when = h
+        .when
+        .as_deref()
+        .map(|w| expr::parse(w).expect("validated"));
+    let conds: Vec<Expr> = h
+        .require
+        .iter()
+        .map(|r| expr::parse(r).expect("validated"))
+        .collect();
+    for (i, cond) in conds.iter().enumerate() {
+        let mut found: Option<String> = None;
+        'search: for field in world.entities[ei]
+            .fields
+            .iter()
+            .filter(|f| reads_input(cond, &f.name).0)
+        {
+            // The rules can't follow a changed input through `source.owner`, so such inputs aren't tried.
+            let hopped = |e: &Expr| reads_input(e, &field.name).1;
+            if when.as_ref().is_some_and(hopped) || conds[..=i].iter().any(hopped) {
+                continue;
+            }
+            for t in tries(world, ei, field, cond) {
+                let swap = Swap {
+                    field: &field.name,
+                    to: SwapTo::Value(t.val.clone()),
+                    and: None,
+                };
+                for p in people.iter().filter(|p| may_call(h, p)) {
+                    let unsure = Cell::new(false);
+                    let env = Env {
+                        world,
+                        ei,
+                        k: 0,
+                        person: p,
+                        swap: Some(&swap),
+                        unsure: &unsure,
+                    };
+                    let through = when
+                        .as_ref()
+                        .is_none_or(|w| eval(w, &env) == Val::Bool(true));
+                    let earlier = conds[..i].iter().all(|c| eval(c, &env) == Val::Bool(true));
+                    let breaks = eval(cond, &env) != Val::Bool(true);
+                    if !(through && earlier && breaks) || unsure.get() {
+                        continue;
+                    }
+                    let args: Vec<String> = world.entities[ei]
+                        .fields
+                        .iter()
+                        .map(|f| {
+                            if f.name == field.name {
+                                t.sql.clone()
+                            } else {
+                                world.value(ei, f, 0).0
+                            }
+                        })
+                        .collect();
+                    let role = if p.id.is_some() {
+                        "authenticated"
+                    } else {
+                        "anon"
+                    };
+                    let user = p.id.as_ref().map_or("null".into(), |id| format!("'{id}'"));
+                    let aal = if p.aal2 { ", 'aal2'" } else { "" };
+                    let sql = format!("select \"public\".{}({})", q(&h.name), args.join(", "));
+                    found = Some(format!(
+                        "select is(svetra_test.call_input('{role}', {user}, $svetra${sql}$svetra${aal}), {}, {});",
+                        lit(&format!("{}: {}", h.name, h.require[i])),
+                        lit(&format!(
+                            "{} calling {} with {} {} is refused as bad input: {}",
+                            p.name, h.name, field.name, t.words, h.require[i]
+                        ))
+                    ));
+                    break 'search;
+                }
+            }
+        }
+        checks.push(found.unwrap_or_else(|| {
+            format!(
+                "select skip({}, 1);",
+                lit(&format!(
+                    "{}: no call found that gets past who may call it and breaks `{}`, so it isn't tried",
+                    h.name, h.require[i]
+                ))
+            )
+        }));
     }
 }
 
