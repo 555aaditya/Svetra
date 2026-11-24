@@ -470,6 +470,8 @@ pub struct Report {
     pub source: String,
     /// Whether the snapshot held any table (`svetra doctor` needs to know).
     pub has_tables: bool,
+    /// The rows of `storage.buckets`, when the query asked for them (`doctor_query`); else empty.
+    pub buckets: Vec<Value>,
 }
 
 impl Report {
@@ -509,7 +511,11 @@ impl Report {
 
 /// Run the check: read the snapshot from `source` and find the leaks in it. Read-only.
 pub fn run(source: &Source, schemas: &[String]) -> Result<Report, CheckError> {
-    let query = query(schemas);
+    run_query(source, schemas, &query(schemas))
+}
+
+/// `run` with another query: `svetra doctor` passes `doctor_query`, which is `check`'s plus buckets.
+pub fn run_query(source: &Source, schemas: &[String], query: &str) -> Result<Report, CheckError> {
     let (text, migrations, label) = match source {
         Source::Db(url) => {
             let out = std::process::Command::new("psql")
@@ -522,7 +528,7 @@ pub fn run(source: &Source, schemas: &[String]) -> Result<Report, CheckError> {
                     "-v",
                     "ON_ERROR_STOP=1",
                     "-c",
-                    &query,
+                    query,
                 ])
                 .output();
             match out {
@@ -549,21 +555,22 @@ pub fn run(source: &Source, schemas: &[String]) -> Result<Report, CheckError> {
         Source::Migrations { dir, scratch } => {
             let path = std::path::Path::new(dir);
             let outcome = match scratch {
-                Some(url) => crate::migrations::run_scratch(path, url, schemas, &query),
-                None => crate::migrations::run_docker(path, &query),
+                Some(url) => crate::migrations::run_scratch(path, url, schemas, query),
+                None => crate::migrations::run_docker(path, query),
             };
             let o = outcome.map_err(|crate::migrations::Fail(m)| CheckError::Fail(m))?;
             (o.snapshot.clone(), Some(o), dir.clone())
         }
     };
     // Migrations where none applied have no snapshot, and so no findings.
-    let (found, has_tables) = if migrations.as_ref().is_some_and(|o| o.applied == 0) {
-        (Vec::new(), false)
+    let (found, has_tables, buckets) = if migrations.as_ref().is_some_and(|o| o.applied == 0) {
+        (Vec::new(), false, Vec::new())
     } else {
         match serde_json::from_str::<Value>(text.trim()) {
             Ok(snap) => (
                 findings(&snap),
                 snap["tables"].as_array().is_some_and(|t| !t.is_empty()),
+                snap["buckets"].as_array().cloned().unwrap_or_default(),
             ),
             Err(e) if migrations.is_some() => {
                 return Err(CheckError::Fail(format!(
@@ -582,7 +589,20 @@ pub fn run(source: &Source, schemas: &[String]) -> Result<Report, CheckError> {
         migrations,
         source: label,
         has_tables,
+        buckets,
     })
+}
+
+/// `check`'s query plus one key, `buckets`, for `svetra doctor` (docs/doctor.md, Storage
+/// buckets). `check`'s own query is unchanged. `storage.buckets` is read through `query_to_xml`,
+/// the one way to run SQL on a table that may not exist: a database without it has no buckets.
+pub fn doctor_query(schemas: &[String]) -> String {
+    let inner = "select coalesce(json_agg(json_build_object(''id'', id, ''name'', name, ''public'', public, ''file_size_limit'', file_size_limit, ''allowed_mime_types'', allowed_mime_types) order by id), ''[]'')::text as j from storage.buckets";
+    let buckets = format!(
+        "'buckets', case when to_regclass('storage.buckets') is null then '[]'::json else \
+replace(replace(replace((xpath('/row/j/text()', query_to_xml('{inner}', true, true, '')))[1]::text, '&lt;', '<'), '&gt;', '>'), '&amp;', '&')::json end"
+    );
+    format!("select json_build_object({}, {buckets})", keys(schemas))
 }
 
 /// `check`'s query plus the keys `svetra infer` needs (docs/infer.md, What it reads): columns,
