@@ -81,3 +81,31 @@ create function "public"."relabel"(wallet uuid, label text)
   as $svetra$ begin perform "svetra_holes"."relabel"((select auth.uid()), wallet, label); end $svetra$;
 revoke all on function "public"."relabel"(uuid, text) from public, anon, authenticated;
 grant execute on function "public"."relabel"(uuid, text) to authenticated;
+
+do $$ begin create role "svetra_hole_move" nologin; exception when duplicate_object then null; end $$;
+grant "svetra_hole_move" to current_user;
+grant usage, create on schema "svetra_holes" to "svetra_hole_move";
+grant usage on schema "public" to "svetra_hole_move";
+grant select on table "public"."wallet" to "svetra_hole_move";
+create policy "svetra_hole_move" on "public"."wallet" for select to "svetra_hole_move" using (true);
+create function "svetra_holes"."move"(p_caller uuid, p_source uuid, p_destination uuid)
+  returns void language plpgsql security definer set search_path = ''
+  as $svetra$
+begin
+  if not coalesce((select t."owner" from "public"."wallet" t where t."id" = p_source) = p_caller, false) then
+    raise exception 'not allowed to call move' using errcode = '42501';
+  end if;
+  if not coalesce(p_source <> p_destination, false) then
+    raise exception using message = 'move: source != destination', errcode = '22023';
+  end if;
+  raise exception 'move is not written yet: edit supabase/holes/move.sql';
+end
+$svetra$;
+alter function "svetra_holes"."move"(uuid, uuid, uuid) owner to "svetra_hole_move";
+revoke all on function "svetra_holes"."move"(uuid, uuid, uuid) from public, anon, authenticated;
+grant execute on function "svetra_holes"."move"(uuid, uuid, uuid) to current_user;
+create function "public"."move"(source uuid, destination uuid)
+  returns void language plpgsql security definer set search_path = ''
+  as $svetra$ begin perform "svetra_holes"."move"((select auth.uid()), source, destination); end $svetra$;
+revoke all on function "public"."move"(uuid, uuid) from public, anon, authenticated;
+grant execute on function "public"."move"(uuid, uuid) to authenticated;

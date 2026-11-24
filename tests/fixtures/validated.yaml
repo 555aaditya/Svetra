@@ -34,3 +34,12 @@ holes:
     when: "wallet.owner == auth.user"
     require:
       - "label != null and label != '100%'"
+  move:
+    kind: function
+    input:
+      source: Wallet.id
+      destination: Wallet.id
+    reads: [Wallet]
+    when: "source.owner == auth.user"
+    require:
+      - "source != destination"

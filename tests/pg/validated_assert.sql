@@ -50,3 +50,16 @@ do $$ begin
   exception when insufficient_privilege then null; end;
 end $$;
 reset role;
+
+-- A condition between two inputs: moving a wallet to itself is refused, to another is not.
+insert into public.wallet (id, owner, balance) values ('22222222-0000-0000-0000-000000000000', 'a0000000-0000-0000-0000-000000000000', 1);
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000000';
+select public.move('11111111-0000-0000-0000-000000000000', '22222222-0000-0000-0000-000000000000');
+do $$ begin
+  begin perform public.move('11111111-0000-0000-0000-000000000000', '11111111-0000-0000-0000-000000000000'); raise exception 'a wallet was moved onto itself';
+  exception when invalid_parameter_value then
+    if sqlerrm <> 'move: source != destination' then raise exception 'wrong message: %', sqlerrm; end if;
+  end;
+end $$;
+reset role;
