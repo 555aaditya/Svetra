@@ -29,6 +29,7 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 | `src/check.rs` | Whole-document rules: names, duplicates, references, access, money, indexes |
 | `src/report.rs` | `validate()`, plus human and JSON output |
 | `src/compile/` | `svetra compile`: names and quoting (`names.rs`), expressions to SQL (`expr.rs`), the SQL schema (`sql.rs`), TypeScript and Zod (`ts.rs`), access tests with their own rule evaluator (`access_tests.rs`), sign-in settings edited into `supabase/config.toml` (`config.rs`), plus the entry point with header and revision (`mod.rs`) |
+| `src/patch.rs` | `svetra patch`: checked `set`, `remove` and `rename` edits made on the text of `svetra.yaml` (comments and order stay), validated as a whole, written only if valid and the revision still matches (docs/patch.md) |
 | `src/change.rs` | `svetra diff` and `plan`: compares two designs and classifies every change, with access compared through `svetra view`'s model (docs/change.md) |
 | `src/inspect.rs` | `svetra check`: the read-only catalog query and the findings on an existing database (docs/check.md) |
 | `src/infer.rs` | `svetra infer`: a catalog snapshot to a draft `svetra.yaml`: names, the type mapping, defaults, check constraints (docs/infer.md). Its query is `inspect::infer_query` |
