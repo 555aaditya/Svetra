@@ -62,3 +62,53 @@ The generated Zod schema for a hole's inputs is unchanged: the format has no `.r
 ### Open question: inherit the field's constraints?
 
 An input typed `Transaction.amount` already gets the field's **type**. It could also get every entity constraint that reads only that field (`amount_positive: "amount > 0"`), so `require` would only be needed for rules across inputs. That makes "a constraint is stated once and holds everywhere" true for holes too. It is not in this proposal because it needs a rule for which constraints count as "only that field", and it changes the behaviour of every existing hole with a typed input. **Decision waiting on the owner.**
+
+## 2. Retries: `idempotent`
+
+### The gap
+
+Mobile clients retry, and so do browsers, proxies and agents. A `transfer` called twice moves the money twice. The usual fix is a client-chosen key that makes the second call a no-op, and agents write it by hand (a table, an insert, an `on conflict`) with the same slips: the key isn't scoped to the caller, the second call returns an error instead of the first answer, or the same key is accepted for different inputs.
+
+### The key
+
+```yaml
+holes:
+  transfer:
+    input:
+      request: uuid
+      source: Account.id
+      ...
+    idempotent: request
+```
+
+- **`idempotent` names one input,** which is the key. It must be typed `uuid` or `text`.
+- **The key is the caller's own.** Records are kept per (hole, caller, key), so one person's key never matches another's and nobody can learn whether a key exists. Because a logged-out visitor has no identity to scope by, a hole with `idempotent` can't have `as: anon` or `as: anyone` (**`SVT041`**, error).
+- **A repeated call returns the first call's answer** and runs nothing: not the guard's side effects, not the body, not the audit record (the first call's record is the record).
+- **The same key with different inputs is refused,** SQLSTATE `22023`, message `<hole>: request was already used with different inputs`. Comparing the inputs, not only the key, stops a buggy client from silently getting the wrong answer.
+- **A failed call leaves no key.** An exception rolls the key back with the rest, so the client's retry runs normally.
+- **The guard runs on a replay too** (see below), so a person whose role was removed since the first call can't read a stored answer.
+- **The answer is stored as `jsonb`:** `to_jsonb` of what the body returned, and `null` for a hole with no `output`. A replay converts it back to the hole's declared return type.
+
+### What it compiles to
+
+A table, created only when some hole has `idempotent`, in the schema the API doesn't expose, with no grants and row-level security with no policy (the same stance as the audit log):
+
+```sql
+create table "svetra"."hole_keys" (
+  "hole"   text   not null,
+  "caller" uuid   not null,
+  "key"    text   not null,
+  "inputs" jsonb  not null,
+  "result" jsonb,
+  primary key ("hole", "caller", "key")
+);
+```
+
+It is written by the public function, which is owned by the migration's role, so the hole's own role never touches it, and the body can't forge or erase a key. The public function becomes: take the key and inputs; look up the row; on a hit with equal inputs, run the guard and return `result`; on a hit with different inputs, raise `22023`; on a miss, call the body and insert the row. Two calls racing on one key are settled by the primary key: the loser's insert fails, so its work rolls back, and its retry gets the winner's answer.
+
+**One extra function.** The guard has to run on a replay, but it lives in the body function, whose body must not run. When a hole has both `idempotent` and `when`, the guard is generated once as `svetra_holes.<name>_allowed(p_caller, <inputs>) returns boolean`, executable only by the migration's role, and called from both places. A hole with no `idempotent` compiles to the same bytes as today.
+
+### Retention is not in this version
+
+The table grows by one row per call. Pruning, and a time window after which a key may be reused, are left out until real use shows what a window should be. `explain` says so.
+
