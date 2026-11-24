@@ -1096,6 +1096,24 @@ create function svetra_test.executes(p_role text, p_schema text, p_name text) re
 $$;
 "#;
 
+/// Only in a file with triggered holes: the condition in a trigger's definition (`pg_get_triggerdef`),
+/// and the same read back from a probe trigger made with the compiled text, so the two are compared
+/// in PostgreSQL's own normal form. The probe is dropped again.
+const TRIGGER_HELPER: &str = r#"create function svetra_test.noop() returns trigger language plpgsql as $$ begin return null; end $$;
+create function svetra_test.when_of(p_trigger oid) returns text language sql as $$
+  select substring(pg_get_triggerdef(p_trigger) from ' WHEN \((.*)\) EXECUTE ') $$;
+create function svetra_test.trigger_when(p_table text, p_event text, p_cond text) returns text
+language plpgsql as $$
+declare r text;
+begin
+  if p_cond is null then return null; end if;
+  execute format('create trigger svetra_test_when after %s on %s for each row when (%s) execute function svetra_test.noop()', p_event, p_table, p_cond);
+  select svetra_test.when_of(t.oid) into r from pg_trigger t where t.tgname = 'svetra_test_when';
+  execute format('drop trigger svetra_test_when on %s', p_table);
+  return r;
+end $$;
+"#;
+
 /// The whole test file for a validated document.
 pub fn tests(doc: &Document) -> String {
     analyse(doc).text
@@ -1284,6 +1302,9 @@ pub fn analyse(doc: &Document) -> Analysis {
     }
 
     let mut checks = Vec::new();
+    // Checks of triggered holes that read the catalog, run before the test data goes in, while
+    // the triggers are still switched on.
+    let mut early: Vec<String> = Vec::new();
     let mut found: Vec<Check> = Vec::new();
     // Giving alice a role, for the scope entity's `a` row when the role is scoped.
     let grant_to_alice = |r: &RoleDef| {
@@ -1798,23 +1819,36 @@ pub fn analyse(doc: &Document) -> Analysis {
                 ));
             }
         }
+        // No API role can run the body (or, for a trigger, the function that fires it), and
+        // there is no function the app can call.
+        let locked = |names: &[String], what: &str| {
+            let list: Vec<String> = names.iter().map(|n| lit(n)).collect();
+            let named = match list.as_slice() {
+                [one] => format!("= {one}"),
+                many => format!("in ({})", many.join(", ")),
+            };
+            format!(
+                "select is((select count(*) from pg_roles r, pg_proc p join pg_namespace n on n.oid = p.pronamespace where r.rolname in ('anon', 'authenticated', 'service_role') and n.nspname = 'svetra_holes' and p.proname {named} and has_function_privilege(r.rolname, p.oid, 'execute')), 0::bigint, {});",
+                lit(what)
+            )
+        };
+        let no_rpc = format!(
+            "select is((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = {}), 0::bigint, {});",
+            lit(&h.name),
+            lit(&format!("{} has no function the app can call", h.name))
+        );
         // A scheduled hole has no caller: the clock runs it, as the migration's role.
         if let HoleKind::Schedule(sched) = &h.kind {
             let job = super::sql::job_name(&h.name);
             let call = format!("\"svetra_holes\".{}(null)", q(&h.name));
-            checks.push(format!(
-                "select is((select count(*) from pg_roles r, pg_proc p join pg_namespace n on n.oid = p.pronamespace where r.rolname in ('anon', 'authenticated', 'service_role') and n.nspname = 'svetra_holes' and p.proname = {} and has_function_privilege(r.rolname, p.oid, 'execute')), 0::bigint, {});",
-                lit(&h.name),
-                lit(&format!(
+            checks.push(locked(
+                std::slice::from_ref(&h.name),
+                &format!(
                     "no one calling the API can run {}, or pass it a caller",
                     h.name
-                ))
+                ),
             ));
-            checks.push(format!(
-                "select is((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = {}), 0::bigint, {});",
-                lit(&h.name),
-                lit(&format!("{} has no function the app can call", h.name))
-            ));
+            checks.push(no_rpc);
             checks.push(format!(
                 "select is((select count(*) from cron.job where jobname = {}), 1::bigint, {});",
                 lit(&job),
@@ -1832,6 +1866,90 @@ pub fn analyse(doc: &Document) -> Analysis {
                 lit(&job),
                 lit(&format!("the job of {} runs {}", h.name, h.name))
             ));
+            continue;
+        }
+        // A triggered hole has no caller either: a change to a row runs it, as its own role.
+        if let HoleKind::Trigger(t) = &h.kind {
+            let on = table(&t.on.name);
+            let fire = super::sql::fire_name(&h.name);
+            early.push(locked(
+                &[h.name.clone(), fire.clone()],
+                &format!(
+                    "no one calling the API can run {}, or the function that fires it",
+                    h.name
+                ),
+            ));
+            early.push(no_rpc);
+            for (func, owner, what) in [
+                (&h.name, Some(&role), "its own role"),
+                (&fire, None, "the owner's rights"),
+            ] {
+                let owned = owner.map_or(String::new(), |o| {
+                    format!(" and pg_get_userbyid(p.proowner) = {}", lit(o))
+                });
+                early.push(format!(
+                    "select is((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'svetra_holes' and p.proname = {}{owned} and p.prosecdef and p.proconfig = array['search_path=\"\"']), 1::bigint, {});",
+                    lit(func),
+                    lit(&format!(
+                        "{func} runs with {what} and an empty search path"
+                    ))
+                ));
+            }
+            for event in &t.events {
+                let tg = super::sql::trigger_name(&h.name, *event);
+                let word = super::sql::event_word(*event);
+                // AFTER, FOR EACH ROW, and the event: PostgreSQL's tgtype bits 1 + 4, 16 or 8.
+                let bits = 1 + match event {
+                    Action::Insert => 4,
+                    Action::Update => 16,
+                    _ => 8,
+                };
+                let which = format!(
+                    "t.tgrelid = {}::regclass and t.tgname = {}",
+                    lit(&on),
+                    lit(&tg)
+                );
+                early.push(format!(
+                    "select is((select count(*) from pg_trigger t where {which} and t.tgenabled = 'O' and t.tgtype = {bits} and t.tgfoid = {}::regprocedure), 1::bigint, {});",
+                    lit(&format!("\"svetra_holes\".{}()", q(&fire))),
+                    lit(&format!(
+                        "{} runs after a row of {} is {}, once per row",
+                        h.name,
+                        t.on.name,
+                        past(*event)
+                    ))
+                ));
+                let cond = super::sql::trigger_when(h, t, *event, &by_name_src)
+                    .map_or("null".to_string(), |c| lit(&c));
+                early.push(format!(
+                    "select is((select svetra_test.when_of(t.oid) from pg_trigger t where {which}), svetra_test.trigger_when({}, {}, {cond}), {});",
+                    lit(&on),
+                    lit(word),
+                    lit(&format!(
+                        "{} fires on {word} only when {}",
+                        h.name,
+                        h.when.as_deref().unwrap_or("always")
+                    ))
+                ));
+            }
+            early.push(format!(
+                "select is((select count(*) from pg_trigger t where t.tgfoid = {}::regprocedure and not t.tgisinternal), {}::bigint, {});",
+                lit(&format!("\"svetra_holes\".{}()", q(&fire))),
+                t.events.len(),
+                lit(&format!("nothing else fires {}", h.name))
+            ));
+            // The hole's role can't write beyond its fence: the first entity it doesn't change.
+            if let Some(ei) = (0..tables).find(|&i| !declared(&h.writes, world.entities[i])) {
+                checks.push(format!(
+                    "select is(svetra_test.try({}, null, $svetra${}$svetra$), 'denied', {});",
+                    lit(&role),
+                    insert(&world, ei, 2),
+                    lit(&format!(
+                        "{} can't create a row of {}",
+                        h.name, world.entities[ei].name
+                    ))
+                ));
+            }
             continue;
         }
         // Only the declared callers reach the hole, and only through its public function: the
@@ -1951,26 +2069,138 @@ pub fn analyse(doc: &Document) -> Analysis {
         );
     }
 
+    // Triggered holes. Their bodies are hand-written, and a stub raises, so the triggers are
+    // switched off while the test data and every other check run, and on again for the one check
+    // that a change to a row fires the hole.
+    let hole_triggers: Vec<(&Hole, &Trigger)> = doc
+        .holes
+        .iter()
+        .filter_map(|h| match &h.kind {
+            HoleKind::Trigger(t) => Some((h, t)),
+            _ => None,
+        })
+        .collect();
+    let switch = |state: &str| -> Vec<String> {
+        hole_triggers
+            .iter()
+            .flat_map(|(h, t)| {
+                t.events.iter().map(move |ev| {
+                    let name = super::sql::trigger_name(&h.name, *ev);
+                    format!(
+                        "select lives_ok($svetra$alter table {} {state} trigger {}$svetra$, {});",
+                        table(&t.on.name),
+                        q(&name),
+                        lit(&format!(
+                            "{name} is switched {}",
+                            if state == "enable" {
+                                "on again"
+                            } else {
+                                "off while the test data goes in"
+                            }
+                        ))
+                    )
+                })
+            })
+            .collect()
+    };
+    if !hole_triggers.is_empty() {
+        setup.splice(0..0, switch("disable"));
+        checks.extend(switch("enable"));
+        for (h, t) in &hole_triggers {
+            if !t.events.contains(&Action::Insert) {
+                continue;
+            }
+            let ei = world.by_name[t.on.name.as_str()];
+            let when = h
+                .when
+                .as_deref()
+                .map(|w| expr::parse(w).expect("validated"));
+            // The first person and row the rules let insert, where the hole's condition holds.
+            let pick = people.iter().find_map(|p| {
+                (2..4).find_map(|k| {
+                    if allowed(doc, &world, p, ei, k, Action::Insert, Phase::Old, None)
+                        != Some(true)
+                    {
+                        return None;
+                    }
+                    let unsure = Cell::new(false);
+                    let env = Env {
+                        world: &world,
+                        ei,
+                        k,
+                        person: p,
+                        swap: None,
+                        unsure: &unsure,
+                    };
+                    let fires = match &when {
+                        None => true,
+                        Some(w) => eval(w, &env) == Val::Bool(true) && !unsure.get(),
+                    };
+                    fires.then_some((p, k))
+                })
+            });
+            let Some((p, k)) = pick else { continue };
+            let row = table(&t.on.name);
+            let probe = format!(
+                "create or replace function \"svetra_holes\".{}(p_caller uuid, p_old {row}, p_new {row}) returns void language plpgsql security definer set search_path = '' as $probe$ begin raise exception 'svetra_fired' using errcode = 'SV001'; end $probe$",
+                q(&h.name)
+            );
+            let role = if p.id.is_some() {
+                "authenticated"
+            } else {
+                "anon"
+            };
+            let user = p.id.as_ref().map_or("null".into(), |id| format!("'{id}'"));
+            let aal = if p.aal2 { "aal2" } else { "aal1" };
+            // The probe replaces the body for this one statement and is undone with it.
+            checks.push(format!(
+                "select is(svetra_test.try('{role}', {user}, $svetra${}$svetra$, '{aal}', $svetra${probe}$svetra$), 'error SV001: svetra_fired', {});",
+                insert(&world, ei, k),
+                lit(&format!(
+                    "{} creating {} {} fires {}",
+                    p.name,
+                    t.on.name,
+                    ROWS[k],
+                    h.name
+                ))
+            ));
+        }
+    }
+
     let names: Vec<&str> = people.iter().map(|p| p.name.as_str()).collect();
+    let trigger_helper = if hole_triggers.is_empty() {
+        ""
+    } else {
+        TRIGGER_HELPER
+    };
+    let early_section = if early.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "-- Triggered holes: what is declared, checked before the test data goes in\n{}\n\n",
+            early.join("\n")
+        )
+    };
     let text = format!(
         "-- Access tests: run with `supabase test db`. Every check runs as a real user, never the\n\
          -- service key, and the whole file rolls back. People: {}.\n\
          begin;\n\
          create extension if not exists pgtap;\n\
-         {HELPER}\n\
+         {HELPER}{trigger_helper}\n\
          select plan({});\n\n\
+         {early_section}\
          -- Test data, inserted as the database owner\n{}\n\n\
          -- Checks\n{}\n\n\
          select * from finish();\n\
          rollback;\n",
         names.join(", "),
-        setup.len() + checks.len(),
+        early.len() + setup.len() + checks.len(),
         setup.join("\n"),
         checks.join("\n")
     );
-    // Checks are numbered after the test data, from 1.
+    // Checks are numbered after the early checks and the test data, from 1.
     for c in &mut found {
-        c.number += setup.len() + 1;
+        c.number += early.len() + setup.len() + 1;
     }
     let people = people
         .iter()
@@ -1995,6 +2225,15 @@ pub fn analyse(doc: &Document) -> Analysis {
         checks: found,
         hazards,
         overlaps,
+    }
+}
+
+/// An event as a past participle, for check names.
+fn past(event: Action) -> &'static str {
+    match event {
+        Action::Insert => "inserted",
+        Action::Update => "updated",
+        _ => "deleted",
     }
 }
 
