@@ -726,9 +726,10 @@ impl<'a> Checker<'a> {
                 }
             }
         }
+        // `when` and each `require` condition are read by the hole's role, so they share one rule.
         for h in &doc.holes {
-            let Some(when) = &h.when else { continue };
             if let HoleKind::Trigger(t) = &h.kind {
+                let Some(when) = &h.when else { continue };
                 // The entity may not exist (SVT002, reported with the hole).
                 let Some(e) = entities.get(t.on.name.as_str()) else {
                     continue;
@@ -750,35 +751,43 @@ impl<'a> Checker<'a> {
             }
             let inputs = typeck::hole_entity(h, &entities);
             let scope = typeck::Scope::new(&inputs, &entities, true, &doc.roles);
-            if let Err(problem) = typeck::check(when, &scope) {
-                let (code, msg) = problem.split();
-                self.d(
-                    code,
-                    format!("holes.{}.when", h.name),
-                    h.pos,
-                    msg,
-                    "Fix the expression; it uses the hole's inputs. See Holes in docs/format.md.",
-                );
-            }
-            // The guard runs as the hole's role, which can read only what the hole declares.
-            else if let Ok(e) = expr::parse(when) {
-                for hop in hops(&e) {
-                    let Some(FieldType::Ref(t)) =
-                        inputs.fields.iter().find(|f| f.name == hop).map(|f| &f.ty)
-                    else {
-                        continue;
-                    };
-                    if !h.reads.iter().chain(&h.writes).any(|r| r.name == t.name) {
-                        self.d(
-                            Code::Svt003,
-                            format!("holes.{}.when", h.name),
-                            h.pos,
-                            format!(
-                                "`when` reads {} through `{hop}`, but the hole doesn't declare it.",
-                                t.name
-                            ),
-                            &format!("Add {} to the hole's reads.", t.name),
-                        );
+            let conditions = h
+                .when
+                .iter()
+                .map(|w| ("when".to_string(), w))
+                .chain(h.require.iter().map(|r| ("require".to_string(), r)));
+            for (key, text) in conditions {
+                let path = format!("holes.{}.{key}", h.name);
+                if let Err(problem) = typeck::check(text, &scope) {
+                    let (code, msg) = problem.split();
+                    self.d(
+                        code,
+                        path,
+                        h.pos,
+                        msg,
+                        "Fix the expression; it uses the hole's inputs. See Holes in docs/format.md.",
+                    );
+                }
+                // The guard runs as the hole's role, which can read only what the hole declares.
+                else if let Ok(e) = expr::parse(text) {
+                    for hop in hops(&e) {
+                        let Some(FieldType::Ref(t)) =
+                            inputs.fields.iter().find(|f| f.name == hop).map(|f| &f.ty)
+                        else {
+                            continue;
+                        };
+                        if !h.reads.iter().chain(&h.writes).any(|r| r.name == t.name) {
+                            self.d(
+                                Code::Svt003,
+                                path.clone(),
+                                h.pos,
+                                format!(
+                                    "`{key}` reads {} through `{hop}`, but the hole doesn't declare it.",
+                                    t.name
+                                ),
+                                &format!("Add {} to the hole's reads.", t.name),
+                            );
+                        }
                     }
                 }
             }
