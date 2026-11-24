@@ -263,6 +263,7 @@ impl Cx {
             role: Role::Authenticated,
             when: None,
             require: Vec::new(),
+            idempotent: None,
             audit: false,
         };
         hole.role = self.role_as(k.get("as").copied(), &path)?;
@@ -285,6 +286,9 @@ impl Cx {
                     "Write the conditions the inputs must meet, or remove require.",
                 );
             }
+        }
+        if let Some(v) = k.get("idempotent") {
+            hole.idempotent = self.string(v, &format!("{path}.idempotent"));
         }
         if let Some(v) = k.get("audit") {
             hole.audit = self.boolean(v, &format!("{path}.audit"));
@@ -387,6 +391,9 @@ fn why_not(kind: &str, key: &str) -> &'static str {
         }
         ("trigger", "input" | "output") => {
             "the changed row is the input: the body gets it as `p_old` and `p_new`."
+        }
+        ("schedule" | "trigger", "idempotent") => {
+            "there is no caller to retry: a clock or a row change runs it."
         }
         ("schedule" | "trigger", "require") => {
             "there are no inputs to check: a clock or a row change runs it."

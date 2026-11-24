@@ -425,6 +425,10 @@
             "type": "string"
           }
         },
+        "idempotent": {
+          "description": "The name of a uuid or text input that is the caller's retry key: a repeat of a call with the same key returns the first answer and runs nothing.",
+          "type": "string"
+        },
         "audit": {
           "description": "Record every call that runs in the append-only audit log, with who made it and the inputs.",
           "type": "boolean"
