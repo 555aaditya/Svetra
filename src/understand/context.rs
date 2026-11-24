@@ -193,6 +193,9 @@ pub fn context(doc: &Document) -> String {
         {
             line += &format!("; when {w}");
         }
+        if !h.require.is_empty() {
+            line += &format!("; require {}", h.require.join(" | "));
+        }
         if h.audit {
             line += "; audit";
         }
