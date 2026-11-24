@@ -17,6 +17,11 @@ Usage:
                                     The same, as a plan: exits 1 on destructive changes or
                                     wider access until they're accepted, then writes the
                                     migration for any declared renames
+  svetra patch [FILE] [--ops FILE | -] [--expected-revision REV] [--dry-run] [--json]
+                                    Change the design with checked edits (set, remove, rename on
+                                    a path), read as JSON from --ops or stdin. All or nothing:
+                                    the result is validated, then written. Exits 1 if refused,
+                                    3 if FILE is not at REV (it changed since you read it)
   svetra check (--db URL | --local | --snapshot FILE) [--schema public,...] [--json]
   svetra check --migrations [DIR] [--scratch URL] [--strict] [--schema public,...] [--json]
                                     Find the leaks in an existing database: tables anyone can
@@ -78,19 +83,28 @@ fn main() -> ExitCode {
         Some("compile") => compile(&args[1..]),
         Some("init") => init(&args[1..]),
         Some("new") => new(&args[1..]),
-        Some("explain") => view("explain", &args[1..], false, |doc, diags| {
+        Some("explain") => view("explain", &args[1..], false, |doc, diags, _| {
             svetra::understand::explain::explain(doc, diags)
         }),
-        Some("graph") => view("graph", &args[1..], true, |doc, _| {
+        Some("graph") => view("graph", &args[1..], true, |doc, _, _| {
             svetra::understand::graph::graph(doc)
         }),
-        Some("context") => view("context", &args[1..], true, |doc, _| {
-            svetra::understand::context::context(doc)
+        // The first line carries the file's revision, which `patch --expected-revision` takes.
+        Some("context") => view("context", &args[1..], true, |doc, _, src| {
+            let out = svetra::understand::context::context(doc);
+            match out.split_once('\n') {
+                Some((head, rest)) => format!(
+                    "{head}, revision {}\n{rest}",
+                    svetra::compile::revision(src)
+                ),
+                None => out,
+            }
         }),
         Some("doctor") => doctor(&args[1..]),
         Some("view") => page(&args[1..]),
         Some(cmd @ ("check" | "infer")) => inspect(cmd, &args[1..]),
         Some(cmd @ ("diff" | "plan")) => change(cmd, &args[1..]),
+        Some("patch") => patch(&args[1..]),
         Some("mcp") if args.len() == 1 => match svetra::mcp::serve() {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
@@ -155,7 +169,7 @@ fn view(
     command: &str,
     args: &[String],
     drawable: bool,
-    render: impl Fn(&svetra::model::Document, &[svetra::diag::Diagnostic]) -> String,
+    render: impl Fn(&svetra::model::Document, &[svetra::diag::Diagnostic], &str) -> String,
 ) -> ExitCode {
     let (file, _) = match file_and_flag(command, args, "--no-such-flag") {
         Ok(v) => v,
@@ -175,7 +189,7 @@ fn view(
         eprint!("{}", report::human(file, &diags));
     }
     let (doc, _) = svetra::load::load(&src);
-    print!("{}", render(&doc, &diags));
+    print!("{}", render(&doc, &diags, &src));
     if errors {
         ExitCode::from(1)
     } else {
@@ -739,6 +753,78 @@ fn draft(snap: &serde_json::Value, out: &str, force: bool) -> ExitCode {
     );
     println!("Next: review the draft, then `svetra validate`, then `svetra compile`.");
     ExitCode::SUCCESS
+}
+
+/// `svetra patch` (docs/patch.md).
+fn patch(args: &[String]) -> ExitCode {
+    use std::io::{IsTerminal, Read};
+    let (mut file, mut ops, mut expected, mut dry_run, mut json) = (None, None, None, false, false);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--json" => json = true,
+            "--dry-run" => dry_run = true,
+            "--ops" | "--expected-revision" => {
+                let Some(v) = it.next() else {
+                    return usage(&format!("{a} needs a value"));
+                };
+                if a == "--ops" {
+                    ops = Some(v.clone());
+                } else {
+                    expected = Some(v.clone());
+                }
+            }
+            "-" if ops.is_none() => ops = Some("-".into()),
+            f if f.starts_with('-') => return usage(&format!("unknown option '{f}'")),
+            f if file.is_none() => file = Some(f.to_string()),
+            _ => return usage("patch takes one file"),
+        }
+    }
+    let file = file.unwrap_or_else(|| "svetra.yaml".into());
+    let text = match ops.as_deref() {
+        Some(path) if path != "-" => match read(path) {
+            Ok(s) => s,
+            Err(e) => return usage(&e),
+        },
+        None if std::io::stdin().is_terminal() => {
+            return usage("patch needs the edits: pass --ops FILE, or pipe them in");
+        }
+        _ => {
+            let mut s = String::new();
+            if let Err(e) = std::io::stdin().read_to_string(&mut s) {
+                return usage(&format!("cannot read the edits from stdin: {e}"));
+            }
+            s
+        }
+    };
+    let edits = match svetra::patch::parse_ops(&text) {
+        Ok(v) => v,
+        Err(e) => return usage(&e),
+    };
+    let report = match svetra::patch::run(
+        std::path::Path::new(&file),
+        &edits,
+        expected.as_deref(),
+        dry_run,
+    ) {
+        Ok(r) => r,
+        Err(e) => return usage(&e),
+    };
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&svetra::patch::json(&report)).unwrap_or_default()
+        );
+    } else {
+        print!("{}", svetra::patch::human(&report, edits.len()));
+    }
+    if report.conflict.is_some() {
+        ExitCode::from(3)
+    } else if report.applied {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
 }
 
 /// `svetra diff` and `svetra plan` (docs/change.md).
