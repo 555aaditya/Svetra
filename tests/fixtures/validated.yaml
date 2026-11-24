@@ -1,0 +1,36 @@
+svetra: "0.1"
+system: Validated
+entities:
+  Wallet:
+    fields:
+      id: { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      balance: { type: decimal, precision: 18, scale: 2, required: true }
+      label: { type: text }
+policies:
+  owner_read:
+    on: Wallet
+    allow: [select]
+    when: "owner == auth.user"
+holes:
+  deposit:
+    kind: function
+    input:
+      wallet: Wallet.id
+      amount: Wallet.balance
+    reads: [Wallet]
+    writes: [Wallet]
+    when: "wallet.owner == auth.user"
+    require:
+      - "amount > 0"
+      - "amount <= 10000"
+  relabel:
+    kind: function
+    input:
+      wallet: Wallet.id
+      label: Wallet.label
+    writes: [Wallet]
+    reads: [Wallet]
+    when: "wallet.owner == auth.user"
+    require:
+      - "label != null and label != '100%'"
