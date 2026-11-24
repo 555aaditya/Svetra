@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **`require` on holes: refuse bad input, separately from who may call.** A hole can list conditions over its inputs, such as `require: ["amount > 0", "source != destination"]`. They run after `when` and before the body, in the language of `when`, and a call that breaks one is refused with SQLSTATE `22023` and the message `transfer: amount > 0`, so a client can tell bad input from `42501` "not allowed". A caller `when` refuses never reaches them, and a null fails. Checked and compiled with the same rules as `when` (`SVT003`; an empty list is `SVT029`), explained in words by `explain`, shown by `context`, and a changed list is a safe `change_require` in `diff` and `plan`. Holes without it compile to the same bytes. The generated access tests don't try bad input yet (planned); the behaviour is checked on PostgreSQL 16 in `scripts/pg-check.sh`. Spec: `docs/format.md`, Requirements; `docs/hole-middleware.md`.
+
 ## 0.8.3 (2026-11-22)
 
 A pre-launch checklist (`svetra doctor`), `infer` that follows real apps (profile tables, `on delete`, role checks) and can check its draft against a copy of the database, `audit: true` on entities and holes, and two fixes to the generated tests found by studying an app written by others.
