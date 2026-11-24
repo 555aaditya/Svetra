@@ -364,28 +364,43 @@ fn hole(
     let inner_params: Vec<String> = std::iter::once("p_caller uuid".to_string())
         .chain(inputs.iter().map(|(n, t)| format!("p_{n} {t}")))
         .collect();
-    let guard = h.when.as_deref().map(|w| {
-        let fields = crate::typeck::hole_entity(h, entities);
-        let cx = Ctx {
-            entity: &fields,
-            entities,
-            params: true,
-            old: false,
-        };
-        expr_sql(&expr::parse(w).expect("validated expression"), &cx)
-    });
+    let fields = crate::typeck::hole_entity(h, entities);
+    let cx = Ctx {
+        entity: &fields,
+        entities,
+        params: true,
+        old: false,
+    };
+    let guard = h
+        .when
+        .as_deref()
+        .map(|w| expr_sql(&expr::parse(w).expect("validated expression"), &cx));
+    // Bad input is refused after who-may-call, with `using message` so a `%` in the condition is
+    // text and not a placeholder.
+    let requirements: String = h
+        .require
+        .iter()
+        .map(|r| {
+            format!(
+                "  if not coalesce({}, false) then\n    raise exception using message = {}, errcode = '22023';\n  end if;\n",
+                expr_sql(&expr::parse(r).expect("validated expression"), &cx),
+                lit(&format!("{}: {r}", h.name))
+            )
+        })
+        .collect();
     let body = bodies
         .get(&h.name)
         .cloned()
         .unwrap_or_else(|| stub(&h.name));
     out.push(format!(
-        "create function \"svetra_holes\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$\nbegin\n{}{}{}end\n$svetra$;",
+        "create function \"svetra_holes\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$\nbegin\n{}{}{}{}end\n$svetra$;",
         q(&h.name),
         inner_params.join(", "),
         guard.map_or(String::new(), |g| format!(
             "  if not coalesce({g}, false) then\n    raise exception 'not allowed to call {}' using errcode = '42501';\n  end if;\n",
             h.name
         )),
+        requirements,
         body,
         if body.ends_with('\n') { "" } else { "\n" }
     ));
