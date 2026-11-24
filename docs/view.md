@@ -51,7 +51,7 @@ The main part: a table.
 
 ### 2. Custom code
 
-One card per hole, from the "Custom code" part of `explain`: what it takes and returns, **who can call it** (with the same All, Some, No per person, from the hole's `as` and `when`), what it can read and what it can change. A scheduled hole's card starts with **Starts** (the sentence from `explain`) and says "Nobody can run this from the app" in place of the who-can-call table. Its entry in the JSON has `"kind": "schedule"`, `"starts"` and no callers.
+One card per hole, from the "Custom code" part of `explain`: what it takes and returns, **who can call it** (with the same All, Some, No per person, from the hole's `as` and `when`), what it can read and what it can change. A scheduled or triggered hole's card starts with **Starts** (the sentence from `explain`) and says "Nobody can run this from the app" ("directly", for a trigger) in place of the who-can-call table. Its entry in the JSON has `"kind": "schedule"` or `"trigger"`, `"starts"` and no callers.
 
 ### 3. The diagram
 
