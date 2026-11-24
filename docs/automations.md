@@ -26,7 +26,7 @@ What changes is **who or what starts the hole**. A `function` hole has a caller.
 
 ## What Supabase supports
 
-Anything not confirmed from the docs or the pinned CLI in this environment is marked **UNVERIFIED**. The pg_cron rows were checked on a real local Supabase (CLI `supabase@3.1.0`, database image PostgreSQL 17.11, pg_cron 1.6.4) by starting only the database, as `scripts/supabase-check.sh` does, and running SQL as `postgres` over `docker exec psql`. The Edge Function rows are for the webhook PR.
+Anything not confirmed from the docs or the pinned CLI in this environment is marked **UNVERIFIED**. The pg_cron rows were checked on a real local Supabase (CLI `supabase@3.1.0`, database image PostgreSQL 17.11, pg_cron 1.6.4) by starting only the database, as `scripts/supabase-check.sh` does, and running SQL as `postgres` over `docker exec psql`. The trigger rows were checked the same way, and again on PostgreSQL 16 with the stand-in, with identical results. The Edge Function rows are for the webhook PR.
 
 | Fact | Status |
 |---|---|
@@ -383,7 +383,7 @@ Three build PRs, each shippable alone with its own golden files, `scripts/pg-che
    - `explain`, `context`, `graph` and `view` text for scheduled holes;
    - a fixture `jobs.yaml` with one hole and its body in `tests/fixtures/holes/jobs/`;
    - first, it resolves the UNVERIFIED pg_cron rows on the pinned local Supabase (done: pg_cron is in the local stack, see the table above), so the tests that read `cron.job` run there for real.
-2. **Triggered holes:** the `old.` form in the expression language, `on` and `events`, `SVT038` and the loop graph, the trigger function and triggers, their tests, a breakage, and the `explain` and `view` text including the extra line under who can change.
+2. **Triggered holes (the second build PR):** the `old.` form in the expression language, `on` and `events`, `SVT038` and the loop graph, the trigger function and triggers, their tests, a breakage, and the `explain` and `view` text including the extra line under who can change.
 3. **Webhook holes:** the Edge Function generator, `config.toml` handling, `svetra.webhook_events`, `SVT039`, the `service_role`-only public function, their tests, and the "Before going live" lines.
 
 ## Done when
