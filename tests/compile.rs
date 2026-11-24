@@ -207,6 +207,35 @@ fn audited_sql_matches_golden_file() {
     assert_eq!(got, include_str!("golden/audited.sql"));
 }
 
+/// Checked on Postgres 16 by `scripts/pg-check.sh` (`tests/pg/validated_assert.sql`): bad input is
+/// refused with 22023 after the guard, and a caller the guard refuses never sees that error.
+#[test]
+fn validated_sql_matches_golden_file() {
+    let got = compile(include_str!("fixtures/validated.yaml"));
+    assert_eq!(got, include_str!("golden/validated.sql"));
+}
+
+#[test]
+fn require_comes_after_the_guard_and_reads_the_condition_as_text() {
+    let sql = compile(include_str!("fixtures/validated.yaml"));
+    let guard = sql.find("not allowed to call deposit").expect("guard");
+    let first = sql
+        .find("using message = 'deposit: amount > 0'")
+        .expect("first requirement");
+    let second = sql
+        .find("using message = 'deposit: amount <= 10000'")
+        .expect("second requirement");
+    assert!(guard < first && first < second);
+    // Quotes are doubled, and `using message` means the `%` is not a placeholder.
+    assert!(sql.contains("label != ''100%''"));
+}
+
+#[test]
+fn a_hole_without_require_compiles_as_before() {
+    let sql = compile(include_str!("fixtures/finledger.yaml"));
+    assert!(!sql.contains("22023"));
+}
+
 #[test]
 fn audit_output_appears_only_when_something_is_audited() {
     for src in [
