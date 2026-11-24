@@ -237,7 +237,11 @@ fn before_live(doc: &Document) -> Vec<String> {
 
 /// Once, when any code runs by itself on a schedule.
 fn schedule_live(doc: &Document) -> Vec<String> {
-    if doc.holes.iter().any(|h| starts(h).is_some()) {
+    if doc
+        .holes
+        .iter()
+        .any(|h| matches!(h.kind, HoleKind::Schedule(_)))
+    {
         vec!["Code that runs by itself on a schedule needs Supabase's pg_cron extension. The update turns it on; if your project refuses, switch it on under Database, Extensions in the Supabase dashboard.".into()]
     } else {
         vec![]
@@ -316,11 +320,13 @@ enum Style {
     Policy,
     /// A hole's `when`: names are its inputs ("the source"), not a row's fields.
     Hole,
+    /// A triggered hole's `when`: the row after the change, and `old.` for the row before.
+    Row,
 }
 
 fn english(e: &Expr, st: Style) -> String {
     let field = |f: &str| match st {
-        Style::Policy => format!("its {}", label(f)),
+        Style::Policy | Style::Row => format!("its {}", label(f)),
         Style::Hole => format!("the {}", label(f)),
         Style::Constraint => label(f),
     };
@@ -339,6 +345,7 @@ fn english(e: &Expr, st: Style) -> String {
         Expr::Path(p) => match p.as_slice() {
             [f] => field(f),
             [a, b] if a == "auth" && b == "user" => "them".into(),
+            [a, f] if a == "old" && st == Style::Row => format!("its previous {}", label(f)),
             [r, f] => format!("the {} of {its} {}", label(f), label(r)),
             _ => p.join("."),
         },
@@ -381,6 +388,13 @@ fn english(e: &Expr, st: Style) -> String {
             format!("{} and {} are different", english(l, st), english(r, st))
         }
         Expr::Bin(op, l, r) => {
+            // `status == 'paid' and old.status != 'paid'` is a change to paid.
+            if *op == Op::And
+                && st == Style::Row
+                && let Some((f, to)) = becomes(l, r)
+            {
+                return format!("its {} becomes {}", label(f), english(to, st));
+            }
             let (a, b) = (group(l, *op, st), group(r, *op, st));
             let word = match op {
                 Op::Or => ", or",
@@ -398,6 +412,35 @@ fn english(e: &Expr, st: Style) -> String {
             };
             format!("{a}{word} {b}")
         }
+    }
+}
+
+/// `f == x and old.f != x` (either order): the field and the value it becomes.
+fn becomes<'a>(l: &'a Expr, r: &'a Expr) -> Option<(&'a str, &'a Expr)> {
+    let parts = |e: &'a Expr, op: Op| -> Option<(&'a Expr, &'a Expr)> {
+        match e {
+            Expr::Bin(o, a, b) if *o == op => Some((a, b)),
+            _ => None,
+        }
+    };
+    let lit = |e: &Expr| matches!(e, Expr::Str(_) | Expr::Num(_) | Expr::Bool(_));
+    let (now, was) = if parts(l, Op::Eq).is_some() {
+        (parts(l, Op::Eq)?, parts(r, Op::Ne)?)
+    } else {
+        (parts(r, Op::Eq)?, parts(l, Op::Ne)?)
+    };
+    match (now, was) {
+        ((Expr::Path(a), x), (Expr::Path(b), y))
+            if a.len() == 1
+                && b.len() == 2
+                && b[0] == "old"
+                && a[0] == b[1]
+                && x == y
+                && lit(x) =>
+        {
+            Some((a[0].as_str(), x))
+        }
+        _ => None,
     }
 }
 
@@ -489,10 +532,12 @@ fn access(e: &Entity, doc: &Document, _entities: &HashMap<&str, &Entity>) -> Vec
         } else {
             format!(".{by_code}")
         };
-        return vec![format!(
+        let mut out = vec![format!(
             "{} are private: the app can't reach them at all{tail}",
             sentence(&many)
         )];
+        out.extend(fires(e, doc));
+        return out;
     }
     // Restrictive policies only narrow, so they don't get a sentence of their own: each sentence
     // they narrow ends with the limit instead (docs/update-check.md).
@@ -614,6 +659,7 @@ fn access(e: &Entity, doc: &Document, _entities: &HashMap<&str, &Entity>) -> Vec
             list(&missing, "or")
         ));
     }
+    out.extend(fires(e, doc));
     out
 }
 
@@ -644,18 +690,96 @@ fn param_words(t: &ParamType, entities: &HashMap<&str, &Entity>) -> String {
     }
 }
 
-/// What starts a scheduled hole, in words: `None` for a hole a person calls.
+/// What starts a scheduled or triggered hole, in words: `None` for a hole a person calls.
 fn starts(h: &Hole) -> Option<String> {
-    let HoleKind::Schedule(s) = &h.kind else {
-        return None;
-    };
-    let when = match crate::cron::words(&s.cron) {
-        Some(w) => format!("{w} (UTC)"),
-        None => format!("on the schedule \"{}\" (UTC)", s.cron),
-    };
-    Some(format!(
-        "runs by itself {when}. Nobody can run it from the app."
-    ))
+    match &h.kind {
+        HoleKind::Schedule(s) => {
+            let when = match crate::cron::words(&s.cron) {
+                Some(w) => format!("{w} (UTC)"),
+                None => format!("on the schedule \"{}\" (UTC)", s.cron),
+            };
+            Some(format!(
+                "runs by itself {when}. Nobody can run it from the app."
+            ))
+        }
+        HoleKind::Trigger(t) => {
+            let one = singular(&t.on.name);
+            let events: Vec<String> = t
+                .events
+                .iter()
+                .map(|a| event_past(*a).to_string())
+                .collect();
+            let only = h
+                .when
+                .as_deref()
+                .and_then(|w| expr::parse(w).ok())
+                .map_or(String::new(), |e| {
+                    format!(", only when {}", english(&e, Style::Row))
+                });
+            Some(format!(
+                "runs by itself after {} {one} is {}{only}. Nobody can run it directly.",
+                article(&one),
+                list(&events, "or")
+            ))
+        }
+        HoleKind::Function => None,
+    }
+}
+
+/// An event as a past participle: "created", "changed" or "deleted".
+fn event_past(a: Action) -> &'static str {
+    match a {
+        Action::Insert => "created",
+        Action::Update => "changed",
+        _ => "deleted",
+    }
+}
+
+/// The lines under an entity for trigger holes that fire on it: what changing it also runs.
+fn fires(e: &Entity, doc: &Document) -> Vec<String> {
+    doc.holes
+        .iter()
+        .filter_map(|h| match &h.kind {
+            HoleKind::Trigger(t) if t.on.name == e.name => Some((h, t)),
+            _ => None,
+        })
+        .map(|(h, t)| {
+            let verbs: Vec<&str> = t
+                .events
+                .iter()
+                .map(|a| match a {
+                    Action::Insert => "Creating",
+                    Action::Update => "Changing",
+                    _ => "Deleting",
+                })
+                .collect();
+            // "Creating or deleting" reads as one verb phrase: only the first is capitalised.
+            let verb = verbs
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    if i == 0 {
+                        v.to_string()
+                    } else {
+                        v.to_lowercase()
+                    }
+                })
+                .collect::<Vec<_>>();
+            let changes = if h.writes.is_empty() {
+                String::new()
+            } else {
+                let many: Vec<String> = h.writes.iter().map(|w| plural(&w.name)).collect();
+                format!(", which changes {}", many.join(", "))
+            };
+            let one = singular(&e.name);
+            format!(
+                "{} {} {one} also runs {}{changes}.",
+                list(&verb, "or"),
+                article(&one),
+                h.name
+            )
+        })
+        .collect()
 }
 
 fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
@@ -700,12 +824,18 @@ fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
             None => format!("who can call it: {who}"),
         });
     }
+    // A trigger runs as its own role, so what it changes doesn't depend on who made the change.
+    let whoever = if matches!(h.kind, HoleKind::Trigger(_)) {
+        ", whoever made the change"
+    } else {
+        ""
+    };
     out.push(match (h.reads.is_empty(), h.writes.is_empty()) {
         (true, true) => "can't read or change any data".into(),
         (false, true) => format!("can read: {}. Can't change any data.", names(&h.reads)),
-        (true, false) => format!("can change: {}.", names(&h.writes)),
+        (true, false) => format!("can change: {}{whoever}.", names(&h.writes)),
         (false, false) => format!(
-            "can read: {}. Can change: {}.",
+            "can read: {}. Can change: {}{whoever}.",
             names(&h.reads),
             names(&h.writes)
         ),
