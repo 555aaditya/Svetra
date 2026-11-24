@@ -292,6 +292,7 @@ The keys below are those of `kind: function`. Each kind takes its own keys, and 
 | `as` | no | Who may call it: `authenticated` (default), `anyone` or `anon`, as for policies |
 | `when` | no | A condition on the inputs that must hold for the call to run, such as `source.owner == auth.user`. Default `true` |
 | `require` | no | List of conditions on the inputs, each of which must hold, such as `["amount > 0"]`. A call that breaks one is refused as bad input ([Requirements](#requirements)) |
+| `idempotent` | no | The name of one input that is the caller's retry key. A repeat of a call with the same key returns the first answer and runs nothing ([Retry keys](#retry-keys)) |
 | `audit` | no | bool, default `false`. Every call that runs is recorded in the audit log, with who made it and the inputs ([Audit](#audit)) |
 
 A parameter or output type is one of three things:
@@ -347,6 +348,29 @@ holes:
 - **The first condition that fails is reported,** in list order, as `<hole>: <the condition as written>`, for example `transfer: amount > 0`.
 - **The TypeScript client is unchanged.** The generated Zod schema doesn't repeat a requirement; the database is the authority.
 
+### Retry keys
+
+Clients retry: a phone loses signal after sending, a browser reloads, an agent runs a step twice. `idempotent` makes a repeat of the same call harmless.
+
+```yaml
+holes:
+  transfer:
+    input:
+      request: uuid
+      source: Account.id
+      amount: Transaction.amount
+    idempotent: request
+```
+
+- **`idempotent` names one input,** the key. It must be typed `uuid` or `text` (`SVT041` otherwise, and `SVT041` if the name isn't an input).
+- **The key belongs to the caller.** It is remembered per hole, per signed-in person and per key, so one person's key never matches another's and nobody can learn whether a key exists. A visitor who isn't signed in has no identity to keep it under, so a hole with `idempotent` can't be called by `anon` or `anyone` (`SVT041`).
+- **A repeat returns the first call's answer** and runs nothing: not the body, not a second audit record.
+- **The same key with different inputs is refused,** with SQLSTATE `22023` and the message `<hole>: request was already used with different inputs`, so a buggy client can't silently get the answer to another question.
+- **`when` runs again on a repeat.** A person whose access was taken away since the first call can't read a stored answer.
+- **A call that fails leaves no key,** so the client's retry runs normally. A repeat that arrives at the same moment as the first one may fail once with a conflict, and its retry then gets the first answer.
+- **The answer is kept as `jsonb`** and returned as the hole's declared type.
+- **Not in this version:** keys are kept for ever. Expiry, pruning and keys made from the whole input are left out until real use shows what they should be. `explain` says so.
+
 ### Scheduled holes
 
 A hole with `kind: schedule` runs on the database's clock, not when a person calls it. Nobody can call it from the app: it has no function in `public` and nothing in `src/svetra.gen.ts`.
@@ -366,7 +390,7 @@ holes:
 | `schedule` | yes | Five-field cron: minute, hour, day of month, month, day of week, in UTC. Each field is `*`, a number, a range (`1-5`), a list (`1,15`) or a step (`*/15`, `10-30/5`). Day of week is `0` to `7` (`0` and `7` are Sunday). Names such as `mon` are not allowed. A bad expression is `SVT037` |
 | `reads`, `writes`, `grants` | no | As for `function` |
 
-Not allowed: `input`, `output`, `require`, `as` and `when`, because nobody passes or receives them, and `audit`, because an audited hole logs a call by a person and a schedule has none (`SVT020`). Write a guard in the body. The body is written as for any hole, and `p_caller` is always `null`. It runs as the hole's own role, with the access `reads`, `writes` and `grants` declare. A schedule with `grants` gives or takes away roles with no person behind it, so it gets `SVT040`. A body should be safe to run twice and to run late: a failed run is not retried and a run missed while the database was down is not made up. The generated SQL, which needs pg_cron, is in [compiler.md](compiler.md#holes).
+Not allowed: `input`, `output`, `require`, `idempotent`, `as` and `when`, because nobody passes or receives them, and `audit`, because an audited hole logs a call by a person and a schedule has none (`SVT020`). Write a guard in the body. The body is written as for any hole, and `p_caller` is always `null`. It runs as the hole's own role, with the access `reads`, `writes` and `grants` declare. A schedule with `grants` gives or takes away roles with no person behind it, so it gets `SVT040`. A body should be safe to run twice and to run late: a failed run is not retried and a run missed while the database was down is not made up. The generated SQL, which needs pg_cron, is in [compiler.md](compiler.md#holes).
 
 ### Triggered holes
 
@@ -391,7 +415,7 @@ holes:
 | `when` | no | A condition on the row that decides whether the body runs. Default: always |
 | `reads`, `writes`, `grants` | no | As for `function` |
 
-Not allowed: `input`, `output`, `require` (the row is the input, and `when` already decides whether the body runs), `as` (a row change starts it) and `audit` (an audited hole logs a call by a person, and nobody calls a trigger), all `SVT020`.
+Not allowed: `input`, `output`, `require`, `idempotent` (the row is the input, and `when` already decides whether the body runs), `as` (a row change starts it) and `audit` (an audited hole logs a call by a person, and nobody calls a trigger), all `SVT020`.
 
 - **The row in the body.** `p_new` is the row after the change (`null` on delete) and `p_old` the row before (`null` on insert), both typed as the entity's row. `p_caller` is the person whose change fired it, from the session's `auth.uid()`, and `null` for the service role, a job or a migration. It is information, never a permission check.
 - **`when`** becomes the trigger's own `WHEN (...)` clause. Fields are written bare and mean the row after the change (the deleted row for `delete`). `old.<field>` means the row before, and is allowed only when `events` is exactly `[update]`. No other entity, no `auth.user` and no `has_role`: a `WHEN` clause can't run a subquery. These are `SVT003`, as is a non-boolean result.
@@ -449,6 +473,7 @@ The generated SQL is in [compiler.md](compiler.md#triggered-holes), and the desi
 | `SVT037` | error | A `schedule` isn't a valid five-field cron expression: wrong number of fields, a value out of range, or a name where a number is needed. The message says which field | `fix_schedule` |
 | `SVT038` | error | Trigger holes form a loop: one writes an entity whose trigger hole (or its own) fires on it. The message names the cycle | `break_loop` |
 | `SVT040` | warning | A `schedule` or `trigger` hole has `grants`: a role is given or taken away with no person calling it | `confirm_grants` |
+| `SVT041` | error | A hole's `idempotent` can't work: it names an input the hole doesn't have, the input isn't `uuid` or `text`, or the hole can be called by `anon` or `anyone`, who have no identity to keep a key under | `fix_hole` |
 | `SVT001` | error | Entity exposed through the API has no policy. Mark it `private: true` or add a policy | `add_policy` |
 | `SVT002` | error | Reference to an entity or field that doesn't exist | `fix_reference` |
 | `SVT003` | error | Expression has a type error, or uses a path form not allowed where it appears, such as `old.` outside an update trigger | `fix_expression` |
@@ -561,5 +586,5 @@ These come later, if real use asks for them:
 - Multiple files and imports
 - Audit retention and export, logging refused calls, and alerting
 - Hole kinds other than `function`, `schedule` and `trigger`: webhooks are specified in [automations.md](automations.md)
-- Retry keys (`idempotent`) on holes: proposed in [hole-middleware.md](hole-middleware.md)
+- Expiry and pruning of retry keys
 - The sign-in methods listed under [Authentication](#authentication) as not in version 0.1
