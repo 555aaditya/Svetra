@@ -570,3 +570,181 @@ fn a_new_map_follows_its_siblings_and_words_that_yaml_reads_as_booleans_are_quot
     );
     assert_eq!(out, "e:\n  m:\n    a: 1\n  p:\n    \"y\": 1\n");
 }
+
+// --- every fixture, every path -------------------------------------------------------------------
+
+const FIXTURES: &[(&str, &str)] = &[
+    ("finledger", include_str!("fixtures/finledger.yaml")),
+    ("bookings", include_str!("fixtures/bookings.yaml")),
+    ("clinic", include_str!("fixtures/clinic.yaml")),
+    ("approvals", include_str!("fixtures/approvals.yaml")),
+    ("forum", include_str!("fixtures/forum.yaml")),
+    ("posts", include_str!("fixtures/posts.yaml")),
+    ("profiles", include_str!("fixtures/profiles.yaml")),
+    ("teams", include_str!("fixtures/teams.yaml")),
+    ("audited", include_str!("fixtures/audited.yaml")),
+];
+
+fn to_json(n: &svetra::yaml::Node) -> serde_json::Value {
+    use svetra::yaml::Value;
+    match &n.value {
+        Value::Null => serde_json::Value::Null,
+        Value::Bool(b) => (*b).into(),
+        Value::Int(i) => (*i).into(),
+        Value::Float(f) => (*f).into(),
+        Value::Str(s) => s.clone().into(),
+        Value::Seq(items) => items.iter().map(to_json).collect(),
+        Value::Map(m) => m
+            .iter()
+            .map(|(k, v)| (k.as_str().unwrap_or("").to_string(), to_json(v)))
+            .collect::<serde_json::Map<_, _>>()
+            .into(),
+    }
+}
+
+/// Every path through maps, with its value: `(["entities", "A"], ...)`.
+fn paths(
+    n: &svetra::yaml::Node,
+    at: &mut Vec<String>,
+    out: &mut Vec<(Vec<String>, serde_json::Value)>,
+) {
+    if let svetra::yaml::Value::Map(m) = &n.value {
+        for (k, v) in m {
+            at.push(k.as_str().unwrap_or("").to_string());
+            out.push((at.clone(), to_json(v)));
+            paths(v, at, out);
+            at.pop();
+        }
+    }
+}
+
+fn all_paths(src: &str) -> Vec<(Vec<String>, serde_json::Value)> {
+    let root = svetra::yaml::parse(src).unwrap();
+    let mut out = Vec::new();
+    paths(&root, &mut Vec::new(), &mut out);
+    out
+}
+
+fn ops_json(op: &str, path: &[String], value: Option<&serde_json::Value>) -> String {
+    let mut o = serde_json::json!({ "op": op, "path": path.join(".") });
+    if let Some(v) = value {
+        o["value"] = v.clone();
+    }
+    serde_json::json!([o]).to_string()
+}
+
+/// Setting a path to the value it already has changes nothing the compiler can see.
+#[test]
+fn setting_every_path_to_its_own_value_changes_nothing() {
+    let mut count = 0;
+    for (name, src) in FIXTURES {
+        let before = svetra::understand::context::context(&svetra::load::load(src).0);
+        for (path, value) in all_paths(src) {
+            let (out, problems) = edit(src, &ops_json("set", &path, Some(&value)));
+            assert!(problems.is_empty(), "{name} {path:?}: {problems:#?}");
+            let after = svetra::understand::context::context(&svetra::load::load(&out).0);
+            assert_eq!(
+                before, after,
+                "{name}: set {path:?} to itself changed the design:\n{out}"
+            );
+            count += 1;
+        }
+    }
+    assert!(count > 500, "only {count} paths");
+}
+
+/// Removing any path leaves text that still parses, with that path gone and every other path
+/// still there with its value.
+#[test]
+fn removing_every_path_removes_exactly_that_path() {
+    for (name, src) in FIXTURES {
+        let all = all_paths(src);
+        for (path, _) in &all {
+            let (out, problems) = edit(src, &ops_json("remove", path, None));
+            assert!(problems.is_empty(), "{name} {path:?}: {problems:#?}");
+            let Ok(root) = svetra::yaml::parse(&out) else {
+                panic!("{name}: removing {path:?} left unparseable text:\n{out}");
+            };
+            let mut left = Vec::new();
+            paths(&root, &mut Vec::new(), &mut left);
+            // Everything that isn't the path, below it, or above it (whose value holds it) is as it was.
+            for (p, v) in all
+                .iter()
+                .filter(|(p, _)| !p.starts_with(path) && !path.starts_with(p))
+            {
+                let now = left.iter().find(|(q, _)| q == p).map(|(_, v)| v);
+                assert_eq!(
+                    now,
+                    Some(v),
+                    "{name}: removing {path:?} changed {p:?}:\n{out}"
+                );
+            }
+            assert!(
+                !left.iter().any(|(p, _)| p.starts_with(path)),
+                "{name}: {path:?} is still there:\n{out}"
+            );
+        }
+    }
+}
+
+/// A new key under every map lands as the last child, readable back with its value.
+#[test]
+fn adding_a_key_under_every_map_reads_back() {
+    for (name, src) in FIXTURES {
+        for (path, value) in all_paths(src) {
+            if !value.is_object() {
+                continue;
+            }
+            let mut deeper = path.clone();
+            deeper.push("zz_new".into());
+            let new = serde_json::json!({ "type": "text", "list": ["a", "b"] });
+            let (out, problems) = edit(src, &ops_json("set", &deeper, Some(&new)));
+            assert!(problems.is_empty(), "{name} {deeper:?}: {problems:#?}");
+            let Ok(root) = svetra::yaml::parse(&out) else {
+                panic!("{name}: adding {deeper:?} left unparseable text:\n{out}");
+            };
+            let mut found = Vec::new();
+            paths(&root, &mut Vec::new(), &mut found);
+            let got = found.iter().find(|(p, _)| p == &deeper).map(|(_, v)| v);
+            assert_eq!(
+                got,
+                Some(&new),
+                "{name}: {deeper:?} reads back wrong:\n{out}"
+            );
+        }
+    }
+}
+
+/// Renaming any key keeps its value (and an entity or a field gains only `was`).
+#[test]
+fn renaming_every_path_keeps_its_value() {
+    for (name, src) in FIXTURES {
+        for (path, value) in all_paths(src) {
+            let ops =
+                serde_json::json!([{ "op": "rename", "path": path.join("."), "to": "zz_renamed" }]);
+            let (out, problems) = edit(src, &ops.to_string());
+            assert!(problems.is_empty(), "{name} {path:?}: {problems:#?}");
+            let Ok(root) = svetra::yaml::parse(&out) else {
+                panic!("{name}: renaming {path:?} left unparseable text:\n{out}");
+            };
+            let mut found = Vec::new();
+            paths(&root, &mut Vec::new(), &mut found);
+            let mut renamed = path.clone();
+            if let Some(last) = renamed.last_mut() {
+                *last = "zz_renamed".into();
+            }
+            let got = found
+                .iter()
+                .find(|(p, _)| p == &renamed)
+                .map(|(_, v)| v.clone());
+            let mut want = value.clone();
+            let declares = matches!(path.as_slice(), [a, _] if a == "entities")
+                || matches!(path.as_slice(), [a, _, c, _] if a == "entities" && c == "fields");
+            if declares && let Some(m) = want.as_object_mut() {
+                m.entry("was")
+                    .or_insert(path.last().cloned().unwrap_or_default().into());
+            }
+            assert_eq!(got, Some(want), "{name}: renaming {path:?}:\n{out}");
+        }
+    }
+}
