@@ -678,12 +678,41 @@ fn audit_change(path: String, on: bool, what: &str) -> Change {
     }
 }
 
-/// What starts a hole: a scheduled one is told apart by its cron expression.
-fn starts(h: &Hole) -> Option<&str> {
+/// What starts a hole, as text that differs when it changes: `None` for a hole a person calls.
+/// The first part says which kind, so a change of kind shows too.
+fn starts(h: &Hole) -> Option<String> {
     match &h.kind {
-        HoleKind::Schedule(s) => Some(&s.cron),
+        HoleKind::Schedule(s) => Some(format!("schedule {}", s.cron)),
+        HoleKind::Trigger(t) => Some(format!(
+            "trigger {} {:?} when {}",
+            t.on.name,
+            t.events,
+            h.when.as_deref().unwrap_or("true")
+        )),
         HoleKind::Function => None,
     }
+}
+
+fn is_trigger(h: &Hole) -> bool {
+    matches!(h.kind, HoleKind::Trigger(_))
+}
+
+/// The statements that remove a triggered hole's triggers by hand.
+fn drop_triggers(h: &Hole) -> String {
+    let HoleKind::Trigger(t) = &h.kind else {
+        return String::new();
+    };
+    t.events
+        .iter()
+        .map(|a| {
+            format!(
+                "drop trigger {} on {};",
+                crate::compile::names::q(&crate::compile::sql::trigger_name(&h.name, *a)),
+                crate::compile::names::table(&t.on.name)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
@@ -699,14 +728,22 @@ fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
             ));
         }
         match old.holes.iter().find(|x| x.name == h.name) {
-            None => changes.push(change("add_hole", path, Data::Safe, match starts(h) {
-                Some(_) => format!("add custom code {}, which runs by itself on a schedule", h.name),
-                None => format!("add custom code {}", h.name),
+            None => changes.push(change("add_hole", path, Data::Safe, match &h.kind {
+                HoleKind::Schedule(_) => format!("add custom code {}, which runs by itself on a schedule", h.name),
+                HoleKind::Trigger(t) => format!("add custom code {}, which runs by itself when {} rows change", h.name, t.on.name),
+                HoleKind::Function => format!("add custom code {}", h.name),
             })),
-            Some(x) if starts(x) != starts(h) => changes.push(hint(
-                change("change_schedule", path, Data::Breaking, format!("custom code {} starts differently: it runs at other times, or is now called by people or by the clock instead", h.name)),
-                "Check what the body does at the new times, and update any app code that called it.",
-            )),
+            Some(x) if starts(x) != starts(h) => changes.push(if is_trigger(x) || is_trigger(h) {
+                hint(
+                    change("change_trigger", path, Data::Breaking, format!("custom code {} starts differently: it runs after other changes, or is now called by people or by the clock instead", h.name)),
+                    "Check what the body does for the rows that now fire it, and update any app code that called it.",
+                )
+            } else {
+                hint(
+                    change("change_schedule", path, Data::Breaking, format!("custom code {} starts differently: it runs at other times, or is now called by people or by the clock instead", h.name)),
+                    "Check what the body does at the new times, and update any app code that called it.",
+                )
+            }),
             Some(x) if signature(x) != signature(h) => changes.push(hint(
                 change("change_hole", path, Data::Breaking, format!("custom code {} takes or returns something different: app code calling it must change", h.name)),
                 "Update the app's calls, using the new typed function in src/svetra.gen.ts.",
@@ -716,8 +753,8 @@ fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
     }
     for x in &old.holes {
         if !new.holes.iter().any(|h| h.name == x.name) {
-            changes.push(match starts(x) {
-                Some(_) => hint(
+            changes.push(match &x.kind {
+                HoleKind::Schedule(_) => hint(
                     change(
                         "remove_hole",
                         format!("holes.{}", x.name),
@@ -726,7 +763,16 @@ fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
                     ),
                     &format!("The generated schema unschedules its job while another scheduled hole remains. If it was the last, run select cron.unschedule('svetra_{}'); by hand.", x.name),
                 ),
-                None => hint(
+                HoleKind::Trigger(t) => hint(
+                    change(
+                        "remove_hole",
+                        format!("holes.{}", x.name),
+                        Data::Breaking,
+                        format!("remove custom code {}: it stops running when {} rows change", x.name, t.on.name),
+                    ),
+                    &format!("The generated schema no longer creates its triggers, but a database that has them keeps them. Drop them by hand: {}", drop_triggers(x)),
+                ),
+                HoleKind::Function => hint(
                     change(
                         "remove_hole",
                         format!("holes.{}", x.name),

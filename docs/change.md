@@ -67,8 +67,11 @@ Changes are computed between the two typed models, never from text, so reorderin
 | `add_role`, `remove_role` | `remove_role` also drops every grant of it | `remove_role` is **destructive** for those grants |
 | `add_hole`, `change_hole`, `remove_hole` | signatures change the typed client | `remove_hole` and a changed signature are **breaking** for app code calling it |
 | `add_hole` (scheduled) | a `schedule` hole is added | safe |
+| `add_hole` (triggered) | a `trigger` hole is added | safe |
 | `change_schedule` | a hole's `schedule` changes, or its kind does | **breaking**: it runs at other times with no data change |
+| `change_trigger` | a trigger hole's `on`, `events` or `when` changes, or its kind does | **breaking**: it runs after other changes with no data change |
 | `remove_hole` (scheduled) | a `schedule` hole is removed | **breaking**: it stops running. Its job is unscheduled by the generated schema while another scheduled hole remains; if it was the last, the hint gives the `cron.unschedule` to run by hand |
+| `remove_hole` (triggered) | a `trigger` hole is removed | **breaking**: it stops running. The generated schema no longer creates its triggers, but a database that has them keeps them, so the hint gives the `drop trigger` statements |
 | `change_auth` | `password.min_length` 10 → 12 | safe for data; listed so it's seen |
 
 ### Access
