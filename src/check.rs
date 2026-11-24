@@ -524,6 +524,42 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// SVT041: a retry key that can't work (docs/format.md, Retry keys).
+    fn retry_key(&mut self, h: &Hole, key: &str, doc: &Document) {
+        let path = format!("holes.{}.idempotent", h.name);
+        let entities: HashMap<&str, &Entity> =
+            doc.entities.iter().map(|e| (e.name.as_str(), e)).collect();
+        let inputs = typeck::hole_entity(h, &entities);
+        let not_a_key =
+            format!("`{key}` can't be a retry key: it must be a `uuid` or `text` input.");
+        let problem = match inputs.fields.iter().find(|f| f.name == key) {
+            None if h.input.iter().any(|p| p.name == key) => Some(not_a_key),
+            None => Some(format!(
+                "`idempotent` names `{key}`, which isn't an input of hole `{}`.",
+                h.name
+            )),
+            Some(f) if matches!(f.ty, FieldType::Uuid | FieldType::Text) => None,
+            Some(_) => Some(not_a_key),
+        };
+        let problem = problem.or_else(|| {
+            (h.role != Role::Authenticated).then(|| {
+                format!(
+                    "Hole `{}` has a retry key but can be called by people who aren't signed in, who have no identity to keep it under.",
+                    h.name
+                )
+            })
+        });
+        if let Some(msg) = problem {
+            self.d(
+                Code::Svt041,
+                path,
+                h.pos,
+                msg,
+                "Name a `uuid` or `text` input, and leave `as` at its default, `authenticated`.",
+            );
+        }
+    }
+
     fn holes(&mut self, doc: &Document) {
         for h in &doc.holes {
             let hp = format!("holes.{}", h.name);
@@ -546,6 +582,9 @@ impl<'a> Checker<'a> {
                     self.reference(&t.on, &format!("{hp}.on"));
                 }
                 HoleKind::Function => {}
+            }
+            if let Some(key) = &h.idempotent {
+                self.retry_key(h, key, doc);
             }
             if let Some(g) = h.grants.first().filter(|_| h.kind != HoleKind::Function) {
                 let starts = match h.kind {
