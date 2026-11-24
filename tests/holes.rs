@@ -256,3 +256,18 @@ fn an_empty_or_misshapen_require_is_refused() {
         );
     }
 }
+
+#[test]
+fn require_is_refused_on_a_scheduled_or_triggered_hole() {
+    let schedule = "svetra: \"0.1\"\nsystem: T\nentities:\n  Inv:\n    fields:\n      id: { type: uuid, primary: true }\nholes:\n  sweep:\n    kind: schedule\n    schedule: \"0 3 * * *\"\n    writes: [Inv]\n    require:\n      - \"true\"\n";
+    let trigger = "svetra: \"0.1\"\nsystem: T\nentities:\n  Inv:\n    fields:\n      id: { type: uuid, primary: true }\nholes:\n  on_add:\n    kind: trigger\n    on: Inv\n    events: [insert]\n    writes: [Inv]\n    require:\n      - \"true\"\n";
+    for src in [schedule, trigger] {
+        let found = codes(src);
+        assert!(
+            found
+                .iter()
+                .any(|(c, m)| c == "SVT020" && m.contains("there are no inputs to check")),
+            "{found:?}"
+        );
+    }
+}

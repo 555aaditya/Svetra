@@ -388,6 +388,9 @@ fn why_not(kind: &str, key: &str) -> &'static str {
         ("trigger", "input" | "output") => {
             "the changed row is the input: the body gets it as `p_old` and `p_new`."
         }
+        ("schedule" | "trigger", "require") => {
+            "there are no inputs to check: a clock or a row change runs it."
+        }
         ("schedule", "as") => "nobody calls it, because the clock runs it.",
         ("trigger", "as") => "nobody calls it, because a change to a row runs it.",
         ("schedule", "when") => {
