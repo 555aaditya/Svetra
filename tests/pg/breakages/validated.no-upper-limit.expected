@@ -1,0 +1,2 @@
+not ok 56 - alice calling deposit with amount 10001 is refused as bad input: amount <= 10000
+# Looks like you failed 1 test of 84
