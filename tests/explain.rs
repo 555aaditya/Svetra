@@ -56,3 +56,25 @@ fn context_marks_audited_entities_and_holes() {
         "{out}"
     );
 }
+
+/// A hole with `require` says what a call must send, in words; a hole without says nothing.
+#[test]
+fn holes_with_require_say_what_input_is_refused() {
+    let (doc, diags) = load(include_str!("fixtures/validated.yaml"));
+    let out = explain(&doc, &diags);
+    assert!(out.contains(
+        "a call with bad input is refused unless the amount is more than 0, and the amount is at most 10000."
+    ));
+    let (doc, diags) = load(include_str!("fixtures/finledger.yaml"));
+    assert!(!explain(&doc, &diags).contains("bad input"));
+}
+
+#[test]
+fn context_lists_a_holes_requirements() {
+    let (doc, _) = load(include_str!("fixtures/validated.yaml"));
+    let out = svetra::understand::context::context(&doc);
+    assert!(
+        out.contains("; when wallet.owner == auth.user; require amount > 0 | amount <= 10000\n"),
+        "{out}"
+    );
+}

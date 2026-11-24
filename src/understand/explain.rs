@@ -680,6 +680,18 @@ fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
             )
         });
     }
+    if !h.require.is_empty() {
+        let rules: Vec<String> = h
+            .require
+            .iter()
+            .filter_map(|r| expr::parse(r).ok())
+            .map(|e| english(&e, Style::Hole))
+            .collect();
+        out.push(format!(
+            "a call with bad input is refused unless {}.",
+            rules.join(", and ")
+        ));
+    }
     if h.audit {
         out.push(
             "every call is recorded in the audit log, with who made it and what they sent.".into(),
