@@ -236,7 +236,16 @@ fn graph_and_context_match_golden_files() {
         for (cmd, ext) in [("graph", "graph.mmd"), ("context", "context.txt")] {
             let out = svetra(&[cmd, &format!("tests/fixtures/{name}.yaml")]);
             assert_eq!(out.status.code(), Some(0));
-            let want = std::fs::read_to_string(format!("tests/golden/{name}.{ext}")).unwrap();
+            let mut want = std::fs::read_to_string(format!("tests/golden/{name}.{ext}")).unwrap();
+            if cmd == "context" {
+                // The command's first line also carries the file's revision (docs/patch.md).
+                let src = std::fs::read_to_string(format!("tests/fixtures/{name}.yaml")).unwrap();
+                let (head, rest) = want.split_once('\n').unwrap();
+                want = format!(
+                    "{head}, revision {}\n{rest}",
+                    svetra::compile::revision(&src)
+                );
+            }
             assert_eq!(String::from_utf8_lossy(&out.stdout), want, "{name} {cmd}");
         }
     }
