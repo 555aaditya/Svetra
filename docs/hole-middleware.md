@@ -114,7 +114,7 @@ The table grows by one row per call. Pruning, and a time window after which a ke
 
 ## 3. Not building: rate limits
 
-The Tracker listed rate limits with this milestone. This proposal leaves them out, for four reasons:
+**Decided 2026-11-24: dropped from M4d.** The Tracker listed rate limits with this milestone. This proposal leaves them out, for four reasons:
 
 1. **They need an identity.** A limit per person works for signed-in callers, but the callers most worth limiting are logged-out ones, and in the database they are all `null`.
 2. **They cost a write on every call.** A counter table, or a scan of one, turns every read-like hole into a write, and the table needs pruning.
