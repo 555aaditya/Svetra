@@ -366,7 +366,7 @@ holes:
 | `schedule` | yes | Five-field cron: minute, hour, day of month, month, day of week, in UTC. Each field is `*`, a number, a range (`1-5`), a list (`1,15`) or a step (`*/15`, `10-30/5`). Day of week is `0` to `7` (`0` and `7` are Sunday). Names such as `mon` are not allowed. A bad expression is `SVT037` |
 | `reads`, `writes`, `grants` | no | As for `function` |
 
-Not allowed: `input`, `output`, `as` and `when`, because nobody passes or receives them, and `audit`, because an audited hole logs a call by a person and a schedule has none (`SVT020`). Write a guard in the body. The body is written as for any hole, and `p_caller` is always `null`. It runs as the hole's own role, with the access `reads`, `writes` and `grants` declare. A schedule with `grants` gives or takes away roles with no person behind it, so it gets `SVT040`. A body should be safe to run twice and to run late: a failed run is not retried and a run missed while the database was down is not made up. The generated SQL, which needs pg_cron, is in [compiler.md](compiler.md#holes).
+Not allowed: `input`, `output`, `require`, `as` and `when`, because nobody passes or receives them, and `audit`, because an audited hole logs a call by a person and a schedule has none (`SVT020`). Write a guard in the body. The body is written as for any hole, and `p_caller` is always `null`. It runs as the hole's own role, with the access `reads`, `writes` and `grants` declare. A schedule with `grants` gives or takes away roles with no person behind it, so it gets `SVT040`. A body should be safe to run twice and to run late: a failed run is not retried and a run missed while the database was down is not made up. The generated SQL, which needs pg_cron, is in [compiler.md](compiler.md#holes).
 
 ### Triggered holes
 
@@ -391,7 +391,7 @@ holes:
 | `when` | no | A condition on the row that decides whether the body runs. Default: always |
 | `reads`, `writes`, `grants` | no | As for `function` |
 
-Not allowed: `input`, `output`, `as` (the row is the input and a row change starts it) and `audit` (an audited hole logs a call by a person, and nobody calls a trigger), all `SVT020`.
+Not allowed: `input`, `output`, `require` (the row is the input, and `when` already decides whether the body runs), `as` (a row change starts it) and `audit` (an audited hole logs a call by a person, and nobody calls a trigger), all `SVT020`.
 
 - **The row in the body.** `p_new` is the row after the change (`null` on delete) and `p_old` the row before (`null` on insert), both typed as the entity's row. `p_caller` is the person whose change fired it, from the session's `auth.uid()`, and `null` for the service role, a job or a migration. It is information, never a permission check.
 - **`when`** becomes the trigger's own `WHEN (...)` clause. Fields are written bare and mean the row after the change (the deleted row for `delete`). `old.<field>` means the row before, and is allowed only when `events` is exactly `[update]`. No other entity, no `auth.user` and no `has_role`: a `WHEN` clause can't run a subquery. These are `SVT003`, as is a non-boolean result.
