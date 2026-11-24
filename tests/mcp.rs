@@ -82,7 +82,7 @@ fn handshake_lists_the_tools() {
     assert_eq!(
         names,
         [
-            "validate", "compile", "explain", "context", "graph", "plan", "check"
+            "validate", "compile", "explain", "context", "graph", "plan", "check", "doctor"
         ]
     );
     assert_eq!(replies[2]["result"], json!({}));
@@ -308,4 +308,112 @@ fn check_builds_migrations_and_reports_what_applied() {
         "strict makes a failed migration an error: {strict}"
     );
     assert_eq!(strict["migrations"]["failed"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn doctor_reads_a_folder_and_matches_the_cli_json_plus_a_summary() {
+    let dir = project("doctor-folder", include_str!("fixtures/clinic.yaml"));
+    let app = std::env::temp_dir().join(format!("svetra-mcp-doctor-app-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&app);
+    std::fs::create_dir_all(app.join("supabase")).unwrap();
+    std::fs::write(
+        app.join("supabase/config.toml"),
+        "[auth]\nminimum_password_length = 6\n",
+    )
+    .unwrap();
+    let replies = session(&dir, &[call(1, "doctor", json!({ "dir": app }))]);
+    let (mut got, is_error) = result(&replies[0]);
+    assert!(!is_error, "{got}");
+    let summary = got.as_object_mut().unwrap().remove("summary").unwrap();
+    assert!(
+        summary.as_str().unwrap().contains("Not a clearance"),
+        "{summary}"
+    );
+    let cli = Command::new(env!("CARGO_BIN_EXE_svetra"))
+        .args(["doctor", app.to_str().unwrap(), "--json"])
+        .output()
+        .unwrap();
+    let cli: Value = serde_json::from_slice(&cli.stdout).unwrap();
+    assert_eq!(got, cli);
+    assert_eq!(got["ready"], false);
+    let kinds: Vec<&str> = got["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["kind"].as_str().unwrap())
+        .collect();
+    assert!(kinds.contains(&"weak_password"), "{got}");
+    let _ = std::fs::remove_dir_all(&app);
+}
+
+#[test]
+fn doctor_usage_errors_are_tool_errors() {
+    let dir = project("doctor-usage", include_str!("fixtures/clinic.yaml"));
+    let replies = session(
+        &dir,
+        &[
+            call(
+                1,
+                "doctor",
+                json!({ "db": "postgresql://x@127.0.0.1:1/p", "local": true }),
+            ),
+            call(2, "doctor", json!({ "strict": true })),
+            call(3, "doctor", json!({ "schemas": [] })),
+            call(4, "doctor", json!({ "dir": "no-such-folder" })),
+        ],
+    );
+    for reply in &replies {
+        let (v, is_error) = result(reply);
+        assert!(is_error, "{v}");
+        assert!(v["error"].is_string(), "{v}");
+    }
+}
+
+#[test]
+fn doctor_never_echoes_a_password() {
+    let dir = project("doctor-redact", include_str!("fixtures/clinic.yaml"));
+    let replies = session(
+        &dir,
+        &[call(
+            1,
+            "doctor",
+            json!({ "db": "postgresql://app:hunter2secret@127.0.0.1:1/postgres" }),
+        )],
+    );
+    let text = replies[0].to_string();
+    assert!(!text.contains("hunter2secret"), "{text}");
+}
+
+/// Needs Docker, like tests/check_migrations.rs.
+#[test]
+fn doctor_builds_migrations_and_reports_data_findings_with_a_summary() {
+    if !svetra::migrations::docker_available() {
+        eprintln!("skipped: Docker isn't running");
+        return;
+    }
+    let dir = project("doctor-migrations", include_str!("fixtures/clinic.yaml"));
+    let replies = session(
+        &dir,
+        &[call(
+            1,
+            "doctor",
+            json!({ "migrations": fixture("migrations") }),
+        )],
+    );
+    let (got, is_error) = result(&replies[0]);
+    assert!(!is_error, "{got}");
+    assert!(got["counts"]["critical"].as_u64().unwrap() > 0, "{got}");
+    assert!(
+        got["summary"].as_str().unwrap().contains("Not ready"),
+        "{got}"
+    );
+    assert_eq!(got["migrations"]["applied"], 3);
+    assert!(
+        got["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["area"] == "data"),
+        "{got}"
+    );
 }
