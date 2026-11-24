@@ -238,6 +238,8 @@ pub struct Hole {
     pub role: Role,
     /// A condition over the inputs that must hold for the call to run.
     pub when: Option<String>,
+    /// Conditions over the inputs, each of which must hold: bad input is refused, not unauthorised.
+    pub require: Vec<String>,
     /// Every call that runs is recorded in the audit log.
     pub audit: bool,
 }

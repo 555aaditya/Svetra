@@ -44,11 +44,11 @@ pub const FIELD_KEYS: &[&str] = &[
 pub const POLICY_KEYS: &[&str] = &["on", "allow", "when", "check", "only", "restrictive", "as"];
 /// Every key any kind of hole takes. Each kind takes its own subset (below).
 pub const HOLE_KEYS: &[&str] = &[
-    "kind", "input", "output", "reads", "writes", "grants", "as", "when", "audit", "schedule",
+    "kind", "input", "output", "reads", "writes", "grants", "as", "when", "require", "audit", "schedule",
     "on", "events",
 ];
 pub const FUNCTION_HOLE_KEYS: &[&str] = &[
-    "kind", "input", "output", "reads", "writes", "grants", "as", "when", "audit",
+    "kind", "input", "output", "reads", "writes", "grants", "as", "when", "require", "audit",
 ];
 pub const SCHEDULE_HOLE_KEYS: &[&str] = &["kind", "schedule", "reads", "writes", "grants"];
 pub const TRIGGER_HOLE_KEYS: &[&str] =
