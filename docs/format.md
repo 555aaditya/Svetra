@@ -480,4 +480,5 @@ These come later, if real use asks for them:
 - Multiple files and imports
 - Hole kinds other than `function`, such as webhook recipes
 - Audit retention and export, logging refused calls, and alerting
+- Input validation (`require`) and retry keys (`idempotent`) on holes: proposed in [hole-middleware.md](hole-middleware.md)
 - The sign-in methods listed under [Authentication](#authentication) as not in version 0.1
