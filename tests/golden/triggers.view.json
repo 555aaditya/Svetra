@@ -1,0 +1,1384 @@
+{
+  "svetra": "0.1",
+  "system": "Shop",
+  "revision": "17da3889fdb0",
+  "people": [
+    {
+      "id": "anon",
+      "label": "Someone not signed in"
+    },
+    {
+      "id": "alice",
+      "label": "A signed-in person"
+    },
+    {
+      "id": "bob",
+      "label": "Another signed-in person"
+    },
+    {
+      "id": "carol",
+      "label": "A signed-in person who owns nothing"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Customer",
+      "label": "Customers",
+      "private": false,
+      "fields": [
+        "the signed-in person who owns it (required)",
+        "name: text (required)"
+      ],
+      "links": []
+    },
+    {
+      "name": "Order",
+      "label": "Orders",
+      "private": false,
+      "fields": [
+        "the signed-in person who owns it (required)",
+        "the customer it belongs to (required)",
+        "status: one of open, paid or shipped (starts as open)",
+        "total: an amount of money, up to 16 digits before the point and 2 after (required)"
+      ],
+      "links": [
+        {
+          "field": "customer",
+          "to": "Customer"
+        }
+      ]
+    },
+    {
+      "name": "Notification",
+      "label": "Notifications",
+      "private": false,
+      "fields": [
+        "the signed-in person who owns it (required)",
+        "message: text (required)"
+      ],
+      "links": []
+    }
+  ],
+  "cells": [
+    {
+      "person": "anon",
+      "entity": "Customer",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see customers any other way."
+      ],
+      "rules": [
+        "Signed-in people can see a customer when its owner is them."
+      ],
+      "tests": [
+        27,
+        28
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Customer",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's customer",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's customer",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a customer when its owner is them."
+      ],
+      "tests": [
+        33,
+        34
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Customer",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete customers directly."
+      ],
+      "rules": [],
+      "tests": [
+        29,
+        30
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Customer",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete customers directly."
+      ],
+      "rules": [],
+      "tests": [
+        31,
+        32
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Order",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's order",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's order",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see orders any other way."
+      ],
+      "rules": [
+        "Signed-in people can see an order when its owner is them."
+      ],
+      "tests": [
+        65,
+        66
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Order",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's order",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's order",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create an order when its owner is them."
+      ],
+      "tests": [
+        71,
+        72
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Order",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's order",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's order",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change an order when its owner is them."
+      ],
+      "tests": [
+        67,
+        68
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Order",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's order",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's order",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can delete an order when its owner is them."
+      ],
+      "tests": [
+        69,
+        70
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Notification",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see notifications any other way."
+      ],
+      "rules": [
+        "Signed-in people can see a notification when its owner is them."
+      ],
+      "tests": [
+        115,
+        116
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Notification",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's notification",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        121,
+        122
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Notification",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        117,
+        118
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Notification",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        119,
+        120
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Customer",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own customer",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see a customer when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see a customer when its owner is them."
+      ],
+      "tests": [
+        35,
+        36
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Customer",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own customer",
+          "allowed": true
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can create a customer when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can create a customer when its owner is them."
+      ],
+      "tests": [
+        41,
+        42
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Customer",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete customers directly."
+      ],
+      "rules": [],
+      "tests": [
+        37,
+        38
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Customer",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete customers directly."
+      ],
+      "rules": [],
+      "tests": [
+        39,
+        40
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Order",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own order",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's order",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see an order when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see an order when its owner is them."
+      ],
+      "tests": [
+        73,
+        74
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Order",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own order",
+          "allowed": true
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's order",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can create an order when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can create an order when its owner is them."
+      ],
+      "tests": [
+        79,
+        80
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Order",
+      "action": "change",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own order",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's order",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can change an order when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can change an order when its owner is them."
+      ],
+      "tests": [
+        75,
+        76
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Order",
+      "action": "delete",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own order",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's order",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can delete an order when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can delete an order when its owner is them."
+      ],
+      "tests": [
+        77,
+        78
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Notification",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own notification",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see a notification when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see a notification when its owner is them."
+      ],
+      "tests": [
+        123,
+        124
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Notification",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own notification",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        129,
+        130
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Notification",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        125,
+        126
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Notification",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        127,
+        128
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Customer",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own customer",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see a customer when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see a customer when its owner is them."
+      ],
+      "tests": [
+        45,
+        46
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Customer",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's customer",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own customer",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can create a customer when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can create a customer when its owner is them."
+      ],
+      "tests": [
+        51,
+        52
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Customer",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete customers directly."
+      ],
+      "rules": [],
+      "tests": [
+        47,
+        48
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Customer",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete customers directly."
+      ],
+      "rules": [],
+      "tests": [
+        49,
+        50
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Order",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's order",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own order",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see an order when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see an order when its owner is them."
+      ],
+      "tests": [
+        87,
+        88
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Order",
+      "action": "create",
+      "access": "some",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's order",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own order",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can create an order when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can create an order when its owner is them."
+      ],
+      "tests": [
+        93,
+        94
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Order",
+      "action": "change",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's order",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own order",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can change an order when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can change an order when its owner is them."
+      ],
+      "tests": [
+        89,
+        90
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Order",
+      "action": "delete",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's order",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own order",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can delete an order when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can delete an order when its owner is them."
+      ],
+      "tests": [
+        91,
+        92
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Notification",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own notification",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see a notification when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see a notification when its owner is them."
+      ],
+      "tests": [
+        133,
+        134
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Notification",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's notification",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        139,
+        140
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Notification",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        135,
+        136
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Notification",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        137,
+        138
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Customer",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see customers any other way."
+      ],
+      "rules": [
+        "Signed-in people can see a customer when its owner is them."
+      ],
+      "tests": [
+        55,
+        56
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Customer",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's customer",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's customer",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create a customer when its owner is them."
+      ],
+      "tests": [
+        61,
+        62
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Customer",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete customers directly."
+      ],
+      "rules": [],
+      "tests": [
+        57,
+        58
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Customer",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's customer",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's customer",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can change or delete customers directly."
+      ],
+      "rules": [],
+      "tests": [
+        59,
+        60
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Order",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's order",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's order",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see orders any other way."
+      ],
+      "rules": [
+        "Signed-in people can see an order when its owner is them."
+      ],
+      "tests": [
+        101,
+        102
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Order",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's order",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's order",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can create an order when its owner is them."
+      ],
+      "tests": [
+        107,
+        108
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Order",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's order",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's order",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can change an order when its owner is them."
+      ],
+      "tests": [
+        103,
+        104
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Order",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's order",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's order",
+          "allowed": false
+        }
+      ],
+      "because": [],
+      "rules": [
+        "Signed-in people can delete an order when its owner is them."
+      ],
+      "tests": [
+        105,
+        106
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Notification",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see notifications any other way."
+      ],
+      "rules": [
+        "Signed-in people can see a notification when its owner is them."
+      ],
+      "tests": [
+        143,
+        144
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Notification",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's notification",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        149,
+        150
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Notification",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        145,
+        146
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Notification",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's notification",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's notification",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete notifications directly. Only custom code can change them: notify_paid, note_order_change."
+      ],
+      "rules": [],
+      "tests": [
+        147,
+        148
+      ]
+    }
+  ],
+  "holes": [
+    {
+      "name": "notify_paid",
+      "lines": [
+        "runs by itself after an order is changed, only when its status becomes paid. Nobody can run it directly.",
+        "can read: orders, customers. Can change: notifications, whoever made the change."
+      ],
+      "callers": [],
+      "kind": "trigger",
+      "starts": "runs by itself after an order is changed, only when its status becomes paid. Nobody can run it directly."
+    },
+    {
+      "name": "note_order_change",
+      "lines": [
+        "runs by itself after an order is created or deleted, only when its total is more than 0. Nobody can run it directly.",
+        "can read: orders. Can change: notifications, whoever made the change."
+      ],
+      "callers": [],
+      "kind": "trigger",
+      "starts": "runs by itself after an order is created or deleted, only when its total is more than 0. Nobody can run it directly."
+    }
+  ],
+  "signing_in": [
+    "People sign in with email (a password or an emailed link).",
+    "Anyone can create an account.",
+    "People confirm their email address before they can sign in.",
+    "Passwords need at least 10 characters."
+  ],
+  "before_going_live": [
+    "Set up your own email sender (SMTP). Supabase's built-in sender is for testing and only sends a few emails an hour.",
+    "Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in."
+  ]
+}

@@ -1,0 +1,14 @@
+Shop (svetra 0.1)
+auth email; signup open; confirm email; password 10
+Customer: id uuid pk; owner user!; name text!
+Order: id uuid pk; owner user!; customer ref(Customer)!; status enum(open|paid|shipped)=open; total money(18,2)!
+Notification: id uuid pk; owner user!; message text!
+policy owner_reads_customers: Customer select authenticated when owner == auth.user
+policy owner_adds_customers: Customer insert authenticated when owner == auth.user
+policy owner_reads_orders: Order select authenticated when owner == auth.user
+policy owner_places_orders: Order insert authenticated when owner == auth.user
+policy owner_changes_orders: Order update authenticated when owner == auth.user
+policy owner_deletes_orders: Order delete authenticated when owner == auth.user
+policy owner_reads_notifications: Notification select authenticated when owner == auth.user
+hole notify_paid: trigger Order update when status == 'paid' and old.status != 'paid'; reads Order, Customer; writes Notification
+hole note_order_change: trigger Order insert,delete when total > 0; reads Order; writes Notification
