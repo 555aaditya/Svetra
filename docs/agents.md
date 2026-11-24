@@ -99,6 +99,6 @@ At most one of `db`, `local` and `migrations`. With none, the database is listed
 
 ## Not in version 0.1
 
-- `svetra patch` and `svetra diff`, so the agent proposes a change as a reviewable graph diff before writing it: planned with safe change, M6.
+- `svetra patch`, so the agent changes the design with checked edits instead of rewriting the file: specified in [patch.md](patch.md), M6. (`diff` and `plan` exist already.)
 - Tools that edit `svetra.yaml` directly.
 - Setup files for other agents. Claude Code reads `SKILL.md` and the project's `.mcp.json`. Cursor (`.cursor/mcp.json` and rules) and Codex (its `config.toml` and `AGENTS.md`) can run `svetra mcp` today if added by hand; `init` writing their files comes later.
