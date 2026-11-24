@@ -8,11 +8,12 @@ Usage:
   svetra explain [FILE]             Describe the app in plain English: data, rules, who can see what
   svetra graph [FILE]               Draw the app as a Mermaid diagram
   svetra context [FILE]             Print the whole app compactly, for agents
-  svetra diff [FILE] [--from OLD] [--json]
+  svetra diff [FILE] [--from OLD | --from-git REF] [--json]
                                     List the changes since OLD (default: FILE in git HEAD),
                                     classified: safe, breaking or destructive, and whose
                                     access widens or narrows
-  svetra plan [FILE] [--from OLD] [--json] [--accept KIND,...] [--at YYYYMMDDHHMMSS]
+  svetra plan [FILE] [--from OLD | --from-git REF] [--json | --markdown] [--accept KIND,...]
+              [--no-write] [--at YYYYMMDDHHMMSS]
                                     The same, as a plan: exits 1 on destructive changes or
                                     wider access until they're accepted, then writes the
                                     migration for any declared renames
@@ -743,16 +744,27 @@ fn draft(snap: &serde_json::Value, out: &str, force: bool) -> ExitCode {
 /// `svetra diff` and `svetra plan` (docs/change.md).
 fn change(command: &str, args: &[String]) -> ExitCode {
     let (mut file, mut from, mut json, mut accept, mut at) = (None, None, false, Vec::new(), None);
+    let (mut from_git, mut markdown, mut no_write) = (None, false, false);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--json" => json = true,
-            "--from" | "--accept" | "--at" if command == "plan" || a == "--from" => {
+            "--markdown" | "--no-write" if command == "plan" => {
+                if a == "--markdown" {
+                    markdown = true;
+                } else {
+                    no_write = true;
+                }
+            }
+            "--from" | "--from-git" | "--accept" | "--at"
+                if command == "plan" || a == "--from" || a == "--from-git" =>
+            {
                 let Some(v) = it.next() else {
                     return usage(&format!("{a} needs a value"));
                 };
                 match a.as_str() {
                     "--from" => from = Some(v.clone()),
+                    "--from-git" => from_git = Some(v.clone()),
                     "--accept" => accept.extend(v.split(',').map(|k| k.trim().to_string())),
                     _ => at = Some(v.clone()),
                 }
@@ -761,6 +773,12 @@ fn change(command: &str, args: &[String]) -> ExitCode {
             f if file.is_none() => file = Some(f.to_string()),
             _ => return usage(&format!("{command} takes one file")),
         }
+    }
+    if from.is_some() && from_git.is_some() {
+        return usage("--from and --from-git can't be used together");
+    }
+    if json && markdown {
+        return usage("--json and --markdown can't be used together");
     }
     let file = file.unwrap_or_else(|| "svetra.yaml".into());
     let path = std::path::Path::new(&file);
@@ -773,12 +791,16 @@ fn change(command: &str, args: &[String]) -> ExitCode {
         Ok(s) => s,
         Err(e) => return usage(&e),
     };
-    let (old_src, from_name) = match &from {
-        Some(f) => match read(f) {
+    let (old_src, from_name) = match (&from, &from_git) {
+        (Some(f), _) => match read(f) {
             Ok(s) => (s, f.clone()),
             Err(e) => return usage(&e),
         },
-        None => match svetra::change::committed(path) {
+        (None, Some(rev)) => match svetra::change::committed_at(path, rev) {
+            Ok(v) => v,
+            Err(e) => return usage(&e),
+        },
+        (None, None) => match svetra::change::committed(path) {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("svetra: {e}.");
@@ -813,6 +835,7 @@ fn change(command: &str, args: &[String]) -> ExitCode {
     // The rename migration runs before `supabase db diff`, so the diff sees the new names and
     // writes nothing destructive for them. Only once nothing is waiting for a yes.
     let mut writes = Vec::new();
+    let mut would_write = Vec::new();
     if command == "plan" && !blocked && !plan.renames.is_empty() {
         let migrations = dir.join("supabase").join("migrations");
         let body = format!(
@@ -827,7 +850,14 @@ fn change(command: &str, args: &[String]) -> ExitCode {
                     && std::fs::read_to_string(e.path()).is_ok_and(|s| s == body)
             })
         });
-        if !done {
+        if !done && no_write {
+            would_write.push(
+                migrations
+                    .join("<time>_svetra_rename.sql")
+                    .display()
+                    .to_string(),
+            );
+        } else if !done {
             let stamp = at.unwrap_or_else(utc_stamp);
             let target = migrations.join(format!("{stamp}_svetra_rename.sql"));
             if let Err(e) =
@@ -839,8 +869,29 @@ fn change(command: &str, args: &[String]) -> ExitCode {
             writes.push(target.display().to_string());
         }
     }
-    if json {
-        let v = svetra::change::json(&plan, &from_name, &writes);
+    if markdown {
+        let waiting_now: Vec<&str> = waiting.clone();
+        let accepted: Vec<&str> = plan
+            .needs_yes()
+            .into_iter()
+            .filter(|k| accept.iter().any(|a| a == k))
+            .collect();
+        print!(
+            "{}",
+            svetra::change::markdown(
+                &plan,
+                &new.system.name,
+                &from_name,
+                &waiting_now,
+                &accepted,
+                !plan.renames.is_empty()
+            )
+        );
+    } else if json {
+        let mut v = svetra::change::json(&plan, &from_name, &writes);
+        if !would_write.is_empty() {
+            v["would_write"] = serde_json::json!(would_write);
+        }
         println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
     } else {
         print!(
@@ -849,6 +900,9 @@ fn change(command: &str, args: &[String]) -> ExitCode {
         );
         for w in &writes {
             println!("\nwrote {w} (run it before supabase db diff: it keeps the renamed data)");
+        }
+        for w in &would_write {
+            println!("\nwould write {w} (not written: --no-write)");
         }
         if command == "plan" {
             if blocked {

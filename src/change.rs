@@ -1026,27 +1026,131 @@ fn access(
 /// The committed version of `file` in git `HEAD`, the default design the database has.
 /// Returns its text and a name for it, such as `HEAD:svetra.yaml`.
 pub fn committed(file: &std::path::Path) -> Result<(String, String), String> {
+    committed_at(file, "HEAD").map_err(|e| {
+        let name = file_name(file);
+        if e.starts_with("git ref") {
+            e
+        } else {
+            format!(
+                "{name} isn't committed in git HEAD here, so there's nothing to compare with. Pass --from OLD, the design the database has"
+            )
+        }
+    })
+}
+
+fn file_name(file: &std::path::Path) -> String {
+    file.file_name()
+        .map_or("svetra.yaml".into(), |n| n.to_string_lossy().to_string())
+}
+
+/// `file` as it is at git `rev` (`--from-git`, docs/action.md). Returns its text and a name for
+/// it, such as `origin/develop:svetra.yaml`. Says which is missing: the ref or the file.
+pub fn committed_at(file: &std::path::Path, rev: &str) -> Result<(String, String), String> {
     let dir = file
         .parent()
         .filter(|d| !d.as_os_str().is_empty())
         .unwrap_or(std::path::Path::new("."));
-    let name = file
-        .file_name()
-        .map_or("svetra.yaml".into(), |n| n.to_string_lossy().to_string());
-    match std::process::Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(["show", &format!("HEAD:./{name}")])
-        .output()
-    {
+    let name = file_name(file);
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+    };
+    let known = git(&[
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        &format!("{rev}^{{commit}}"),
+    ])
+    .is_ok_and(|o| o.status.success());
+    if !known {
+        return Err(format!(
+            "git ref {rev} doesn't exist here. In CI, fetch it first (actions/checkout with fetch-depth: 0)"
+        ));
+    }
+    match git(&["show", &format!("{rev}:./{name}")]) {
         Ok(o) if o.status.success() => Ok((
             String::from_utf8_lossy(&o.stdout).to_string(),
-            format!("HEAD:{name}"),
+            format!("{rev}:{name}"),
         )),
         _ => Err(format!(
-            "{name} isn't committed in git HEAD here, so there's nothing to compare with. Pass --from OLD, the design the database has"
+            "{name} isn't in git {rev}, so there's nothing to compare with"
         )),
     }
+}
+
+/// The plan as a pull-request comment (docs/action.md, Comment). `waiting` are the kinds that
+/// still need a yes, `accepted` the ones a person already agreed to.
+pub fn markdown(
+    plan: &Plan,
+    system: &str,
+    from: &str,
+    waiting: &[&str],
+    accepted: &[&str],
+    renames: bool,
+) -> String {
+    // Names are limited by the loader, but a message may carry a `|` or a backtick from an
+    // expression, and the `from` name comes from a branch name.
+    let esc = |t: &str| {
+        t.replace('\\', "\\\\")
+            .replace('|', "\\|")
+            .replace('`', "\\`")
+            .replace(['\n', '\r'], " ")
+    };
+    let n = plan.changes.len();
+    if n == 0 {
+        return format!(
+            "### svetra plan: no changes to {} (from {})\n",
+            esc(system),
+            esc(from)
+        );
+    }
+    let mut out = format!(
+        "### svetra plan: {n} change{} to {} (from {})\n\n| | Change |\n|---|---|\n",
+        if n == 1 { "" } else { "s" },
+        esc(system),
+        esc(from)
+    );
+    for c in &plan.changes {
+        let tag = c.access.unwrap_or(match c.kind {
+            "rename_entity" | "rename_field" => "rename",
+            _ => c.data.word(),
+        });
+        let mut cell = esc(&c.message);
+        for b in &c.because {
+            cell += &format!("<br>because: {}", esc(b));
+        }
+        if let Some(h) = &c.hint {
+            cell += &format!("<br>hint: {}", esc(h));
+        }
+        out += &format!("| {tag} | {cell} |\n");
+    }
+    let list = |kinds: &[&str]| {
+        kinds
+            .iter()
+            .map(|k| format!("`{k}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    out.push('\n');
+    if !waiting.is_empty() {
+        out += &format!(
+            "**Needs a yes:** {}. A person who owns the data has to agree, then add them to `accept` in the workflow.\n",
+            list(waiting)
+        );
+    }
+    if !accepted.is_empty() {
+        out += &format!("**Accepted:** {}.\n", list(accepted));
+    }
+    if waiting.is_empty() && accepted.is_empty() {
+        out += "**Nothing needs a yes.**\n";
+    }
+    if renames {
+        out += "\nDeclared renames need a migration before `supabase db diff`; run `svetra plan` locally to write it.\n";
+    }
+    out
 }
 
 /// The plan as JSON (docs/change.md, Output).

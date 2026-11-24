@@ -27,13 +27,14 @@ Svetra knows things a schema diff can't: the design before and after, what each 
 ## Commands
 
 ```sh
-svetra diff [NEW] [--from OLD] [--json]
-svetra plan [NEW] [--from OLD] [--json] [--accept KIND...]
+svetra diff [NEW] [--from OLD | --from-git REF] [--json]
+svetra plan [NEW] [--from OLD | --from-git REF] [--json | --markdown] [--accept KIND...] [--no-write]
 ```
 
 - **`NEW`** defaults to `./svetra.yaml`.
 - **`--from OLD`** is the design the database has now. Default: the same path in git's `HEAD` (`git show HEAD:<path>`), because the usual flow is "edit, plan, commit". Outside git, or for a file not in `HEAD`, `--from` is required.
 - **Both files must validate.** An invalid one prints its diagnostics and exits `1`.
+- **`--from-git REF`** reads the old design from git `REF` instead of a file, such as `origin/develop` (the PR's base in CI); **`--no-write`** keeps `plan` from writing the rename migration; **`--markdown`** prints the plan as a PR comment. Details and the GitHub Action that uses them: [action.md](action.md).
 - **`diff`** lists the changes, classified. It always exits `0` when both files are valid: it's for reading.
 - **`plan`** prints the same list as steps, plus what to run, and **exits `1` if any change is destructive or widens access** and isn't named in `--accept`. It writes nothing unless a rename needs a migration (below).
 
@@ -169,7 +170,7 @@ Then: svetra compile && supabase db diff -f <name> && supabase db push
 | C1 | Default `--from`: git `HEAD`, or a snapshot Svetra writes after each successful plan (`.svetra/applied.yaml`)? | **git `HEAD`.** No new state file to drift; works in CI on a PR (`--from origin/develop:svetra.yaml` through a `--from-git REF` form) |
 | C2 | The rename migration's file name needs a timestamp, which is a clock. | **Use the clock only for that file name**, never for content; or take `--at YYYYMMDDHHMMSS` for reproducible output in tests |
 | C3 | Should `compile` refuse when `plan` would exit 1? | **No.** `compile` only writes the declarative schema; nothing reaches the database until `db push`. Keep the gate in `plan` and the skill |
-| C4 | A GitHub Action that posts `plan` on PRs | **Yes, after 0.1:** the access lines are exactly what a reviewer should see |
+| C4 | A GitHub Action that posts `plan` on PRs | **Yes, after 0.1:** the access lines are exactly what a reviewer should see. Specified in [action.md](action.md) |
 
 ## Tests
 
