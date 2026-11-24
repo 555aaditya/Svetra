@@ -375,7 +375,7 @@ end
 $svetra$;
 revoke all on function "svetra_holes"."notify_paid__fire"() from public, anon, authenticated;
 create trigger "svetra_notify_paid_update" after update on "public"."order"
-  for each row when (new."status" = 'paid' and old."status" is distinct from 'paid')
+  for each row when (new."status" = 'paid' and old."status" <> 'paid')
   execute function "svetra_holes"."notify_paid__fire"();
 ```
 

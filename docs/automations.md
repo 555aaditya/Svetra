@@ -150,7 +150,7 @@ holes:
 | `when` | no | A condition on the row that decides whether the body runs. Default: always |
 | `reads`, `writes`, `grants` | no | As for `function` |
 
-Not allowed: `input`, `output`, `as`. The row is the input.
+Not allowed: `input`, `output`, `as` (the row is the input, and a row change starts it) and `audit` (an audited hole records a call by a person, and nobody calls a trigger; changes to audited entities are logged anyway). Using one is `SVT020`, and the hint says why.
 
 Timing is always **after** the row is written. A `before` trigger can change or cancel the write, which is a rule about data, so it belongs in a constraint or a policy, not a hole.
 
@@ -168,12 +168,12 @@ Both rows are typed as the entity's row type. `p_caller` tells the body who star
 
 `when` becomes the trigger's own `WHEN (...)` clause, so Postgres decides whether to fire before any function runs. That makes it checkable from the catalog (see [tests](#what-the-access-tests-prove)).
 
-- Fields are written bare, as in a policy, and mean the row after the change (the deleted row for `delete`).
+- Fields are written bare, as in a policy, and mean the row after the change (the deleted row for `delete`). Operators are Svetra's, so `!=` is SQL's `<>` and a null on either side makes the condition null, which does not fire.
 - `old.<field>` means the row before. It is allowed only when `events` is exactly `[update]`, because Postgres refuses `old` in an insert trigger's `WHEN` and `new` in a delete trigger's.
 - No other entity, no `auth.user`, no `has_role`: a `WHEN` clause can't run a subquery, and there may be no signed-in person. These are `SVT003`, as is a non-boolean result.
 - Svetra creates **one Postgres trigger per event**, so each can use the right row. `[insert, update]` is two triggers, `svetra_<name>_insert` and `svetra_<name>_update`.
 
-The expression parser knows the row after a change (`check`). `old.` is the one new form, so the build needs a change in `src/expr.rs` and `src/typeck.rs`.
+The expression parser already reads `old.field` as a one-hop path, so the build changes only `src/typeck.rs` (a trigger scope that allows `old.<field>` for `[update]` and nothing but the row's own fields) and the SQL translation (`new.`/`old.` prefixes).
 
 ### What Svetra generates
 
@@ -185,7 +185,7 @@ The expression parser knows the row after a change (`check`). `old.` is the one 
    create trigger svetra_notify_paid_update
      after update on "public"."order"
      for each row
-     when (new."status" = 'paid' and old."status" is distinct from 'paid')
+     when (new."status" = 'paid' and old."status" <> 'paid')
      execute function svetra_holes.notify_paid__fire();
    ```
    Always `for each row`: a statement trigger has no single row to give the body.
@@ -201,7 +201,7 @@ The hole's own role, **not the person who made the change** and not `postgres`. 
 
 A trigger hole that writes the entity it fires on, or an entity whose own trigger hole writes back, loops. Svetra stops it twice.
 
-1. **At validate time, `SVT038`.** Draw an edge from each trigger hole to every trigger hole whose `on` entity is in the first one's `writes` and whose `events` Svetra can't rule out. It can't read the body, so writing an entity counts as insert, update and delete. Any cycle, including a hole that writes its own `on` entity, is an error. The message names the cycle. The hint says to write to another entity, merge the two holes, or narrow `events`.
+1. **At validate time, `SVT038`.** Draw an edge from each trigger hole to every trigger hole whose `on` entity is in the first one's `writes` and whose `events` Svetra can't rule out. It can't read the body, so writing an entity counts as insert, update and delete. Any cycle, including a hole that writes its own `on` entity, is an error. The message names the cycle. The hint says to write to another entity or merge the holes. Narrowing `events` can't help, because an edge ignores `events` (a write counts as every event), so the hint doesn't suggest it.
 2. **At run time, a depth limit.** The trigger function raises SQLSTATE `54001` when `pg_trigger_depth() > 3`, so a loop through a hand-made trigger, which Svetra can't see, ends in an error and not a hung database. It is a backstop. A design that depends on it is wrong.
 
 Holes of other kinds that write an entity do fire its trigger holes. That is an edge and not a cycle, because nothing fires them back, so only trigger-to-trigger edges are checked.
@@ -313,20 +313,23 @@ The generated pgTAP tests already prove, for a `function` hole, its table privil
 | `schedule` | pg_cron's `cron.timezone` is `UTC` or `GMT` (or absent, as on the stand-in) | "UTC" in the schedule means UTC |
 | `schedule` | No `svetra_%` job exists that the design doesn't declare | A removed hole's job is gone |
 | `trigger` | `pg_trigger` has one trigger per declared event on the declared table: `after`, `for each row`, enabled | It fires when, and only when, declared |
-| `trigger` | `pg_get_triggerdef` contains the compiled `when` | The condition is the one in the design |
+| `trigger` | The `WHEN` clause in `pg_get_triggerdef` equals the one PostgreSQL makes from the compiled `when` (read back from a probe trigger that is dropped again) | The condition is the one in the design, compared in PostgreSQL's own normal form, which differs from the text written (`pg_get_expr` can't be used: it refuses a clause that reads both `old` and `new`) |
 | `trigger` | The body function is `security definer`, owned by `svetra_hole_<name>`, with an empty `search_path` | It runs as the declared role |
 | `trigger` | `anon`, `authenticated` and `service_role` can't execute the body or the trigger function | It can't be started by calling it |
-| `trigger` | As its own role, an insert into an entity not in `writes` is denied | A triggered hole can't write beyond its fence |
+| `trigger` | As its own role, an insert into the first entity not in `writes` is denied | A triggered hole can't write beyond its fence |
+| `trigger` | Where the design lets some person insert a row into the entity, and the hole fires on `insert`: that person's insert of a row the condition accepts fires the hole. The check swaps in a body that raises a marker error for that one statement and undoes the swap, so it holds whatever the real body does | The trigger, its function and the body are wired together, and a person who can't call anything in `svetra_holes` fires the hole |
+| `trigger` | `pg_trigger` has no other trigger on the hole's trigger function | A stale or hand-added trigger of the hole is found |
 | `webhook` | `anon` and `authenticated` can't execute `public.<name>`; `service_role` can | Only the Edge Function's key reaches it |
 | `webhook` | `anon` and `authenticated` can't execute `svetra_holes.<name>` | As for every hole |
 | `webhook` | The guard: inputs that point at the `a` rows and at the `b` rows are refused (`42501`) or let through as `when` says | As for `function` holes |
 
 **Not covered, and said so in `explain` and in the test output:**
+- Update and delete firing in the generated tests (only insert has a behavioural check: an update needs a row pair the rules evaluator doesn't build). `scripts/pg-check.sh` covers all three events on the `triggers` example with real bodies.
 - What a body does when it runs. Bodies are hand-written, as for `function` holes.
 - The Edge Function's signature check. A **generated Deno test** that signs a sample body and checks accept, reject and wrong-header cases is a follow-up PR, because it needs a Deno runner in CI. Until then the build PR checks it by hand on a real local Supabase and says so.
 - That pg_cron fires at the right minute. That is pg_cron's job. The test proves the job is registered correctly.
 
-Each kind also gets deliberate breakages in `tests/pg/breakages/`, like the existing ones, each failing exactly the expected checks: execute on a body function granted to `authenticated`, a job's schedule edited, a trigger's `when` dropped, a hole's role given a privilege it didn't declare.
+A file with trigger holes switches those triggers off while its test data and every other check run, because hand-written bodies (and the stub, which raises) would otherwise run on the test data; it switches them on again before the firing check, and checks the catalog first, while they are still on. Each kind also gets deliberate breakages in `tests/pg/breakages/`, like the existing ones, each failing exactly the expected checks: execute on a body function granted to `authenticated`, a job's schedule edited, a trigger's `when` dropped, a hole's role given a privilege it didn't declare.
 
 ## How `explain` and `view` describe them
 
@@ -335,17 +338,17 @@ Words follow [`understand.md`](understand.md): no "hole", "trigger" or "cron". T
 | Kind | `explain` |
 |---|---|
 | `schedule` | `expire_invites: runs by itself every day at 03:00 (UTC). Nobody can run it from the app. It can read invites and change invites.` |
-| `trigger` | `notify_paid: runs by itself after an order is changed, only when its status becomes paid. Nobody can run it directly. It can read orders and customers and change notifications, whoever made the change.` |
+| `trigger` | `notify_paid: runs by itself after an order is changed, only when its status becomes paid. Nobody can run it directly. It can read: orders, customers. Can change: notifications, whoever made the change.` |
 | `webhook` | `payment_received: runs when another service calls your app, and only if the call carries the right signature. Nobody can run it from the app. It can read invoices and change invoices and payments.` |
 
 - **Cron in words.** Common forms are spelled out: "every day at 03:00", "every 15 minutes", "every Monday at 09:00", "on the 1st of each month at 00:00". Any other valid expression is shown as written, in quotes, never guessed at.
-- **Side effects where readers look.** For a trigger, the entity it fires on gets an extra line under "Who can see and change what": "Changing an order also runs `notify_paid`, which changes notifications." The "Only custom code can change them" line names these holes too.
+- **Side effects where readers look.** For a trigger, the entity it fires on gets an extra line under "Who can see and change what": "Changing an order also runs notify_paid, which changes notifications." (several events read "Creating or deleting an order also runs ...") The "Only custom code can change them" line names these holes too.
 - **Grants.** "It can give people the member role" gets a second sentence for `schedule` and `trigger`: "Nobody is asked first: it happens by itself." This is the `SVT040` warning in words under "Worth knowing".
 - **Before going live** gets, per webhook, the secret's name with its `supabase secrets set` command and the deploy step; and, once for any schedule, a line that the update turns on the pg_cron extension and, if the project refuses, to switch it on under Database, Extensions in the Supabase dashboard (the migration enabling it is confirmed locally, not on hosted Supabase). A `shared_secret` webhook is described as weaker than a signature, and every webhook says old calls can be replayed.
-- **`context`** gets one line each, as today: `hole expire_invites: schedule "0 3 * * *"; reads Invite; writes Invite`, `hole notify_paid: trigger Order update when status == 'paid' and old.status != 'paid'; reads Order, Customer; writes Notification`, `hole payment_received: webhook secret PAYMENTS_WEBHOOK_SECRET (invoice Invoice.id, paid Invoice.amount, event_id text); reads Invoice; writes Invoice, Payment`.
-- **`graph`** draws them with the same rounded node, and a dotted line from the entity a trigger fires on into the hole, besides the usual `reads` and `changes` edges.
+- **`context`** gets one line each, as today: `hole expire_invites: schedule "0 3 * * *"; reads Invite; writes Invite`, `hole notify_paid: trigger Order update when status == 'paid' and old.status != 'paid'; reads Order, Customer; writes Notification` (several events are joined with commas: `trigger Order insert,delete`), `hole payment_received: webhook secret PAYMENTS_WEBHOOK_SECRET (invoice Invoice.id, paid Invoice.amount, event_id text); reads Invoice; writes Invoice, Payment`.
+- **`graph`** draws them with the same rounded node, and a dotted `fires` line from the entity a trigger fires on into the hole, besides the usual `reads` and `changes` edges.
 - **`view`:** each Custom code card gets a first row, **Starts**, with the sentence above. The All, Some, No table of who can call it is replaced for these kinds by "Nobody can run this from the app", because there is no person to evaluate. The `--json` model gets `"kind"` and `"starts"` per hole, and `"secret"` (the name only) for a webhook. The page still makes no network requests.
-- **`svetra diff` and `plan`** ([change.md](change.md)): adding an automation is **safe**. Changing `schedule`, `on`, `events`, `when` or `secret` is **breaking**, because behaviour changes without a data change. Widening `reads`, `writes` or `grants` is access widening, as for `function` holes.
+- **`svetra diff` and `plan`** ([change.md](change.md)): adding an automation is **safe**. Changing `schedule`, `on`, `events`, `when` or `secret` is **breaking** (`change_schedule`, `change_trigger`), because behaviour changes without a data change. Widening `reads`, `writes` or `grants` is access widening, as for `function` holes.
 
 ## Security summary
 
