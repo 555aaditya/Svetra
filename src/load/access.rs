@@ -160,11 +160,29 @@ impl Cx {
             grants: Vec::new(),
             role: Role::Authenticated,
             when: None,
+            require: Vec::new(),
             audit: false,
         };
         hole.role = self.role_as(k.get("as").copied(), &path)?;
         if let Some(v) = k.get("when") {
             hole.when = self.string(v, &format!("{path}.when"));
+        }
+        if let Some(v) = k.get("require") {
+            let rpath = format!("{path}.require");
+            hole.require = self
+                .name_list(v, &rpath)
+                .into_iter()
+                .map(|r| r.name)
+                .collect();
+            if hole.require.is_empty() && matches!(v.value, Value::Seq(_)) {
+                self.report(
+                    Code::Svt029,
+                    &rpath,
+                    v,
+                    "`require` must list at least one condition.".into(),
+                    "Write the conditions the inputs must meet, or remove require.",
+                );
+            }
         }
         if let Some(v) = k.get("audit") {
             hole.audit = self.boolean(v, &format!("{path}.audit"));
