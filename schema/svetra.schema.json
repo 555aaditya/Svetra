@@ -391,6 +391,14 @@
           "description": "A condition over the inputs that must hold for the call to run, such as \"source.owner == auth.user\".",
           "type": "string"
         },
+        "require": {
+          "description": "Conditions over the inputs, each of which must hold, such as \"amount > 0\". A call that breaks one is refused as bad input (SQLSTATE 22023).",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
         "audit": {
           "description": "Record every call that runs in the append-only audit log, with who made it and the inputs.",
           "type": "boolean"
