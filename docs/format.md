@@ -291,6 +291,7 @@ The keys below are those of `kind: function`. Each kind takes its own keys, and 
 | `grants` | no | Roles the hole may give people and take away, such as `[member]`. No other role is reachable from it |
 | `as` | no | Who may call it: `authenticated` (default), `anyone` or `anon`, as for policies |
 | `when` | no | A condition on the inputs that must hold for the call to run, such as `source.owner == auth.user`. Default `true` |
+| `require` | no | List of conditions on the inputs, each of which must hold, such as `["amount > 0"]`. A call that breaks one is refused as bad input ([Requirements](#requirements)) |
 | `audit` | no | bool, default `false`. Every call that runs is recorded in the audit log, with who made it and the inputs ([Audit](#audit)) |
 
 A parameter or output type is one of three things:
@@ -326,6 +327,25 @@ holes:
     writes: [Account, Transaction]
     when: "source.owner == auth.user"
 ```
+
+### Requirements
+
+`when` says **who** may call a hole and refuses with SQLSTATE `42501`, which every client reads as "not allowed". `require` says what the **inputs** must be, and refuses with `22023` (`invalid_parameter_value`), so a client can tell "that amount is wrong" from "you may not".
+
+```yaml
+holes:
+  transfer:
+    when: "source.owner == auth.user"
+    require:
+      - "amount > 0"
+      - "source != destination"
+```
+
+- **Each item is an expression** in the language of `when`: inputs are written without `p_`, an `Entity.<primary key>` input allows one hop, and `auth.user` and `has_role(...)` work. It must be a boolean (`SVT003` otherwise), and reading through an input into an entity the hole doesn't declare in `reads` or `writes` is `SVT003`, as for `when`. `require` must list at least one condition (`SVT029`).
+- **The order is `when`, then `require`, then the body.** Who may call is settled first, so a caller who isn't allowed learns nothing about the rules for input.
+- **A null fails.** SQL's `check` lets a null pass; a requirement doesn't, so `amount > 0` refuses a missing amount.
+- **The first condition that fails is reported,** in list order, as `<hole>: <the condition as written>`, for example `transfer: amount > 0`.
+- **The TypeScript client is unchanged.** The generated Zod schema doesn't repeat a requirement; the database is the authority.
 
 ### Scheduled holes
 
@@ -541,5 +561,5 @@ These come later, if real use asks for them:
 - Multiple files and imports
 - Audit retention and export, logging refused calls, and alerting
 - Hole kinds other than `function`, `schedule` and `trigger`: webhooks are specified in [automations.md](automations.md)
-- Input validation (`require`) and retry keys (`idempotent`) on holes: proposed in [hole-middleware.md](hole-middleware.md)
+- Retry keys (`idempotent`) on holes: proposed in [hole-middleware.md](hole-middleware.md)
 - The sign-in methods listed under [Authentication](#authentication) as not in version 0.1

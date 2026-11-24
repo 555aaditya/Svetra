@@ -304,6 +304,7 @@ Each hole compiles to two functions, plus a role that holds exactly its declared
    - **With `grants`,** the role also gets `select`, `insert` and `delete` on `svetra.role_grants`, and a policy that limits all three to the listed roles: `using ("role" in ('member')) with check ("role" in ('member'))`. It can give and take away those roles, for anyone, and can't see or touch any other role's grants.
 2. **The body function,** `svetra_holes.<name>(p_caller, p_<input>, …)`, in a schema the API doesn't expose. It's `security definer` and owned by the hole's role, so its statements run with that role's access and no more, and it has `set search_path = ''`. Svetra writes the signature, then:
    - **the `when` guard first,** left out when there's no `when`: if the condition isn't true, it raises SQLSTATE `42501` (insufficient privilege), so a refused call looks like any other refusal. `auth.user` in the guard is `p_caller`.
+   - **then each `require` condition,** in order, left out when there is none: if it isn't true (a null isn't), it raises SQLSTATE `22023` with the message `<hole>: <condition as written>`, set with `using message` so a `%` in the text is not read as a placeholder. It runs after the guard, so a refused caller never reaches it, and it holds for every caller, not only Svetra's client
    - **then the body** from `supabase/holes/<name>.sql`, verbatim
 
    Only the migration's role may execute it, so no caller can pass in someone else's id.
