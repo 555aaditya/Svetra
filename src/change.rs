@@ -690,6 +690,19 @@ fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
                 &format!("calls of {}", h.name),
             ));
         }
+        if let Some(x) = old.holes.iter().find(|x| x.name == h.name)
+            && x.require != h.require
+        {
+            changes.push(hint(
+                change(
+                    "change_require",
+                    path.clone(),
+                    Data::Safe,
+                    format!("the rules for what calls of {} may send changed", h.name),
+                ),
+                "A call that ran before may now be refused as bad input, or the reverse. Check the app's calls.",
+            ));
+        }
         match old.holes.iter().find(|x| x.name == h.name) {
             None => changes.push(change("add_hole", path, Data::Safe, format!("add custom code {}", h.name))),
             Some(x) if signature(x) != signature(h) => changes.push(hint(

@@ -503,3 +503,30 @@ fn turning_audit_on_for_a_hole_is_listed_by_hole() {
         .collect();
     assert_eq!(found, [("add_audit", "holes.close".to_string())]);
 }
+
+#[test]
+fn changing_a_holes_require_is_listed_and_safe_for_data() {
+    let hole = |extra: &str| {
+        format!(
+            "{BASE}holes:\n  close:\n    kind: function\n    writes: [Order]\n    input:\n      n: int\n{extra}"
+        )
+    };
+    let (plain, strict) = (hole(""), hole("    require:\n      - \"n > 0\"\n"));
+    let (a, d) = load(&plain);
+    assert!(d.is_empty(), "{d:#?}");
+    let (b, d) = load(&strict);
+    assert!(d.is_empty(), "{d:#?}");
+    for (from, to, fs, ts) in [(&a, &b, &plain, &strict), (&b, &a, &strict, &plain)] {
+        let found: Vec<_> = plan(from, fs, to, ts)
+            .changes
+            .into_iter()
+            .map(|c| (c.kind, c.path, c.data))
+            .collect();
+        assert_eq!(
+            found,
+            [("change_require", "holes.close".to_string(), Data::Safe)]
+        );
+    }
+    // The same list is no change.
+    assert!(plan(&b, &strict, &b, &strict).changes.is_empty());
+}
