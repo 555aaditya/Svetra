@@ -1,0 +1,110 @@
+name: svetra plan
+description: Comment on a pull request with what a change to svetra.yaml does to the data and to who can see and change what.
+author: Aaditya
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  file:
+    description: The design, relative to the repository root.
+    default: svetra.yaml
+  base:
+    description: The git ref the database's design is read from. Default is the pull request's base branch. Needs history (fetch-depth 0).
+    default: ""
+  accept:
+    description: "Kinds a person has agreed to, as in `svetra plan --accept`: for example wider_access,remove_entity."
+    default: ""
+  version:
+    description: The Svetra release to install, such as v0.8.3. Default is the latest release.
+    default: latest
+  comment:
+    description: Post the plan as a comment on the pull request. The plan always goes to the job summary.
+    default: "true"
+  token:
+    description: Used only to post the comment.
+    default: ${{ github.token }}
+
+outputs:
+  needs_yes:
+    description: The kinds still waiting for a yes, comma separated; empty when none.
+    value: ${{ steps.plan.outputs.needs_yes }}
+  changes:
+    description: How many changes the plan lists.
+    value: ${{ steps.plan.outputs.changes }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install svetra
+      shell: bash
+      env:
+        SVETRA_VERSION: ${{ inputs.version }}
+        SVETRA_INSTALL_DIR: ${{ runner.temp }}/svetra-bin
+      run: |
+        sh "$GITHUB_ACTION_PATH/install.sh"
+        echo "$SVETRA_INSTALL_DIR" >> "$GITHUB_PATH"
+
+    - name: Plan
+      id: plan
+      shell: bash
+      env:
+        INPUT_FILE: ${{ inputs.file }}
+        INPUT_BASE: ${{ inputs.base }}
+        INPUT_ACCEPT: ${{ inputs.accept }}
+        INPUT_COMMENT: ${{ inputs.comment }}
+        GH_TOKEN: ${{ inputs.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+        BASE_REF: ${{ github.base_ref }}
+        OUT: ${{ runner.temp }}
+      run: |
+        set -uo pipefail
+        base="$INPUT_BASE"
+        [ -z "$base" ] && [ -n "$BASE_REF" ] && base="origin/$BASE_REF"
+        if [ -z "$base" ]; then
+          echo "::error::No base to compare with: run this on a pull_request, or set the base input."
+          exit 2
+        fi
+        summary() { printf '%s\n' "$1" >> "$GITHUB_STEP_SUMMARY"; }
+        echo "needs_yes=" >> "$GITHUB_OUTPUT"; echo "changes=0" >> "$GITHUB_OUTPUT"
+        # A design that is new, or didn't change, has nothing to compare.
+        if ! git cat-file -e "$base:$INPUT_FILE" 2>/dev/null; then
+          summary "svetra plan: $INPUT_FILE isn't in $base, so there is nothing to compare with."
+          exit 0
+        fi
+        if git diff --quiet "$base" -- "$INPUT_FILE"; then
+          summary "svetra plan: $INPUT_FILE is unchanged from $base."
+          exit 0
+        fi
+        args=(plan "$INPUT_FILE" --from-git "$base" --no-write)
+        [ -n "$INPUT_ACCEPT" ] && args+=(--accept "$INPUT_ACCEPT")
+        svetra "${args[@]}" --markdown > "$OUT/plan.md" 2> "$OUT/plan.err"; code=$?
+        if [ "$code" -eq 2 ]; then
+          cat "$OUT/plan.err"; echo "::error::svetra plan could not run. See the log."
+          exit 2
+        fi
+        # Exit 1 with no table: the design doesn't validate. Show its diagnostics, as they are.
+        if ! head -n 1 "$OUT/plan.md" | grep -q '^### svetra plan'; then
+          { echo '### svetra plan: the design is not valid'; echo; echo '```'; cat "$OUT/plan.md"; echo '```'; } > "$OUT/plan.tmp"
+          mv "$OUT/plan.tmp" "$OUT/plan.md"
+        fi
+        json="$(svetra "${args[@]}" --json 2>/dev/null)" || true
+        waiting="$(jq -r --arg a "$INPUT_ACCEPT" '(.needs_yes // []) - ($a | split(",") | map(gsub(" "; ""))) | join(",")' <<<"$json" 2>/dev/null || true)"
+        n="$(jq -r '(.changes // []) | length' <<<"$json" 2>/dev/null || echo 0)"
+        echo "needs_yes=$waiting" >> "$GITHUB_OUTPUT"; echo "changes=$n" >> "$GITHUB_OUTPUT"
+        summary "$(cat "$OUT/plan.md")"
+        if [ "$INPUT_COMMENT" = "true" ] && [ -n "$PR_NUMBER" ]; then
+          marker='<!-- svetra-plan -->'
+          { echo "$marker"; cat "$OUT/plan.md"; } > "$OUT/comment.md"
+          id="$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" 2>/dev/null | head -n 1)"
+          # Edit the comment from an earlier push; if that isn't allowed, or there is none, add one.
+          if [ -n "$id" ] && gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@"$OUT/comment.md" >/dev/null 2>&1; then
+            :
+          elif ! gh api -X POST "repos/$REPO/issues/$PR_NUMBER/comments" -F body=@"$OUT/comment.md" >/dev/null 2>&1; then
+            echo "::notice::Could not comment on the pull request (a fork's token is read-only). The plan is in the job summary."
+          fi
+        fi
+        [ "$code" -eq 0 ] || echo "::error::svetra plan: ${waiting:-the design is not valid} need a yes. See the comment or the job summary."
+        exit "$code"
