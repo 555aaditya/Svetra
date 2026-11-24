@@ -201,3 +201,58 @@ fn a_body_must_end_with_a_semicolon_but_nested_blocks_and_comments_are_fine() {
         "fixtures/holes/finledger/transfer.sql"
     )));
 }
+
+#[test]
+fn require_loads_and_checks() {
+    let src = ledger("    require:\n      - \"amount > 0\"\n      - \"source != destination\"");
+    assert!(codes(&src).is_empty(), "{:?}", codes(&src));
+    let (doc, _) = load(&src);
+    assert_eq!(
+        doc.holes[0].require,
+        ["amount > 0", "source != destination"]
+    );
+}
+
+#[test]
+fn require_is_checked_against_the_inputs() {
+    for (cond, needle) in [
+        ("balance > 0", "has no field `balance`"),
+        ("amount", "must be true or false"),
+        ("source.nope == auth.user", "has no field `nope`"),
+    ] {
+        let src = ledger(&format!("    require:\n      - \"{cond}\""));
+        let found = codes(&src);
+        assert!(
+            found
+                .iter()
+                .any(|(c, m)| c == "SVT003" && m.contains(needle)),
+            "{cond}: {found:?}"
+        );
+    }
+}
+
+#[test]
+fn require_may_not_read_through_an_input_the_hole_doesnt_declare() {
+    let src = ledger("    require:\n      - \"source.owner == auth.user\"").replace(
+        "    reads: [Account]\n    writes: [Account, Transaction]",
+        "    writes: [Transaction]",
+    );
+    let found = codes(&src);
+    assert!(
+        found
+            .iter()
+            .any(|(c, m)| c == "SVT003" && m.contains("`require` reads Account")),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn an_empty_or_misshapen_require_is_refused() {
+    for tail in ["    require: []", "    require: \"amount > 0\""] {
+        let found = codes(&ledger(tail));
+        assert!(
+            found.iter().any(|(c, _)| c == "SVT029"),
+            "{tail}: {found:?}"
+        );
+    }
+}
