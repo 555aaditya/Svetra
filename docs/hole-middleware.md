@@ -15,6 +15,8 @@ A hole body is the one hand-written part of a Svetra app, so it is where an agen
 
 ## 1. Input validation: `require`
 
+**Status:** built, with the spec moved to [format.md](format.md#requirements) and [compiler.md](compiler.md#holes). The generated access tests for it (below, Proof) are not built yet.
+
 ### The gap
 
 `when` is for **who**. It runs first and refuses with `42501`, which every client reads as "not allowed". Putting "the amount is positive" in `when` works, but it tells a person "not allowed" when the truth is "that amount is wrong", and it mixes two questions that `explain` should answer separately. Today the agent writes `if p_amount <= 0 then raise exception ...; end if;` at the top of the body, in a different wording each time.
@@ -161,6 +163,7 @@ New checks, written as sentences like the others:
 Two PRs after this one, each small, each with spec text moved into `format.md` and `compiler.md` first:
 
 1. **`require`:** loader and JSON Schema, type-check, the guard statements, `explain`, `context` and `diff`, tests and a golden, the breakage fixture.
+   - **Built.** Left for a follow-up: the generated checks that call each hole with inputs that break each condition, and the breakage fixture. They need inputs chosen from the literals in the condition (each one, one below, one above, and null), which is its own piece of work.
 2. **`idempotent`:** loader and `SVT041`, `hole_keys`, the guard function, the replay path, the same follow-through, and a check on real Supabase.
 
 ## Done when
