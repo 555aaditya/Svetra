@@ -343,11 +343,12 @@
       ],
       "properties": {
         "kind": {
-          "description": "function: called by a person. schedule: run by the database's clock, with only kind, schedule, reads, writes and grants. trigger: run when a row of an entity is inserted, updated or deleted, with only kind, on, events, when, reads, writes and grants.",
+          "description": "function: called by a person. schedule: run by the database's clock, with only kind, schedule, reads, writes and grants. trigger: run when a row of an entity is inserted, updated or deleted, with only kind, on, events, when, reads, writes and grants. webhook: run when another service calls the app through a generated Edge Function, with only kind, secret, signature, input, dedupe, reads, writes, grants, when, require and audit.",
           "enum": [
             "function",
             "schedule",
-            "trigger"
+            "trigger",
+            "webhook"
           ]
         },
         "on": {
@@ -369,6 +370,32 @@
         },
         "schedule": {
           "description": "For kind: schedule. Five-field cron in UTC: minute hour day-of-month month day-of-week, such as \"0 3 * * *\".",
+          "type": "string"
+        },
+        "secret": {
+          "description": "A webhook's secret, by NAME: capital letters, digits and underscores. Set its value with supabase secrets set. Never the value itself.",
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "signature": {
+          "description": "How a webhook's call proves who sent it. Default: hmac_sha256 in x-signature.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scheme": {
+              "enum": [
+                "hmac_sha256",
+                "shared_secret"
+              ]
+            },
+            "header": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]+$"
+            }
+          }
+        },
+        "dedupe": {
+          "description": "The input that identifies a webhook event, so a second delivery is ignored.",
           "type": "string"
         },
         "input": {
