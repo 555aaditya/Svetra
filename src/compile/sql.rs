@@ -168,8 +168,17 @@ pub fn schema_with(doc: &Document, bodies: &HashMap<String, String>) -> String {
         } else {
             ""
         };
+        let events = if doc
+            .holes
+            .iter()
+            .any(|h| matches!(&h.kind, HoleKind::Webhook(w) if w.dedupe.is_some()))
+        {
+            WEBHOOK_EVENTS
+        } else {
+            ""
+        };
         out += &format!(
-            "\n-- Holes\ncreate schema if not exists \"svetra_holes\";\n{keys}{cron_on}\n{}{cleanup}",
+            "\n-- Holes\ncreate schema if not exists \"svetra_holes\";\n{keys}{events}{cron_on}\n{}{cleanup}",
             holes.join("\n")
         );
     }
@@ -267,6 +276,19 @@ create table "svetra"."hole_keys" (
 );
 alter table "svetra"."hole_keys" enable row level security;
 revoke all on table "svetra"."hole_keys" from public, anon, authenticated;
+"#;
+
+/// The events a webhook with `dedupe` has already handled, so a repeat delivery is ignored
+/// (docs/compiler.md, Webhook holes). Closed to the API roles, like the audit log.
+const WEBHOOK_EVENTS: &str = r#"create schema if not exists "svetra";
+create table "svetra"."webhook_events" (
+  "hook" text not null,
+  "event_id" text not null,
+  primary key ("hook", "event_id")
+);
+alter table "svetra"."webhook_events" enable row level security;
+revoke all on table "svetra"."webhook_events" from public, anon, authenticated;
+do $$ begin if exists (select from pg_roles where rolname = 'service_role') then revoke all on table "svetra"."webhook_events" from service_role; end if; end $$;
 "#;
 
 /// The audit log, its append-only trigger and one row trigger per audited entity
@@ -647,9 +669,21 @@ fn hole(
     } else {
         String::new()
     };
+    // A repeat delivery of a webhook event is answered and ignored: the insert is in the same
+    // transaction as the body, so a body that fails takes it back and the sender's retry runs.
+    let dedupe = match &h.kind {
+        HoleKind::Webhook(w) => w.dedupe.as_ref().map_or(String::new(), |d| {
+            format!(
+                " insert into \"svetra\".\"webhook_events\" (\"hook\", \"event_id\") values ({}, ({})::text) on conflict do nothing; if not found then return; end if;",
+                lit(&h.name),
+                d.name
+            )
+        }),
+        _ => String::new(),
+    };
     let public_fn = match retry {
         None => format!(
-            "create function \"public\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$ begin{log} {run} end $svetra$;",
+            "create function \"public\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$ begin{dedupe}{log} {run} end $svetra$;",
             q(&h.name),
             outer_params.join(", ")
         ),
@@ -668,7 +702,9 @@ fn hole(
     out.push(format!(
         "revoke all on function {outer_sig} from public, anon, authenticated;"
     ));
+    // A webhook is reached only through its Edge Function, which holds the service key.
     let callers = match h.role {
+        _ if matches!(h.kind, HoleKind::Webhook(_)) => "service_role",
         Role::Authenticated => "authenticated",
         Role::Anon => "anon",
         Role::Anyone => "anon, authenticated",

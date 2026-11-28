@@ -6,6 +6,9 @@ create function auth.uid() returns uuid language sql stable
   as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 create role anon nologin;
 create role authenticated nologin;
+-- The role Supabase's keys of that name use: the only caller a webhook's database function has.
+create role service_role nologin bypassrls;
+grant usage on schema public to service_role;
 create function auth.jwt() returns jsonb language sql stable
   as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
 grant usage on schema public, auth to anon, authenticated;
