@@ -58,13 +58,8 @@ fn a_signature_can_be_a_shared_secret_in_another_header() {
 
 #[test]
 fn svt028_a_webhook_needs_a_secret_and_inputs() {
-    for missing in ["    secret: PAYMENTS_WEBHOOK_SECRET\n"] {
-        assert_eq!(
-            codes(&GOOD.replace(missing, "")),
-            ["SVT028"],
-            "without {missing:?}"
-        );
-    }
+    let hole = GOOD.replace("    secret: PAYMENTS_WEBHOOK_SECRET\n", "");
+    assert_eq!(codes(&hole), ["SVT028"]);
     let no_input = "  paid:\n    kind: webhook\n    secret: S\n";
     assert_eq!(codes(no_input), ["SVT028"]);
 }
