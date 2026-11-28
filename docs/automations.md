@@ -1,6 +1,6 @@
 # Automations, proposal for version 0.2
 
-This document specifies three new kinds of hole: **scheduled**, **triggered** and **webhook**. It is roadmap milestone M4b. It is a proposal: nothing here is built yet, and once it is, [`format.md`](format.md) and [`compiler.md`](compiler.md) become the authority and this file is folded into them.
+This document specifies three new kinds of hole: **scheduled**, **triggered** and **webhook**. It is roadmap milestone M4b. **Status:** all three kinds are built (scheduled and triggered in 0.8.4, webhooks after it), and every row of the Supabase table below is confirmed or marked UNVERIFIED with what was tried. It began as a proposal, and now [`format.md`](format.md) and [`compiler.md`](compiler.md) become the authority and this file is folded into them.
 
 Real apps soon need code that runs without a person clicking: clean up every night, send a receipt when an order is paid, accept a payment provider's call. Today a hole only runs when someone calls it. These three kinds run on a clock, on a data change, or on an outside call. They keep the rules holes already have: declared access, a role of their own, and generated tests that prove it.
 
