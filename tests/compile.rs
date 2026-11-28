@@ -292,3 +292,43 @@ fn triggers_sql_and_types_match_golden_files() {
     assert_eq!(compile(src), include_str!("golden/triggers.sql"));
     assert_eq!(types(src), include_str!("golden/triggers.ts"));
 }
+
+/// Checked on Postgres 16 by `scripts/pg-check.sh` (`tests/pg/retries_assert.sql`): a repeat returns
+/// the first answer, a changed input is refused, the guard runs again, and the key table is closed.
+#[test]
+fn retries_sql_matches_golden_file() {
+    let got = compile(include_str!("fixtures/retries.yaml"));
+    assert_eq!(got, include_str!("golden/retries.sql"));
+}
+
+#[test]
+fn the_key_table_and_shared_guard_exist_only_for_retry_keys() {
+    let sql = compile(include_str!("fixtures/retries.yaml"));
+    assert_eq!(
+        sql.matches("create table \"svetra\".\"hole_keys\"").count(),
+        1
+    );
+    // One shared guard for the hole that has `when` and a key; none for those without.
+    assert!(sql.contains("\"svetra_holes\".\"pay_allowed\"("));
+    assert!(!sql.contains("relabel_allowed") && !sql.contains("total_allowed"));
+    // The body function's own guard is that function, so the two can't drift apart.
+    assert!(sql.contains("if not coalesce(\"svetra_holes\".\"pay_allowed\"(p_caller, p_request"));
+    for src in [
+        include_str!("fixtures/finledger.yaml"),
+        include_str!("fixtures/validated.yaml"),
+        include_str!("fixtures/audited.yaml"),
+    ] {
+        let sql = compile(src);
+        assert!(!sql.contains("hole_keys") && !sql.contains("_allowed"));
+    }
+}
+
+#[test]
+fn a_repeat_checks_who_may_call_before_it_looks_at_the_inputs() {
+    let sql = compile(include_str!("fixtures/retries.yaml"));
+    let pay = &sql[sql.find("create function \"public\".\"pay\"").expect("pay")..];
+    let guard = pay.find("pay_allowed").expect("guard");
+    let inputs = pay.find("is distinct from v_inputs").expect("inputs");
+    let replay = pay.find("jsonb_populate_record").expect("replay");
+    assert!(guard < inputs && inputs < replay);
+}
