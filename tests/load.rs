@@ -120,7 +120,7 @@ fn holes_and_policies_report_their_own_problems() {
     let src = format!(
         "{HEAD}entities:\n  A:\n    fields:\n      id: {{ type: uuid, primary: true }}\n\
          policies:\n  p:\n    on: A\n    allow: [select, read]\n    when: \"true\"\n    as: everyone\n\
-         holes:\n  h:\n    kind: webhook\n  g:\n    kind: function\n    input:\n      n: money\n"
+         holes:\n  h:\n    kind: queue\n  g:\n    kind: function\n    input:\n      n: money\n"
     );
     assert_eq!(codes(&src), ["SVT029", "SVT029", "SVT023", "SVT023"]);
 }

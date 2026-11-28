@@ -73,12 +73,12 @@ fn svt028_a_schedule_needs_a_schedule() {
 
 #[test]
 fn svt023_an_unknown_kind_lists_the_kinds() {
-    let src = doc("    kind: webhook\n");
+    let src = doc("    kind: queue\n");
     let d = validate(&src)
         .into_iter()
         .find(|d| d.code.id() == "SVT023")
         .expect("SVT023");
-    assert!(d.hint.contains("function, schedule"));
+    assert!(d.hint.contains("function, schedule, trigger, webhook"));
 }
 
 #[test]

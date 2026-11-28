@@ -332,3 +332,31 @@ fn a_condition_between_two_inputs_is_broken_with_the_others_value() {
         "{out}"
     );
 }
+
+/// Checked on PostgreSQL 16 by `scripts/pg-check.sh`, with breakages (`tests/pg/breakages/webhooks.*`).
+#[test]
+fn webhook_checks_match_the_golden_file() {
+    assert_eq!(
+        generate(include_str!("fixtures/webhooks.yaml")),
+        include_str!("golden/webhooks.test.sql")
+    );
+}
+
+#[test]
+fn a_webhook_is_called_by_the_service_role_alone() {
+    let out = generate(include_str!("fixtures/webhooks.yaml"));
+    // Nobody signed in, or out, can run it; the Edge Function's key can; nobody reaches the inside.
+    assert!(out.contains("executes('anon', 'public', 'payment_received'), false"));
+    assert!(out.contains("executes('authenticated', 'public', 'payment_received'), false"));
+    assert!(out.contains("executes('service_role', 'public', 'payment_received'), true"));
+    for role in ["anon", "authenticated", "service_role"] {
+        assert!(out.contains(&format!(
+            "executes('{role}', 'svetra_holes', 'payment_received'), false"
+        )));
+    }
+    // The guard and the requirements are tried as the service role, never as a person.
+    assert!(out.contains("svetra_test.call('service_role', null,"));
+    assert!(out.contains("svetra_test.call_input('service_role', null,"));
+    assert!(!out.contains("svetra_test.call('authenticated'"));
+    assert!(!out.contains("svetra_test.call('anon'"));
+}
