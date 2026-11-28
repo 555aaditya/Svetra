@@ -1,7 +1,7 @@
 use std::process::ExitCode;
 use svetra::report;
 
-const HELP: &str = "svetra: design the system with the AI, compile it to the low level
+const HELP: &str = "svetra: you design the data, Svetra makes it safe
 
 Usage:
   svetra validate [FILE] [--json]   Check a svetra.yaml file (default: ./svetra.yaml)
