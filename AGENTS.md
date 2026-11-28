@@ -28,7 +28,7 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 | `src/typeck.rs` | Expression typing (SVT003) |
 | `src/check.rs` | Whole-document rules: names, duplicates, references, access, money, indexes |
 | `src/report.rs` | `validate()`, plus human and JSON output |
-| `src/compile/` | `svetra compile`: names and quoting (`names.rs`), expressions to SQL (`expr.rs`), the SQL schema (`sql.rs`), TypeScript and Zod (`ts.rs`), access tests with their own rule evaluator (`access_tests.rs`), sign-in settings edited into `supabase/config.toml` (`config.rs`), plus the entry point with header and revision (`mod.rs`) |
+| `src/compile/` | `svetra compile`: names and quoting (`names.rs`), expressions to SQL (`expr.rs`), the SQL schema (`sql.rs`), TypeScript and Zod (`ts.rs`), access tests with their own rule evaluator (`access_tests.rs`), sign-in settings edited into `supabase/config.toml` (`config.rs`), plus the entry point with header and revision (`mod.rs`); a webhook's Edge Function (`edge.rs`), generated in full and importing nothing |
 | `src/patch.rs` | `svetra patch`: checked `set`, `remove` and `rename` edits made on the text of `svetra.yaml` (comments and order stay), validated as a whole, written only if valid and the revision still matches (docs/patch.md) |
 | `src/change.rs` | `svetra diff` and `plan`: compares two designs and classifies every change, with access compared through `svetra view`'s model (docs/change.md) |
 | `src/inspect.rs` | `svetra check`: the read-only catalog query and the findings on an existing database (docs/check.md) |
@@ -57,6 +57,7 @@ cargo +1.88 check --all-targets      # the minimum supported Rust version
 cargo run -- validate tests/fixtures/finledger.yaml [--json]
 scripts/pg-check.sh                  # needs Docker: real-Postgres behaviour checks
 scripts/supabase-check.sh            # needs Docker and Node: the access tests on a real local Supabase
+scripts/webhook-check.sh             # needs Docker, Node and openssl: the generated Edge Functions over HTTP on a real local Supabase
 scripts/mutate.py [--supabase]       # needs Docker (and Node with --supabase): the mutation study
 ```
 

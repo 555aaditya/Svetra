@@ -192,7 +192,7 @@ The full format is specified in [`docs/format.md`](docs/format.md).
 | Sign-in settings | `auth:` (methods, signup, email confirmation, password rules) compiled into `supabase/config.toml`, and `mfa: true` roles that need a second factor | **Done** |
 | Agents | The Svetra skill for Claude Code, `svetra init`, an MCP server for any agent, and holes: custom code as guarded Postgres functions | **Done** |
 | See who can see what | `svetra view`: one page with a table of every person × thing × action, in words, and a diagram ([spec](docs/view.md)) | **Done** |
-| Automations | Scheduled jobs, triggers when data changes, and incoming webhooks | Planned |
+| Automations | Scheduled jobs, triggers when data changes, and incoming webhooks (a generated Edge Function checks the sender's signature, then runs the hole) ([spec](docs/automations.md)) | **Done** |
 | Start fast | `svetra new` with templates ([spec](docs/new.md)) | **Done** |
 | Change safely | `svetra diff` and `svetra plan`: classify every change as safe, breaking or destructive, show whose access widens, and keep renamed data ([spec](docs/change.md)) | **Done** |
 | Existing apps | `svetra check` finds the leaks in an app you've already built ([spec](docs/check.md)); `svetra infer` drafts its `svetra.yaml` | `check` **Done**; `infer` planned |
