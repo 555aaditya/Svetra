@@ -212,7 +212,7 @@ fn a_role_that_needs_mfa_while_authenticator_apps_are_off_is_a_warning() {
 }
 
 #[test]
-fn redirect_urls_that_are_open_or_insecure_are_flagged_with_the_unverified_note() {
+fn redirect_urls_that_are_open_or_insecure_are_flagged() {
     let p = Project::new("redirect");
     p.write(
         "supabase/config.toml",
@@ -230,7 +230,10 @@ fn redirect_urls_that_are_open_or_insecure_are_flagged_with_the_unverified_note(
         "a wildcard path is fine; a wildcard host, plain http and localhost are not"
     );
     let fixes = v["findings"].to_string();
-    assert!(fixes.contains("UNVERIFIED"), "{fixes}");
+    assert!(
+        !fixes.contains("UNVERIFIED"),
+        "the key names are checked now: {fixes}"
+    );
     assert!(!fixes.contains("app.example.com/**"), "{fixes}");
 }
 
