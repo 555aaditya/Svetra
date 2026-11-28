@@ -424,9 +424,18 @@ fn new(args: &[String]) -> ExitCode {
     if dir != "." {
         println!("  cd {dir}");
     }
-    println!("  svetra explain      read the rules in plain English");
-    println!("  svetra compile      write the SQL, types and access tests");
-    println!("  svetra init         set up your coding agent, when you want it to take over");
+    let p = program();
+    let w = p.len() + 14;
+    for (cmd, what) in [
+        ("explain", "read the rules in plain English"),
+        ("compile", "write the SQL, types and access tests"),
+        (
+            "init",
+            "set up your coding agent, when you want it to take over",
+        ),
+    ] {
+        println!("  {:<w$}{what}", format!("{p} {cmd}"));
+    }
     ExitCode::SUCCESS
 }
 
