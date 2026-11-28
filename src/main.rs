@@ -134,7 +134,26 @@ fn file_and_flag<'a>(
 }
 
 fn read(file: &str) -> Result<String, String> {
-    std::fs::read_to_string(file).map_err(|e| format!("cannot read {file}: {e}"))
+    std::fs::read_to_string(file).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            format!(
+                "there is no {file} here. Run `{} new` to start one from a template, or pass the path of your design.",
+                program()
+            )
+        } else {
+            format!("cannot read {file}: {e}")
+        }
+    })
+}
+
+/// How to run svetra, for the hints we print: `npx svetra` when it was started by npx (which
+/// leaves no `svetra` on the PATH), `svetra` otherwise.
+fn program() -> &'static str {
+    if std::env::var("npm_command").is_ok_and(|c| c == "exec") {
+        "npx svetra"
+    } else {
+        "svetra"
+    }
 }
 
 fn validate(args: &[String]) -> ExitCode {
