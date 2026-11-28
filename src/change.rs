@@ -701,8 +701,20 @@ fn starts(h: &Hole) -> Option<String> {
             t.events,
             h.when.as_deref().unwrap_or("true")
         )),
+        HoleKind::Webhook(w) => Some(format!(
+            "webhook {} {:?} {} {:?} when {}",
+            w.secret,
+            w.scheme,
+            w.header,
+            w.dedupe.as_ref().map(|d| &d.name),
+            h.when.as_deref().unwrap_or("true")
+        )),
         HoleKind::Function => None,
     }
+}
+
+fn is_webhook(h: &Hole) -> bool {
+    matches!(h.kind, HoleKind::Webhook(_))
 }
 
 fn is_trigger(h: &Hole) -> bool {
@@ -769,9 +781,15 @@ fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
             None => changes.push(change("add_hole", path, Data::Safe, match &h.kind {
                 HoleKind::Schedule(_) => format!("add custom code {}, which runs by itself on a schedule", h.name),
                 HoleKind::Trigger(t) => format!("add custom code {}, which runs by itself when {} rows change", h.name, t.on.name),
+                HoleKind::Webhook(_) => format!("add custom code {}, which runs when another service calls your app", h.name),
                 HoleKind::Function => format!("add custom code {}", h.name),
             })),
-            Some(x) if starts(x) != starts(h) => changes.push(if is_trigger(x) || is_trigger(h) {
+            Some(x) if starts(x) != starts(h) => changes.push(if is_webhook(x) || is_webhook(h) {
+                hint(
+                    change("change_webhook", path, Data::Breaking, format!("custom code {} is called differently: its secret, signature, repeat check or condition changed, or it is now called by people or by the clock instead", h.name)),
+                    "Set the new secret with supabase secrets set, redeploy the function, and update the sender's settings.",
+                )
+            } else if is_trigger(x) || is_trigger(h) {
                 hint(
                     change("change_trigger", path, Data::Breaking, format!("custom code {} starts differently: it runs after other changes, or is now called by people or by the clock instead", h.name)),
                     "Check what the body does for the rows that now fire it, and update any app code that called it.",
@@ -809,6 +827,15 @@ fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
                         format!("remove custom code {}: it stops running when {} rows change", x.name, t.on.name),
                     ),
                     &format!("The generated schema no longer creates its triggers, but a database that has them keeps them. Drop them by hand: {}", drop_triggers(x)),
+                ),
+                HoleKind::Webhook(_) => hint(
+                    change(
+                        "remove_hole",
+                        format!("holes.{}", x.name),
+                        Data::Breaking,
+                        format!("remove custom code {}: the other service's calls to it fail", x.name),
+                    ),
+                    &format!("Remove the webhook at the sender, and delete supabase/functions/{}.", x.name),
                 ),
                 HoleKind::Function => hint(
                     change(

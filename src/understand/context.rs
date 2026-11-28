@@ -159,6 +159,19 @@ pub fn context(doc: &Document) -> String {
                     events.join(",")
                 )
             }
+            HoleKind::Webhook(w) => {
+                let mut line = format!("hole {}: webhook secret {}", h.name, w.secret);
+                if w.scheme == Scheme::SharedSecret {
+                    line += " shared_secret";
+                }
+                if w.header != "x-signature" {
+                    line += &format!(" header {}", w.header);
+                }
+                if let Some(d) = &w.dedupe {
+                    line += &format!(" dedupe {}", d.name);
+                }
+                format!("{line} ({})", params.join(", "))
+            }
             HoleKind::Function => format!(
                 "hole {}: ({}) -> {}",
                 h.name,
