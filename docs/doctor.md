@@ -178,7 +178,7 @@ Doctor reads how people sign in from two places, and nothing else:
 
 A key missing from `config.toml` has Supabase's default, which doctor applies: sign-ups open, passwords of 6 characters, no email confirmation, anonymous sign-ins off. Doctor never needs a `config.toml`: with none and no `auth:` section, auth checks are listed under "Not checked" and doctor says to run `supabase init`.
 
-**Keys.** VERIFIED means the key is one `svetra compile` already writes ([compiler.md](compiler.md#sign-in-settings)). UNVERIFIED means it's from memory of the Supabase CLI's `config.toml` and must be checked against a `config.toml` made by `supabase init` before the build. No Supabase CLI config was available while writing this spec.
+**Keys.** VERIFIED means the key is one `svetra compile` already writes ([compiler.md](compiler.md#sign-in-settings)), or exists in the `config.toml` that `supabase init` writes: checked on 2026-11-28 against Supabase CLI 3.1.0, where every key the auth checks read (`site_url`, `additional_redirect_urls`, `enable_signup`, `enable_anonymous_sign_ins`, `minimum_password_length`, `[auth.email] enable_confirmations`, `[auth.mfa.totp] enroll_enabled` and `verify_enabled`) is present. UNVERIFIED means it's from memory and not in that file.
 
 | Kind | Severity | Reads | When | Message and fix |
 |---|---|---|---|---|
@@ -188,7 +188,7 @@ A key missing from `config.toml` has Supabase's default, which doctor applies: s
 | `open_signup` | info | `[auth] enable_signup` (VERIFIED), or `signup` | `true` (the default) | "Anyone on the internet can create an account. Fine for a public app; for a private one, set `enable_signup = false` and invite people." Always info: it's the default for public apps |
 | `admin_no_mfa` | warning | `svetra.yaml` `roles:` | A role named `admin`, `owner`, `superadmin` or `root` without `mfa: true`. Only with a `svetra.yaml` | "The admin role works with a password alone. If a password leaks, so does everything admins can reach. fix: add `mfa: true` to the role and compile." Without `svetra.yaml`, doctor can't know who your admins are: that's a reminder, "Turn on a second factor for admin accounts" |
 | `mfa_off` | warning | `[auth.mfa.totp] enroll_enabled`, `verify_enabled` (VERIFIED) | A role has `mfa: true` but either key is `false`: nobody can enroll an authenticator app, so nobody can ever hold the role | "The role admin needs a second factor, but authenticator apps are switched off, so nobody can reach it. fix: run `svetra compile`." |
-| `redirect_open` | warning | `[auth] site_url`, `additional_redirect_urls` (UNVERIFIED) | A redirect URL with a wildcard host (`https://*`), `http://` for a non-local host, or `localhost` while `site_url` is a real domain | "Sign-in links may send people to addresses you don't control. fix: list only your own production addresses." UNVERIFIED: the key names and whether wildcard paths such as `https://app.example.com/**` are a safe, normal form (they are expected to be; they're not flagged) |
+| `redirect_open` | warning | `[auth] site_url`, `additional_redirect_urls` | A redirect URL with a wildcard host (`https://*`), `http://` for a non-local host, or `localhost` while `site_url` is a real domain | "Sign-in links may send people to addresses you don't control. fix: list only your own production addresses." The key names are checked (above). UNVERIFIED: whether wildcard paths such as `https://app.example.com/**` are a safe, normal form: they are expected to be and are not flagged, but the generated `config.toml` describes the list as "*exact* URLs", so this needs checking against the hosted Auth documentation |
 
 **Not read, because the exact keys are UNVERIFIED or the setting is hosted:** OTP and email-link expiry, rate limits, CAPTCHA, SMTP settings, and refresh-token rotation. They are listed under "Not in this version".
 
@@ -229,7 +229,7 @@ Supabase Storage keeps files in buckets, and a **public bucket** serves every fi
 
 Always a warning, never critical: public buckets are normal, and the content decides. A bucket with `file_size_limit` unset or no `allowed_mime_types` is not flagged in this version (see "Not in this version").
 
-Without a database source, this is listed under "Not checked". Doctor does not read `[storage.buckets.*]` tables in `config.toml`: UNVERIFIED that the CLI has such tables, and they describe local buckets only.
+Without a database source, this is listed under "Not checked". Doctor does not read `[storage.buckets.*]` tables in `config.toml` (the CLI's generated file has them as a commented example), because they describe local buckets only.
 
 ## Generated files
 
@@ -285,7 +285,7 @@ Doctor ships in three pull requests, each one topic. The spec is this document.
 
 **What the third PR built, where it differs from the list above.** Auth settings, `public_bucket` and the MCP tool. Everything in the Auth settings and Storage buckets sections is built as written, except:
 
-- **Not checked against a real `config.toml`.** No Supabase CLI was available while building this either, so the UNVERIFIED keys (`site_url`, `additional_redirect_urls`) are still unverified. Doctor reads them, and every `redirect_open` fix says "UNVERIFIED: doctor reads the key names ... from memory of the Supabase CLI's config.toml". The VERIFIED keys are the ones `compile` writes. The spec's step "check against `supabase init` before the build" is still open; do it before relying on `redirect_open`.
+- **Checked against a real `config.toml` on 2026-11-28** (Supabase CLI 3.1.0, `supabase init`): every key the auth checks read exists there, so `redirect_open`'s fix no longer says UNVERIFIED. Still open: whether a wildcard path in `additional_redirect_urls` is safe, which the hosted Auth documentation has to settle, and how the same settings read on a hosted project.
 - **The reader** is `src/doctor/auth.rs`. It uses `compile/config.rs`'s `header` and `entry`, and adds comments after a value, quoted values, booleans, integers, string arrays (also over several lines) and `[[array]]` tables. A line it can't read, or a key it reads with the wrong type (`enable_signup = "yes"`), gives no auth findings from the file and one entry under "Not checked": "supabase/config.toml was not understood (line N)...". The checks that need only `svetra.yaml` (`admin_no_mfa`) still run. It never fails the run.
 - **Findings point at a line** when the key is in the file (`supabase/config.toml:48`), at the file when the value is a default, and at `svetra.yaml:LINE` for values from a design (an `auth:` section's line, a role's line).
 - **Where values come from:** with a `config.toml`, only the file (a missing key has Supabase's default); without one, the design's `auth:` section; with neither, "Auth settings" is under "Not checked" and says to run `supabase init`. A design with errors counts as no design here: `generated.rs` already says so. Email sign-in counts as on unless `[auth.email] enabled = false`.
