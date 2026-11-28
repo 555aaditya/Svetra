@@ -332,7 +332,9 @@ fn svetra(dir: &Path, args: &[&str], stdin: Option<&str>) -> Output {
         .spawn()
         .unwrap();
     if let Some(s) = stdin {
-        child.stdin.take().unwrap().write_all(s.as_bytes()).unwrap();
+        // The command may exit (a usage error) before it reads its input, which closes the pipe
+        // under the write: a broken pipe is not a test failure, the exit code is what is checked.
+        let _ = child.stdin.take().unwrap().write_all(s.as_bytes());
     } else {
         drop(child.stdin.take());
     }
