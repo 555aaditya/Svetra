@@ -1,0 +1,936 @@
+{
+  "svetra": "0.1",
+  "system": "Webhooks",
+  "revision": "ef6e9ace79cf",
+  "people": [
+    {
+      "id": "anon",
+      "label": "Someone not signed in"
+    },
+    {
+      "id": "alice",
+      "label": "A signed-in person"
+    },
+    {
+      "id": "bob",
+      "label": "Another signed-in person"
+    },
+    {
+      "id": "carol",
+      "label": "A signed-in person who owns nothing"
+    }
+  ],
+  "entities": [
+    {
+      "name": "Invoice",
+      "label": "Invoices",
+      "private": false,
+      "fields": [
+        "the signed-in person who owns it (required)",
+        "amount: an exact number, up to 10 digits before the point and 2 after (required)",
+        "status: one of open or paid (starts as open)"
+      ],
+      "links": []
+    },
+    {
+      "name": "Payment",
+      "label": "Payments",
+      "private": false,
+      "fields": [
+        "the invoice it belongs to (required)",
+        "amount: an exact number, up to 10 digits before the point and 2 after (required)"
+      ],
+      "links": [
+        {
+          "field": "invoice",
+          "to": "Invoice"
+        }
+      ]
+    }
+  ],
+  "cells": [
+    {
+      "person": "anon",
+      "entity": "Invoice",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see invoices any other way."
+      ],
+      "rules": [
+        "Signed-in people can see an invoice when its owner is them."
+      ],
+      "tests": [
+        6,
+        7
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Invoice",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's invoice",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        12,
+        13
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Invoice",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        8,
+        9
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Invoice",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        10,
+        11
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Payment",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see payments any other way."
+      ],
+      "rules": [
+        "Signed-in people can see a payment when the owner of its invoice is them."
+      ],
+      "tests": [
+        44,
+        45
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Payment",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one payment",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        50,
+        51
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Payment",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        46,
+        47
+      ]
+    },
+    {
+      "person": "anon",
+      "entity": "Payment",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        48,
+        49
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Invoice",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own invoice",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "someone else's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see an invoice when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see an invoice when its owner is them."
+      ],
+      "tests": [
+        14,
+        15
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Invoice",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: their own invoice",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: someone else's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        20,
+        21
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Invoice",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        16,
+        17
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Invoice",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "their own invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "someone else's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        18,
+        19
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Payment",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": true
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Signed-in people can see a payment when the owner of its invoice is them."
+      ],
+      "rules": [
+        "Signed-in people can see a payment when the owner of its invoice is them."
+      ],
+      "tests": [
+        52,
+        53
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Payment",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one payment",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        58,
+        59
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Payment",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        54,
+        55
+      ]
+    },
+    {
+      "person": "alice",
+      "entity": "Payment",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        56,
+        57
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Invoice",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own invoice",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see an invoice when its owner is them."
+      ],
+      "rules": [
+        "Signed-in people can see an invoice when its owner is them."
+      ],
+      "tests": [
+        24,
+        25
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Invoice",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: someone else's invoice",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: their own invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        30,
+        31
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Invoice",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        26,
+        27
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Invoice",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "someone else's invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "their own invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        28,
+        29
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Payment",
+      "action": "see",
+      "access": "some",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": true
+        }
+      ],
+      "because": [
+        "Signed-in people can see a payment when the owner of its invoice is them."
+      ],
+      "rules": [
+        "Signed-in people can see a payment when the owner of its invoice is them."
+      ],
+      "tests": [
+        62,
+        63
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Payment",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one payment",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        68,
+        69
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Payment",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        64,
+        65
+      ]
+    },
+    {
+      "person": "bob",
+      "entity": "Payment",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        66,
+        67
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Invoice",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see invoices any other way."
+      ],
+      "rules": [
+        "Signed-in people can see an invoice when its owner is them."
+      ],
+      "tests": [
+        34,
+        35
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Invoice",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one person's invoice",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another person's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        40,
+        41
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Invoice",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        36,
+        37
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Invoice",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one person's invoice",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another person's invoice",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        38,
+        39
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Payment",
+      "action": "see",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can see payments any other way."
+      ],
+      "rules": [
+        "Signed-in people can see a payment when the owner of its invoice is them."
+      ],
+      "tests": [
+        72,
+        73
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Payment",
+      "action": "create",
+      "access": "none",
+      "rows": [
+        {
+          "row": "c",
+          "label": "a new one: one payment",
+          "allowed": false
+        },
+        {
+          "row": "d",
+          "label": "a new one: another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        78,
+        79
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Payment",
+      "action": "change",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        74,
+        75
+      ]
+    },
+    {
+      "person": "carol",
+      "entity": "Payment",
+      "action": "delete",
+      "access": "none",
+      "rows": [
+        {
+          "row": "a",
+          "label": "one payment",
+          "allowed": false
+        },
+        {
+          "row": "b",
+          "label": "another payment",
+          "allowed": false
+        }
+      ],
+      "because": [
+        "Nobody can create, change or delete payments directly. Only custom code can change them: payment_received."
+      ],
+      "rules": [],
+      "tests": [
+        76,
+        77
+      ]
+    }
+  ],
+  "holes": [
+    {
+      "name": "payment_received",
+      "lines": [
+        "runs when another service calls your app, only if the call carries the right signature, and only when the paid is more than 0. Nobody can run it from the app.",
+        "takes: invoice (an invoice), paid (an exact number, up to 10 digits before the point and 2 after), event id (text)",
+        "can read: invoices. Can change: invoices, payments.",
+        "every call is recorded in the audit log, with who made it and what they sent."
+      ],
+      "callers": [],
+      "kind": "webhook",
+      "secret": "PAYMENTS_WEBHOOK_SECRET",
+      "starts": "runs when another service calls your app, only if the call carries the right signature, and only when the paid is more than 0. Nobody can run it from the app."
+    },
+    {
+      "name": "form_submitted",
+      "lines": [
+        "runs when another service calls your app, only if the call carries the shared secret. Nobody can run it from the app.",
+        "takes: invoice (an invoice), note (text)",
+        "can read: invoices. Can't change any data.",
+        "a call with bad input is refused unless the note is not empty."
+      ],
+      "callers": [],
+      "kind": "webhook",
+      "secret": "FORM_TOKEN",
+      "starts": "runs when another service calls your app, only if the call carries the shared secret. Nobody can run it from the app."
+    }
+  ],
+  "signing_in": [],
+  "before_going_live": [
+    "payment_received: set the secret with `supabase secrets set PAYMENTS_WEBHOOK_SECRET=...` (use the key the sender gives you), then deploy it with `supabase functions deploy payment_received`. Give the sender the address of that function in your project.",
+    "payment_received: the sender proves who it is with a signature, but a call that was signed once can be sent again by anyone who saved it. The same event is ignored the second time.",
+    "form_submitted: set the secret with `supabase secrets set FORM_TOKEN=...` (use the key the sender gives you), then deploy it with `supabase functions deploy form_submitted`. Give the sender the address of that function in your project.",
+    "form_submitted: the sender proves who it is with a shared secret, which is weaker than a signature: anyone who sees one call can make another."
+  ]
+}
