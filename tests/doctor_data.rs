@@ -193,6 +193,27 @@ fn tracked_migrations_give_no_schema_not_in_git_and_untracked_give_it() {
     p.migrations("migrations");
     let (_, v) = p.json(&["--migrations"]);
     assert_eq!(kinds(&v, "backups"), ["schema_not_in_git"], "{v}");
+    // The migrations are on disk, only not tracked: the message says so, not "only in the database".
+    let finding = v["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["kind"] == "schema_not_in_git")
+        .unwrap();
+    assert!(
+        finding["message"]
+            .as_str()
+            .unwrap()
+            .contains("doesn't track"),
+        "{v}"
+    );
+    assert!(
+        finding["fix"]
+            .as_str()
+            .unwrap()
+            .contains("git add supabase"),
+        "{v}"
+    );
     p.track("supabase/migrations");
     let (_, v) = p.json(&["--migrations"]);
     assert!(kinds(&v, "backups").is_empty(), "{v}");
