@@ -1,0 +1,48 @@
+svetra: "0.1"
+system: Webhooks
+entities:
+  Invoice:
+    fields:
+      id: { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      amount: { type: decimal, precision: 12, scale: 2, required: true }
+      status: { type: enum, values: [open, paid], default: open }
+  Payment:
+    fields:
+      id: { type: uuid, primary: true }
+      invoice: { type: ref, entity: Invoice, required: true }
+      amount: { type: decimal, precision: 12, scale: 2, required: true }
+policies:
+  own_invoices:
+    on: Invoice
+    allow: [select]
+    when: "owner == auth.user"
+  own_payments:
+    on: Payment
+    allow: [select]
+    when: "invoice.owner == auth.user"
+holes:
+  payment_received:
+    kind: webhook
+    secret: PAYMENTS_WEBHOOK_SECRET
+    input:
+      invoice: Invoice.id
+      paid: Invoice.amount
+      event_id: text
+    dedupe: event_id
+    when: "paid > 0"
+    reads: [Invoice]
+    writes: [Invoice, Payment]
+    audit: true
+  form_submitted:
+    kind: webhook
+    secret: FORM_TOKEN
+    signature:
+      scheme: shared_secret
+      header: X-Form-Token
+    input:
+      invoice: Invoice.id
+      note: text
+    require:
+      - "note != ''"
+    reads: [Invoice]

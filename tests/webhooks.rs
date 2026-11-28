@@ -151,3 +151,139 @@ fn a_webhook_with_one_input_and_no_dedupe_is_valid() {
     let hole = "  ping:\n    kind: webhook\n    secret: PING_SECRET\n    input:\n      n: int\n    reads: [Invoice]\n    writes: [Payment, Invoice]\n";
     assert_eq!(found(hole), vec![]);
 }
+
+fn compiled(src: &str) -> Vec<svetra::compile::Output> {
+    svetra::compile::compile(src, "svetra.yaml")
+        .expect("valid")
+        .0
+}
+
+fn output<'a>(all: &'a [svetra::compile::Output], path: &str) -> &'a str {
+    &all.iter().find(|o| o.path == path).expect(path).contents
+}
+
+/// Checked on Postgres 16 by `scripts/pg-check.sh` (`tests/pg/webhooks_assert.sql`).
+#[test]
+fn webhooks_sql_matches_golden_file() {
+    let all = compiled(include_str!("fixtures/webhooks.yaml"));
+    let sql = output(&all, "supabase/schemas/svetra.sql");
+    assert_eq!(
+        sql.split_once("\n\n").expect("header").1,
+        include_str!("golden/webhooks.sql")
+    );
+}
+
+/// Run on a real local Supabase by `scripts/supabase-check.sh`: signed calls, bad signatures, wrong
+/// shapes, the guard and a repeat delivery.
+#[test]
+fn edge_functions_match_golden_files() {
+    let all = compiled(include_str!("fixtures/webhooks.yaml"));
+    for (name, golden) in [
+        (
+            "payment_received",
+            include_str!("golden/webhooks.payment_received.ts"),
+        ),
+        (
+            "form_submitted",
+            include_str!("golden/webhooks.form_submitted.ts"),
+        ),
+    ] {
+        let ts = output(&all, &format!("supabase/functions/{name}/index.ts"));
+        assert_eq!(ts.split_once('\n').expect("header").1, golden, "{name}");
+    }
+}
+
+#[test]
+fn only_webhooks_get_an_edge_function_and_the_client_has_no_call_for_them() {
+    let all = compiled(include_str!("fixtures/webhooks.yaml"));
+    let paths: Vec<&str> = all.iter().map(|o| o.path.as_str()).collect();
+    assert!(paths.contains(&"supabase/functions/payment_received/index.ts"));
+    assert!(paths.contains(&"supabase/functions/form_submitted/index.ts"));
+    let ts = output(&all, "src/svetra.gen.ts");
+    assert!(!ts.contains("payment_received") && !ts.contains("form_submitted"));
+    for src in [
+        include_str!("fixtures/finledger.yaml"),
+        include_str!("fixtures/triggers.yaml"),
+        include_str!("fixtures/jobs.yaml"),
+    ] {
+        assert!(compiled(src).iter().all(|o| !o.path.contains("functions/")));
+    }
+}
+
+#[test]
+fn the_function_never_holds_a_secret_and_names_only_the_secret_and_the_header() {
+    let all = compiled(include_str!("fixtures/webhooks.yaml"));
+    let ts = output(&all, "supabase/functions/payment_received/index.ts");
+    assert!(ts.contains("const SECRET = \"PAYMENTS_WEBHOOK_SECRET\";"));
+    assert!(ts.contains("const HEADER = \"x-signature\";"));
+    // The proof is read from the environment, and the body is read raw before it is parsed.
+    assert!(ts.contains("Deno.env.get(SECRET)"));
+    assert!(ts.find("arrayBuffer()").unwrap() < ts.find("JSON.parse").unwrap());
+    // No library is imported, so a call never waits on the network to start.
+    assert!(!ts.contains("import "));
+    // The shared-secret function compares, and does not compute a signature.
+    let shared = output(&all, "supabase/functions/form_submitted/index.ts");
+    assert!(shared.contains("same(bytes(secret), bytes(given))"));
+    assert!(!shared.contains("crypto.subtle"));
+    assert!(shared.contains("const HEADER = \"x-form-token\";"));
+}
+
+#[test]
+fn the_public_function_is_for_the_service_role_alone() {
+    let all = compiled(include_str!("fixtures/webhooks.yaml"));
+    let sql = output(&all, "supabase/schemas/svetra.sql");
+    for name in ["payment_received", "form_submitted"] {
+        assert!(sql.contains(&format!("\"public\".\"{name}\"(")), "{name}");
+    }
+    assert_eq!(sql.matches("to service_role;").count(), 2);
+    assert!(!sql.contains("to authenticated;") && !sql.contains("to anon;"));
+    // A hole with dedupe has the events table, and answers a repeat before anything else runs.
+    assert_eq!(
+        sql.matches("create table \"svetra\".\"webhook_events\"")
+            .count(),
+        1
+    );
+    let at = sql
+        .find("on conflict do nothing; if not found then return;")
+        .expect("dedupe");
+    assert!(
+        at < sql
+            .find("insert into \"svetra\".\"audit_log\"")
+            .expect("audit")
+    );
+    // The one without dedupe never touches the events table.
+    let form = &sql[sql
+        .find("create function \"public\".\"form_submitted\"")
+        .unwrap()..];
+    assert!(!form[..form.find("revoke all").unwrap()].contains("webhook_events"));
+}
+
+#[test]
+fn the_function_is_reached_by_the_sender_so_config_toml_says_no_token_is_needed() {
+    let d = std::env::temp_dir().join(format!("svetra-wh-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(d.join("supabase")).unwrap();
+    std::fs::write(d.join("supabase/config.toml"), "[api]\nenabled = true\n").unwrap();
+    std::fs::write(
+        d.join("svetra.yaml"),
+        include_str!("fixtures/webhooks.yaml"),
+    )
+    .unwrap();
+    let run = svetra::project::compile(&d.join("svetra.yaml"), false).expect("compiles");
+    assert!(run.config_updated);
+    let config = std::fs::read_to_string(d.join("supabase/config.toml")).unwrap();
+    assert!(config.contains("[functions.payment_received]\nverify_jwt = false"));
+    assert!(config.contains("[functions.form_submitted]\nverify_jwt = false"));
+    assert!(config.starts_with("[api]\nenabled = true\n"));
+    // Run again: nothing changes, and --check agrees.
+    let again = svetra::project::compile(&d.join("svetra.yaml"), true).expect("checks");
+    assert!(again.stale.is_empty(), "{:?}", again.stale);
+    // Edit the generated function by hand and --check says so.
+    std::fs::write(d.join("supabase/functions/payment_received/index.ts"), "//").unwrap();
+    let edited = svetra::project::compile(&d.join("svetra.yaml"), true).expect("checks");
+    assert_eq!(
+        edited.stale,
+        ["supabase/functions/payment_received/index.ts"]
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
