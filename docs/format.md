@@ -427,6 +427,46 @@ Not allowed: `input`, `output`, `require`, `idempotent` (the row is the input, a
 
 The generated SQL is in [compiler.md](compiler.md#triggered-holes), and the design in [automations.md](automations.md#triggered-holes).
 
+### Webhook holes
+
+A hole with `kind: webhook` runs when another service calls your app: a payment provider reporting a charge, a form tool sending a submission. Nobody can run it from the app. Svetra generates a small Edge Function that checks who is calling and hands the call to the hole.
+
+```yaml
+holes:
+  payment_received:
+    kind: webhook
+    secret: PAYMENTS_WEBHOOK_SECRET   # the NAME of a secret, never its value
+    signature:
+      scheme: hmac_sha256
+      header: x-signature
+    input:
+      invoice: Invoice.id
+      paid: Invoice.amount
+      event_id: text
+    dedupe: event_id
+    reads: [Invoice]
+    writes: [Invoice, Payment]
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `kind` | yes | `webhook` |
+| `secret` | yes | The **name** of the secret that holds the key: capital letters, digits and underscores, starting with a letter. Set its value with `supabase secrets set NAME=...`. Anything else is `SVT039`, so a pasted key is caught (the message doesn't print it) |
+| `signature` | no | `{ scheme, header }`. `scheme` is `hmac_sha256` (the header is the hex HMAC-SHA256 of the raw body, keyed by the secret) or `shared_secret` (the header must equal the secret). Default: `hmac_sha256` in `x-signature`. Another `scheme` is `SVT029`. Provider-specific formats, such as Stripe's, are not in this version |
+| `input` | yes | Map of name to type, as for `function`. Each is read from the JSON body's key of the same name, and all are required |
+| `dedupe` | no | One `input` name that identifies the event. A second delivery with the same value is answered `200` and ignored. A name that isn't an input is `SVT002` |
+| `reads`, `writes`, `grants`, `require`, `audit` | no | As for `function`. A webhook has no caller, so an audited call is recorded with no `actor` |
+| `when` | no | A condition on the inputs, as for `function`, but without `auth.user` or `has_role` (`SVT003`): nobody is signed in |
+
+Not allowed: `as` (the generated function is the only caller), `output` (a webhook answers `200` with no body) and `idempotent` (use `dedupe`), all `SVT020`.
+
+- **The check comes first.** The function reads the raw body, checks the signature in constant time, and only then reads the JSON. A missing secret, a missing header or a wrong signature is `401` with no detail; a body that doesn't match the inputs is `400`; a `when` that refuses is `403`; any other failure is `500` with no detail.
+- **It runs as the hole's own role,** like every hole, with the grants it declares and nothing else. `p_caller` is `null`.
+- **Replays.** `dedupe` stops a duplicate delivery. It does not stop an old, correctly signed call being sent again: timestamp checks are not in this version, and `explain` says so. A `shared_secret` is weaker than a signature, because anyone who sees one call can send another.
+- **Going live.** The secret's value is never in `svetra.yaml` or any generated file. `explain` lists, per webhook, the `supabase secrets set` command and the deploy step.
+
+The generated SQL and Edge Function are in [compiler.md](compiler.md#webhook-holes), and the design in [automations.md](automations.md#webhook-holes).
+
 ## Audit
 
 `audit: true` on an entity or a hole records what happened in one append-only table, `svetra.audit_log`. It answers "who changed this, and when" from the database itself, so it holds for every client, not only Svetra's.
@@ -473,6 +513,7 @@ The generated SQL is in [compiler.md](compiler.md#triggered-holes), and the desi
 | `SVT031` | info | In `svetra plan`: `was` names a rename that's already applied, because the design the database has already uses the new name. Remove it | `remove_was` |
 | `SVT037` | error | A `schedule` isn't a valid five-field cron expression: wrong number of fields, a value out of range, or a name where a number is needed. The message says which field | `fix_schedule` |
 | `SVT038` | error | Trigger holes form a loop: one writes an entity whose trigger hole (or its own) fires on it. The message names the cycle | `break_loop` |
+| `SVT039` | error | A webhook's `secret` isn't the name of a secret (capital letters, digits and underscores, starting with a letter), which usually means its value was pasted into the file. The message never prints the value | `use_secret_name` |
 | `SVT040` | warning | A `schedule` or `trigger` hole has `grants`: a role is given or taken away with no person calling it | `confirm_grants` |
 | `SVT041` | error | A hole's `idempotent` can't work: it names an input the hole doesn't have, the input isn't `uuid` or `text`, or the hole can be called by `anon` or `anyone`, who have no identity to keep a key under | `fix_hole` |
 | `SVT001` | error | Entity exposed through the API has no policy. Mark it `private: true` or add a policy | `add_policy` |
@@ -586,6 +627,7 @@ These come later, if real use asks for them:
 - Migrations between graph revisions (planned for `svetra diff` and `patch`)
 - Multiple files and imports
 - Audit retention and export, logging refused calls, and alerting
-- Hole kinds other than `function`, `schedule` and `trigger`: webhooks are specified in [automations.md](automations.md)
 - Expiry and pruning of retry keys
+- Provider-specific webhook signatures (such as Stripe's `t=…,v1=…`) and timestamp checks against replay
+- Retry keys (`idempotent`) on holes: proposed in [hole-middleware.md](hole-middleware.md)
 - The sign-in methods listed under [Authentication](#authentication) as not in version 0.1
