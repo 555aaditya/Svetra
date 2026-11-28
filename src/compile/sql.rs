@@ -159,13 +159,115 @@ pub fn schema_with(doc: &Document, bodies: &HashMap<String, String>) -> String {
                 scheduled.join(", ")
             )
         };
+        let keys = if doc
+            .holes
+            .iter()
+            .any(|h| h.idempotent.is_some() && h.kind == HoleKind::Function)
+        {
+            KEY_TABLE
+        } else {
+            ""
+        };
         out += &format!(
-            "\n-- Holes\ncreate schema if not exists \"svetra_holes\";\n{cron_on}\n{}{cleanup}",
+            "\n-- Holes\ncreate schema if not exists \"svetra_holes\";\n{keys}{cron_on}\n{}{cleanup}",
             holes.join("\n")
         );
     }
     out
 }
+
+/// The call of the shared guard from the public function, which has the caller as `auth.uid()`.
+fn guard_call(allowed: &str, inputs: &[(String, String)], h: &Hole) -> Option<String> {
+    h.when.as_ref().map(|_| {
+        let args: String = inputs.iter().map(|(n, _)| format!(", {n}")).collect();
+        format!("{allowed}((select auth.uid()){args})")
+    })
+}
+
+/// The public function of a hole with a retry key (docs/compiler.md, Retry keys): look the key up
+/// first, answer a repeat from the stored first answer after the guard has run again, and
+/// otherwise run the body and keep its answer. The migration's role owns it, so the hole's role
+/// never touches `svetra.hole_keys`.
+#[allow(clippy::too_many_arguments)]
+fn retry_function(
+    h: &Hole,
+    key: &str,
+    inputs: &[(String, String)],
+    returns: &str,
+    params: &[String],
+    log: &str,
+    call: &str,
+    guard: Option<String>,
+) -> String {
+    let name = lit(&h.name);
+    let pairs: Vec<String> = inputs
+        .iter()
+        .map(|(n, _)| format!("{}, {n}", lit(n)))
+        .collect();
+    let refuse = |message: String| {
+        format!(
+            "raise exception using message = {}, errcode = '22023';",
+            lit(&message)
+        )
+    };
+    let allowed = guard.map_or(String::new(), |g| {
+        format!(
+            "    if not coalesce({g}, false) then raise exception 'not allowed to call {}' using errcode = '42501'; end if;\n",
+            h.name
+        )
+    });
+    let replay = match (&h.output, returns) {
+        (None, _) => "return;".to_string(),
+        (Some(ParamType::Entity(_)), t) => {
+            format!("return jsonb_populate_record(null::{t}, v_row.\"result\");")
+        }
+        (Some(_), "jsonb") => "return v_row.\"result\";".to_string(),
+        (Some(_), t) => format!("return (v_row.\"result\" #>> '{{}}')::{t};"),
+    };
+    let (declare_result, run, answer) = if h.output.is_some() {
+        (
+            format!("  v_result {returns};\n"),
+            format!("v_result := {call};"),
+            "to_jsonb(v_result)",
+        )
+    } else {
+        (String::new(), format!("perform {call};"), "null::jsonb")
+    };
+    let finish = if h.output.is_some() {
+        " return v_result;"
+    } else {
+        ""
+    };
+    format!(
+        "create function \"public\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$\n#variable_conflict use_column\ndeclare\n  v_key text := ({key})::text;\n  v_inputs jsonb := jsonb_build_object({});\n  v_row \"svetra\".\"hole_keys\";\n{declare_result}begin\n  if v_key is null then {} end if;\n  select * into v_row from \"svetra\".\"hole_keys\" where \"hole\" = {name} and \"caller\" = (select auth.uid()) and \"key\" = v_key;\n  if found then\n{allowed}    if v_row.\"inputs\" is distinct from v_inputs then {} end if;\n    {replay}\n  end if;\n  {log} {run}\n  insert into \"svetra\".\"hole_keys\" (\"hole\", \"caller\", \"key\", \"inputs\", \"result\") values ({name}, (select auth.uid()), v_key, v_inputs, {answer});{finish}\nend\n$svetra$;",
+        q(&h.name),
+        params.join(", "),
+        pairs.join(", "),
+        refuse(format!(
+            "{}: {key} is needed so a repeat can be recognised",
+            h.name
+        )),
+        refuse(format!(
+            "{}: {key} was already used with different inputs",
+            h.name
+        )),
+    )
+}
+
+/// Where a hole with `idempotent` keeps each caller's keys and first answers (docs/compiler.md,
+/// Retry keys). Closed to the app and to every hole, like the audit log.
+const KEY_TABLE: &str = r#"create schema if not exists "svetra";
+create table "svetra"."hole_keys" (
+  "hole" text not null,
+  "caller" uuid not null,
+  "key" text not null,
+  "inputs" jsonb not null,
+  "result" jsonb,
+  primary key ("hole", "caller", "key")
+);
+alter table "svetra"."hole_keys" enable row level security;
+revoke all on table "svetra"."hole_keys" from public, anon, authenticated;
+"#;
 
 /// The audit log, its append-only trigger and one row trigger per audited entity
 /// (docs/compiler.md, Audit).
@@ -451,6 +553,32 @@ fn hole(
         .get(&h.name)
         .cloned()
         .unwrap_or_else(|| stub(&h.name));
+    // With a retry key, the guard is one function, called by the body and by a repeat.
+    let retry = h
+        .idempotent
+        .as_deref()
+        .filter(|_| h.kind == HoleKind::Function);
+    let allowed = format!("\"svetra_holes\".{}", q(&format!("{}_allowed", h.name)));
+    let allowed_args: String = inputs.iter().map(|(n, _)| format!(", p_{n}")).collect();
+    let guard = match (retry, guard) {
+        (Some(_), Some(g)) => {
+            let sig = format!(
+                "{allowed}(uuid{})",
+                types.iter().map(|t| format!(", {t}")).collect::<String>()
+            );
+            out.push(format!(
+                "create function {allowed}({})\n  returns boolean language plpgsql security definer set search_path = ''\n  as $svetra$\nbegin\n  return coalesce({g}, false);\nend\n$svetra$;",
+                inner_params.join(", ")
+            ));
+            out.push(format!("alter function {sig} owner to {role};"));
+            out.push(format!(
+                "revoke all on function {sig} from public, anon, authenticated;"
+            ));
+            out.push(format!("grant execute on function {sig} to current_user;"));
+            Some(format!("{allowed}(p_caller{allowed_args})"))
+        }
+        (_, g) => g,
+    };
     out.push(format!(
         "create function \"svetra_holes\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$\nbegin\n{}{}{}{}end\n$svetra$;",
         q(&h.name),
@@ -519,11 +647,24 @@ fn hole(
     } else {
         String::new()
     };
-    out.push(format!(
-        "create function \"public\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$ begin{log} {run} end $svetra$;",
-        q(&h.name),
-        outer_params.join(", ")
-    ));
+    let public_fn = match retry {
+        None => format!(
+            "create function \"public\".{}({})\n  returns {returns} language plpgsql security definer set search_path = ''\n  as $svetra$ begin{log} {run} end $svetra$;",
+            q(&h.name),
+            outer_params.join(", ")
+        ),
+        Some(key) => retry_function(
+            h,
+            key,
+            &inputs,
+            &returns,
+            &outer_params,
+            &log,
+            &call,
+            guard_call(&allowed, &inputs, h),
+        ),
+    };
+    out.push(public_fn);
     out.push(format!(
         "revoke all on function {outer_sig} from public, anon, authenticated;"
     ));
