@@ -1,0 +1,14 @@
+flowchart LR
+  person(("👤 Signed-in person"))
+  e_Invoice["Invoice<br/>owner: user!<br/>amount: decimal!<br/>status: enum"]
+  e_Payment["Payment<br/>invoice: → Invoice!<br/>amount: decimal!"]
+  h_payment_received(["⚙️ payment_received"])
+  h_form_submitted(["⚙️ form_submitted"])
+  e_Invoice -- owner --> person
+  e_Payment -- invoice --> e_Invoice
+  person -. "sees" .-> e_Invoice
+  person -. "sees" .-> e_Payment
+  h_payment_received -. reads .-> e_Invoice
+  h_payment_received == changes ==> e_Invoice
+  h_payment_received == changes ==> e_Payment
+  h_form_submitted -. reads .-> e_Invoice

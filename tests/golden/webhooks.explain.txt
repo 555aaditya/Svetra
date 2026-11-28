@@ -1,0 +1,38 @@
+Webhooks
+
+What your app stores
+  Invoices
+    - the signed-in person who owns it (required)
+    - amount: an exact number, up to 10 digits before the point and 2 after (required)
+    - status: one of open or paid (starts as open)
+  Payments
+    - the invoice it belongs to (required)
+    - amount: an exact number, up to 10 digits before the point and 2 after (required)
+
+Who can see and change what
+  Invoices
+    - Signed-in people can see an invoice when its owner is them.
+    - Nobody can see invoices any other way.
+    - Nobody can create, change or delete invoices directly. Only custom code can change them: payment_received.
+  Payments
+    - Signed-in people can see a payment when the owner of its invoice is them.
+    - Nobody can see payments any other way.
+    - Nobody can create, change or delete payments directly. Only custom code can change them: payment_received.
+
+Custom code
+  payment_received
+    - runs when another service calls your app, only if the call carries the right signature, and only when the paid is more than 0. Nobody can run it from the app.
+    - takes: invoice (an invoice), paid (an exact number, up to 10 digits before the point and 2 after), event id (text)
+    - can read: invoices. Can change: invoices, payments.
+    - every call is recorded in the audit log, with who made it and what they sent.
+  form_submitted
+    - runs when another service calls your app, only if the call carries the shared secret. Nobody can run it from the app.
+    - takes: invoice (an invoice), note (text)
+    - can read: invoices. Can't change any data.
+    - a call with bad input is refused unless the note is not empty.
+
+Before going live
+  - payment_received: set the secret with `supabase secrets set PAYMENTS_WEBHOOK_SECRET=...` (use the key the sender gives you), then deploy it with `supabase functions deploy payment_received`. Give the sender the address of that function in your project.
+  - payment_received: the sender proves who it is with a signature, but a call that was signed once can be sent again by anyone who saved it. The same event is ignored the second time.
+  - form_submitted: set the secret with `supabase secrets set FORM_TOKEN=...` (use the key the sender gives you), then deploy it with `supabase functions deploy form_submitted`. Give the sender the address of that function in your project.
+  - form_submitted: the sender proves who it is with a shared secret, which is weaker than a signature: anyone who sees one call can make another.

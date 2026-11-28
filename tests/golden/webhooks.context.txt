@@ -1,0 +1,7 @@
+Webhooks (svetra 0.1)
+Invoice: id uuid pk; owner user!; amount decimal(12,2)!; status enum(open|paid)=open
+Payment: id uuid pk; invoice ref(Invoice)!; amount decimal(12,2)!
+policy own_invoices: Invoice select authenticated when owner == auth.user
+policy own_payments: Payment select authenticated when invoice.owner == auth.user
+hole payment_received: webhook secret PAYMENTS_WEBHOOK_SECRET dedupe event_id (invoice Invoice.id, paid Invoice.amount, event_id text); reads Invoice; writes Invoice, Payment; when paid > 0; audit
+hole form_submitted: webhook secret FORM_TOKEN shared_secret header x-form-token (invoice Invoice.id, note text); reads Invoice; require note != ''
