@@ -52,6 +52,9 @@ pub struct Scope<'a> {
     /// A triggered hole's `when`: fields are the row after the change, nothing else is
     /// readable, and `old.<field>` is the row before when this is `Some(true)`.
     trigger: Option<bool>,
+    /// A webhook's `when`: it reads its inputs like a policy does, but nobody is signed in when
+    /// another service calls, so there is no `auth.user` and no `has_role`.
+    nobody: bool,
     /// Set when the error came from `has_role`, so it's reported as SVT006 rather than SVT003.
     role_error: std::cell::Cell<bool>,
 }
@@ -69,6 +72,7 @@ impl<'a> Scope<'a> {
             policy,
             roles,
             trigger: None,
+            nobody: false,
             role_error: std::cell::Cell::new(false),
         }
     }
@@ -78,6 +82,12 @@ impl<'a> Scope<'a> {
     /// row before the change, exists (it does only for an update).
     pub fn for_trigger(mut self, old: bool) -> Self {
         self.trigger = Some(old);
+        self
+    }
+
+    /// The scope of a webhook's `when`: the inputs, one hop through them, and nobody signed in.
+    pub fn for_webhook(mut self) -> Self {
+        self.nobody = true;
         self
     }
 }
@@ -209,6 +219,9 @@ impl Scope<'_> {
             [a, b] if a == "auth" && b == "user" && self.trigger.is_some() => Err(
                 "A trigger's `when` can't use `auth.user`: the change may not come from a signed-in person, and a WHEN clause can't look anyone up.".into(),
             ),
+            [a, b] if a == "auth" && b == "user" && self.nobody => Err(
+                "A webhook's `when` can't use `auth.user`: nobody is signed in when another service calls.".into(),
+            ),
             [a, b] if a == "auth" && b == "user" => {
                 if self.policy {
                     Ok((Ty::Id, None))
@@ -311,6 +324,12 @@ impl Scope<'_> {
         if self.trigger.is_some() {
             return Err(
                 "A trigger's `when` can't use `has_role`: a WHEN clause can't look anyone up."
+                    .into(),
+            );
+        }
+        if self.nobody {
+            return Err(
+                "A webhook's `when` can't use `has_role`: nobody is signed in when another service calls."
                     .into(),
             );
         }

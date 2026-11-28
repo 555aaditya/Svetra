@@ -581,12 +581,34 @@ impl<'a> Checker<'a> {
                 HoleKind::Trigger(t) => {
                     self.reference(&t.on, &format!("{hp}.on"));
                 }
+                HoleKind::Webhook(w) => {
+                    if let Some(d) = w
+                        .dedupe
+                        .as_ref()
+                        .filter(|d| !h.input.iter().any(|p| p.name == d.name))
+                    {
+                        self.d(
+                            Code::Svt002,
+                            format!("{hp}.dedupe"),
+                            d.pos,
+                            format!(
+                                "`dedupe` names `{}`, which isn't an input of hole `{}`.",
+                                d.name, h.name
+                            ),
+                            "Name the input that identifies each event, such as event_id.",
+                        );
+                    }
+                }
                 HoleKind::Function => {}
             }
             if let Some(key) = &h.idempotent {
                 self.retry_key(h, key, doc);
             }
-            if let Some(g) = h.grants.first().filter(|_| h.kind != HoleKind::Function) {
+            if let Some(g) = h
+                .grants
+                .first()
+                .filter(|_| matches!(h.kind, HoleKind::Schedule(_) | HoleKind::Trigger(_)))
+            {
                 let starts = match h.kind {
                     HoleKind::Schedule(_) => "runs on a schedule",
                     _ => "runs when a row changes",
@@ -789,7 +811,11 @@ impl<'a> Checker<'a> {
                 continue;
             }
             let inputs = typeck::hole_entity(h, &entities);
-            let scope = typeck::Scope::new(&inputs, &entities, true, &doc.roles);
+            let mut scope = typeck::Scope::new(&inputs, &entities, true, &doc.roles);
+            // Nobody is signed in when another service calls, so a webhook can't ask who it is.
+            if matches!(h.kind, HoleKind::Webhook(_)) {
+                scope = scope.for_webhook();
+            }
             let conditions = h
                 .when
                 .iter()
