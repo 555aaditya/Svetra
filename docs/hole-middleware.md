@@ -67,6 +67,8 @@ An input typed `Transaction.amount` already gets the field's **type**. It could 
 
 ## 2. Retries: `idempotent`
 
+**Status:** built, with the spec moved to [format.md](format.md#retry-keys) and [compiler.md](compiler.md#retry-keys). Differences from the proposal below: a call with no key is refused (`22023`), the refusal message names the key input (`<hole>: <key> was already used with different inputs`), and the generated access tests prove only that the key table is closed to the app and to every hole. Replay behaviour is checked by hand on PostgreSQL 16 (`tests/pg/retries_assert.sql`), because it needs a body that runs.
+
 ### The gap
 
 Mobile clients retry, and so do browsers, proxies and agents. A `transfer` called twice moves the money twice. The usual fix is a client-chosen key that makes the second call a no-op, and agents write it by hand (a table, an insert, an `on conflict`) with the same slips: the key isn't scoped to the caller, the second call returns an error instead of the first answer, or the same key is accepted for different inputs.
