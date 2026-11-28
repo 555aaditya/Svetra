@@ -555,3 +555,51 @@ fn changing_a_holes_retry_key_is_listed_and_safe_for_data() {
         );
     }
 }
+
+#[test]
+fn the_human_plan_merges_one_persons_actions_and_json_keeps_every_change() {
+    // Opening every action on customers to everyone: each person gets one line per action in the
+    // data (the JSON), and one line in the text people read.
+    let wide = BASE.replace(
+        "allow: [select, insert, update], when: \"owner == auth.user\"",
+        "allow: [select, insert, update], when: \"true\"",
+    );
+    let (a, _) = load(BASE);
+    let (b, _) = load(&wide);
+    let p = plan(&a, BASE, &b, &wide);
+    let per_cell: Vec<&str> = p
+        .changes
+        .iter()
+        .filter(|c| c.access == Some("wider"))
+        .map(|c| c.message.as_str())
+        .collect();
+    assert!(
+        per_cell.len() >= 6,
+        "one change per person and action: {per_cell:?}"
+    );
+    assert!(per_cell.contains(&"A signed-in person can now create all customers (was: some)."));
+
+    let text = svetra::change::human(&p, "Shop", "HEAD");
+    let merged = "A signed-in person can now see, create and change all customers (was: some).";
+    assert!(text.contains(merged), "{text}");
+    // The per-action lines are gone from the text, and so is the repeated reason.
+    assert!(!text.contains("can now create all customers"), "{text}");
+    let wider_lines = text
+        .lines()
+        .filter(|l| l.trim_start().starts_with("wider"))
+        .count();
+    assert!(
+        wider_lines < per_cell.len(),
+        "{wider_lines} lines for {} changes\n{text}",
+        per_cell.len()
+    );
+    // The header counts the lines shown, not the changes in the data.
+    let shown = text
+        .lines()
+        .filter(|l| {
+            let t = l.trim_start();
+            t.starts_with("wider") || t.starts_with("safe") || t.starts_with("breaking")
+        })
+        .count();
+    assert!(text.starts_with(&format!("{shown} change")), "{text}");
+}
