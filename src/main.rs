@@ -250,7 +250,7 @@ fn compile(args: &[String]) -> ExitCode {
     }
     if run.no_config {
         println!(
-            "note: no {CONFIG}, so the sign-in settings weren't applied. Run `supabase init`, then `svetra compile` again."
+            "note: no {CONFIG}, so the sign-in settings and the webhook settings weren't applied. A webhook's Edge Function refuses its sender until `verify_jwt = false` is set for it. Run `supabase init`, then `svetra compile` again."
         );
     }
     if check {
@@ -270,7 +270,7 @@ fn compile(args: &[String]) -> ExitCode {
         println!("wrote {w}");
     }
     if run.config_updated {
-        println!("updated the sign-in settings in {CONFIG}");
+        println!("updated the settings in {CONFIG}");
     }
     ExitCode::SUCCESS
 }
