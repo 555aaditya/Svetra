@@ -867,6 +867,11 @@ fn hole(h: &Hole, entities: &HashMap<&str, &Entity>) -> Vec<String> {
             rules.join(", and ")
         ));
     }
+    if let Some(key) = &h.idempotent {
+        out.push(format!(
+            "a call repeated with the same {key} by the same person returns the first answer and runs nothing; one repeated with different details is refused. The keys are kept for good."
+        ));
+    }
     if h.audit {
         out.push(
             "every call is recorded in the audit log, with who made it and what they sent.".into(),

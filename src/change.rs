@@ -728,6 +728,19 @@ fn holes(old: &Document, new: &Document, changes: &mut Vec<Change>) {
             ));
         }
         if let Some(x) = old.holes.iter().find(|x| x.name == h.name)
+            && x.idempotent != h.idempotent
+        {
+            changes.push(hint(
+                change(
+                    "change_idempotent",
+                    path.clone(),
+                    Data::Safe,
+                    format!("repeated calls of {} are now answered differently", h.name),
+                ),
+                "With a key, a repeat returns the first answer; without one it runs again. Check the app's retries.",
+            ));
+        }
+        if let Some(x) = old.holes.iter().find(|x| x.name == h.name)
             && x.require != h.require
         {
             changes.push(hint(
