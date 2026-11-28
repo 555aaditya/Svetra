@@ -213,7 +213,7 @@ What can be read locally, and is a finding:
 
 | Kind | Severity | Reads | When | Message and fix |
 |---|---|---|---|---|
-| `schema_not_in_git` | warning | `git ls-files`, `DIR/supabase/` | A `supabase/` folder with no tracked `.sql` file under `supabase/migrations/` or `supabase/schemas/`, while the project has tables (any source gave tables) | "Your tables exist only in the live database. If the project is lost, nothing can recreate them. fix: `supabase db pull` writes them as a migration; commit it." |
+| `schema_not_in_git` | warning | `git ls-files`, `DIR/supabase/` | A `supabase/` folder with no tracked `.sql` file under `supabase/migrations/` or `supabase/schemas/`, while the project has tables (any source gave tables) | With no `.sql` file on disk: "Your tables exist only in the live database. If the project is lost, nothing can recreate them. fix: `supabase db pull` writes them as a migration; commit it." With `.sql` files on disk that git doesn't track: "The files in supabase/migrations describe your tables, but git doesn't track them yet. If this folder is lost, so are they. fix: `git add supabase`, then commit." |
 
 With no git, or no `supabase/` folder, this check is skipped and listed under "Not checked".
 
@@ -280,7 +280,7 @@ Doctor ships in three pull requests, each one topic. The spec is this document.
 - **The first line** drops "(database not checked)" and the `Database:` line says what was read: `3 migrations, 3 applied (reads your migrations, not your live database)`, or the connection string without its password. `--json` adds `migrations` as in `check`.
 - **Failed migrations** are listed under "Data exposure" with the database's first error line, and "Database" goes under "Not checked" (so no clearance), both when some failed and when none applied.
 - **`ready` is still always false in this build,** because "Auth settings" and a new "Storage buckets" entry are always under "Not checked" until the third part lands. The "Not a clearance." last line stays.
-- **`schema_not_in_git`** is a warning with the object `supabase`: the database snapshot has at least one table (in the schemas read), `DIR/supabase/` exists, and no `.sql` file under `supabase/migrations/` or `supabase/schemas/` is tracked. It also appears for `--migrations` run on a folder whose migrations aren't committed. Without git it is listed under "Not checked" as "Schema in git"; without a `supabase/` folder it is skipped silently.
+- **`schema_not_in_git`** is a warning with the object `supabase`: the database snapshot has at least one table (in the schemas read), `DIR/supabase/` exists, and no `.sql` file under `supabase/migrations/` or `supabase/schemas/` is tracked. It also appears for `--migrations` run on a folder whose migrations aren't committed, and then the message says the files exist but aren't tracked, and the fix is `git add supabase`, not `supabase db pull`. Without git it is listed under "Not checked" as "Schema in git"; without a `supabase/` folder it is skipped silently.
 - **Reminders** are printed when `DIR/supabase/` exists or a database source was given.
 
 **What the third PR built, where it differs from the list above.** Auth settings, `public_bucket` and the MCP tool. Everything in the Auth settings and Storage buckets sections is built as written, except:
