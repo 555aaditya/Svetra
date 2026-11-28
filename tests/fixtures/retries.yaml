@@ -1,0 +1,55 @@
+svetra: "0.1"
+system: Retries
+entities:
+  Wallet:
+    fields:
+      id: { type: uuid, primary: true }
+      owner: { type: user, required: true }
+      balance: { type: decimal, precision: 18, scale: 2, required: true }
+      label: { type: text }
+  Payment:
+    fields:
+      id: { type: uuid, primary: true }
+      wallet: { type: ref, entity: Wallet, required: true }
+      amount: { type: decimal, precision: 18, scale: 2, required: true }
+policies:
+  owner_read:
+    on: Wallet
+    allow: [select]
+    when: "owner == auth.user"
+  payments_read:
+    on: Payment
+    allow: [select]
+    when: "wallet.owner == auth.user"
+holes:
+  pay:
+    kind: function
+    input:
+      request: uuid
+      wallet: Wallet.id
+      amount: Payment.amount
+    output: Payment
+    reads: [Wallet]
+    writes: [Wallet, Payment]
+    when: "wallet.owner == auth.user"
+    require:
+      - "amount > 0"
+    idempotent: request
+    audit: true
+  relabel:
+    kind: function
+    input:
+      tag: text
+      wallet: Wallet.id
+      label: Wallet.label
+    reads: [Wallet]
+    writes: [Wallet]
+    idempotent: tag
+  total:
+    kind: function
+    input:
+      request: text
+      wallet: Wallet.id
+    output: Wallet.balance
+    reads: [Wallet]
+    idempotent: request
