@@ -460,7 +460,7 @@ holes:
 
 Not allowed: `as` (the generated function is the only caller), `output` (a webhook answers `200` with no body) and `idempotent` (use `dedupe`), all `SVT020`.
 
-- **The check comes first.** The function reads the raw body, checks the signature in constant time, and only then reads the JSON. A missing secret, a missing header or a wrong signature is `401` with no detail; a body that doesn't match the inputs is `400`; a `when` that refuses is `403`; any other failure is `500` with no detail.
+- **The check comes first.** The function reads the raw body, checks the signature in constant time, and only then reads the JSON. A missing secret, a missing header or a wrong signature is `401` with no detail; a body that doesn't match the inputs, or breaks a `require`, is `400`; a `when` that refuses is `403`; any other failure is `500` with no detail.
 - **It runs as the hole's own role,** like every hole, with the grants it declares and nothing else. `p_caller` is `null`.
 - **Replays.** `dedupe` stops a duplicate delivery. It does not stop an old, correctly signed call being sent again: timestamp checks are not in this version, and `explain` says so. A `shared_secret` is weaker than a signature, because anyone who sees one call can send another.
 - **Going live.** The secret's value is never in `svetra.yaml` or any generated file. `explain` lists, per webhook, the `supabase secrets set` command and the deploy step.
