@@ -39,6 +39,7 @@ Dependencies flow one way: `yaml` → `model` → `load` → `expr`/`typeck` →
 | `schema/svetra.schema.json` | The JSON Schema for editors. Hand-written; `tests/schema.rs` fails if it drifts from the loader |
 | `tests/` | Integration tests. `tests/fixtures/` holds example `svetra.yaml` files (and real hole bodies in `tests/fixtures/holes/<fixture>/`), and `tests/golden/` holds their expected compiler output, compared byte for byte |
 | `site/` | The website: Vite, React, Tailwind v4 and BoardUI's free components (MIT, see `site/LICENSE-BOARDUI`). Shows only real output, imported from `tests/` at build time. `npm run build` in `site/`; deployed from `main` by `pages.yml` |
+| `brand/` | The logo and every file built from it (SVG, PNG, ICO). `brand/scripts/build.py` draws them from one definition of the mark with only the Python standard library; `--check` fails if a committed file is stale. Edit `scripts/geometry.py`, never the generated files (see `brand/README.md`) |
 | `eval/agent/` | The agent evaluation pilot: headless Claude Code on fixed prompts, then deterministic checks of what it built on a real PostgreSQL. Not shipped; see its README for what it can and cannot show |
 | `eval/leakstudy/` | The leak study harness: `svetra check` on the migrations of open-source Supabase apps, in a sealed throwaway PostgreSQL. Code only; the data (repo names, findings) is git-ignored and never published. Not shipped |
 | `npm/` | The npm wrapper: downloads, verifies and caches the release binary on first run |
