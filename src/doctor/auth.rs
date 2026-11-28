@@ -390,8 +390,8 @@ fn mfa_off(doc: &Document, c: &Config, out: &mut Vec<Finding>) {
     }
 }
 
-/// `redirect_open`. UNVERIFIED: the key names `site_url` and `additional_redirect_urls` are from
-/// memory of the Supabase CLI's `config.toml` (docs/doctor.md), so the fix says so.
+/// `redirect_open`. The key names `site_url` and `additional_redirect_urls` are checked against the
+/// `config.toml` that `supabase init` writes (docs/doctor.md, Auth settings).
 fn redirect_open(c: &Config, out: &mut Vec<Finding>) {
     let site = match c.get("auth", "site_url") {
         Some((Val::Str(s), l)) => Some((s.clone(), l)),
@@ -421,9 +421,7 @@ fn redirect_open(c: &Config, out: &mut Vec<Finding>) {
         );
         f.message =
             format!("Sign-in links may send people to addresses you don't control: {url} ({why}).");
-        f.fix = format!(
-            "list only your own production addresses, {DASHBOARD}. UNVERIFIED: doctor reads the key names site_url and additional_redirect_urls from memory of the Supabase CLI's config.toml, not from a file `supabase init` made."
-        );
+        f.fix = format!("list only your own production addresses, {DASHBOARD}.");
         out.push(f);
     }
 }
