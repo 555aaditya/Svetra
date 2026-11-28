@@ -722,6 +722,22 @@ fn starts(h: &Hole) -> Option<String> {
                 list(&events, "or")
             ))
         }
+        HoleKind::Webhook(w) => {
+            let proof = match w.scheme {
+                Scheme::HmacSha256 => "only if the call carries the right signature",
+                Scheme::SharedSecret => "only if the call carries the shared secret",
+            };
+            let only = h
+                .when
+                .as_deref()
+                .and_then(|x| expr::parse(x).ok())
+                .map_or(String::new(), |e| {
+                    format!(", and only when {}", english(&e, Style::Hole))
+                });
+            Some(format!(
+                "runs when another service calls your app, {proof}{only}. Nobody can run it from the app."
+            ))
+        }
         HoleKind::Function => None,
     }
 }
