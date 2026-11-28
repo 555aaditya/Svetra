@@ -271,3 +271,49 @@ fn require_is_refused_on_a_scheduled_or_triggered_hole() {
         );
     }
 }
+
+#[test]
+fn a_retry_key_must_be_a_uuid_or_text_input_on_a_signed_in_hole() {
+    let hole = |tail: &str| {
+        let src = ledger(tail).replace(
+            "      amount: Transaction.amount\n",
+            "      amount: Transaction.amount\n      request: uuid\n      note: text\n      count: int\n",
+        );
+        codes(&src)
+    };
+    assert!(hole("    idempotent: request").is_empty());
+    assert!(hole("    idempotent: note").is_empty());
+    for (tail, needle) in [
+        ("    idempotent: count", "must be a `uuid` or `text` input"),
+        ("    idempotent: source", "must be a `uuid` or `text` input"),
+        ("    idempotent: nothing", "isn't an input"),
+        (
+            "    idempotent: request\n    as: anyone",
+            "who have no identity",
+        ),
+        (
+            "    idempotent: request\n    as: anon",
+            "who have no identity",
+        ),
+    ] {
+        let found = hole(tail);
+        assert!(
+            found
+                .iter()
+                .any(|(c, m)| c == "SVT041" && m.contains(needle)),
+            "{tail}: {found:?}"
+        );
+    }
+}
+
+#[test]
+fn idempotent_is_refused_on_a_scheduled_or_triggered_hole() {
+    let schedule = "svetra: \"0.1\"\nsystem: T\nentities:\n  Inv:\n    fields:\n      id: { type: uuid, primary: true }\nholes:\n  sweep:\n    kind: schedule\n    schedule: \"0 3 * * *\"\n    writes: [Inv]\n    idempotent: id\n";
+    let found = codes(schedule);
+    assert!(
+        found
+            .iter()
+            .any(|(c, m)| c == "SVT020" && m.contains("no caller to retry")),
+        "{found:?}"
+    );
+}
