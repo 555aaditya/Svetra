@@ -335,8 +335,8 @@ A hole with `idempotent` differs from other holes in two places, and a hole with
 
 - **`svetra_holes.<name>_allowed(p_caller, p_<input>, …) returns boolean`,** only when the hole also has `when`: the `when` condition, written once, owned by the hole's role (so it reads with the hole's access) and executable by the migration's role only. The body function's guard calls it, and so does the public function on a repeat.
 - **The public function** gets variables `v_inputs jsonb` (`jsonb_build_object` of every input) and `v_key`, and becomes, in order:
-  1. look up `(<hole>, auth.uid(), <key input>::text)` in `hole_keys`;
-  2. **on a hit:** if the hole has `when` and `_allowed(...)` isn't true, raise `42501`; if the stored `inputs` differ from `v_inputs`, raise `22023` with `<hole>: request was already used with different inputs`; otherwise return the stored `result` as the hole's type (`jsonb_populate_record` for an entity, a cast of the text value for a scalar, nothing for a hole with no `output`), and do nothing else;
+  1. if the key is null, raise `22023` (`<hole>: <key> is needed so a repeat can be recognised`); otherwise look up `(<hole>, auth.uid(), <key input>::text)` in `hole_keys`. The function reads `#variable_conflict use_column`, so an input named `key` or `caller` can't be mistaken for a column;
+  2. **on a hit:** if the hole has `when` and `_allowed(...)` isn't true, raise `42501`; if the stored `inputs` differ from `v_inputs`, raise `22023` with `<hole>: <key> was already used with different inputs`; otherwise return the stored `result` as the hole's type (`jsonb_populate_record` for an entity, a cast of the text value for a scalar, nothing for a hole with no `output`), and do nothing else;
   3. **on a miss:** the audit record if the hole has `audit` (a repeat is not recorded again), the call to the body function, then the insert into `hole_keys` with `to_jsonb(<result>)`, then the return.
 
   The primary key settles two first calls that arrive together: the second insert fails and its work rolls back.
