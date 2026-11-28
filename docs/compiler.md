@@ -418,6 +418,36 @@ create trigger "svetra_notify_paid_update" after update on "public"."order"
 - **One trigger per event**, named `svetra_<name>_<event>`, always `after`, `for each row`, so each can use the right row in its `WHEN`. Bare fields in `when` become `new."col"` (`old."col"` for `delete`), and `old.<field>` becomes `old."col"`. `is null` and `is not null` stand in for `== null`, as everywhere. Where the Svetra expression is `!=` the SQL is `<>`.
 - **The depth limit** raises SQLSTATE `54001` when triggers nest more than three deep, a backstop for loops `SVT038` can't see.
 
+### Webhook holes
+
+A hole with `kind: webhook` gets the role and the body function of a `function` hole (the `when` guard, then each `require`, then the body; `p_caller` is `null` because the service key carries no user), and a `public` function, with two differences from a `function` hole:
+
+- **Only `service_role` may call the `public` function.** Execute is revoked from `public`, `anon` and `authenticated` by name and granted to `service_role`. The body function is executable by the migration's role alone, so `service_role` is revoked from it too. The role the body runs as is still `svetra_hole_<name>`, not the service role's wide access.
+- **With `dedupe`,** the `-- Holes` section starts with a table, and the public function's first statement records the event and returns if it was already there:
+
+```sql
+create table "svetra"."webhook_events" (
+  "hook" text not null,
+  "event_id" text not null,
+  primary key ("hook", "event_id")
+);
+-- in public.<name>:
+insert into "svetra"."webhook_events" ("hook", "event_id") values ('payment_received', (event_id)::text) on conflict do nothing;
+if not found then return; end if;
+```
+
+  The table has row-level security with no policy and no grant to `anon`, `authenticated` or `service_role`, in a schema Supabase doesn't expose. The insert shares the transaction with the body, so a body that fails, or a `when` that refuses, takes it back and the sender's retry runs.
+
+**The Edge Function** is written to `supabase/functions/<name>/index.ts` on every `compile`, with the "do not edit" header, and checked by `compile --check` like the other generated files. It imports nothing. In order:
+1. `405` for anything but `POST`; the raw body is read as bytes, and `413` above 1 MB.
+2. The proof, read **before** the JSON is parsed. For `hmac_sha256` it computes the HMAC-SHA256 of the raw bytes with the secret from `Deno.env.get("<SECRET>")` and compares it with the header in constant time (a loop over every byte, never stopping at the first difference). For `shared_secret` it compares the header with the secret the same way. A missing secret, a missing header or a mismatch is `401` with no body.
+3. The JSON must be an object with every input, each of the right type (a validator written into the function from the hole's input types: text, enum values, whole and decimal numbers, booleans, uuids, dates and times; `json` takes anything). Otherwise `400`. Keys the hole doesn't declare are dropped.
+4. A `fetch` to `${SUPABASE_URL}/rest/v1/rpc/<name>` with the service key from its own environment as `apikey` and bearer. `200` on success; PostgREST's error `code` `42501` (the hole's `when`) is `403`, `22023` (a `require`) is `400`, and anything else is `500` with no body.
+
+**`supabase/config.toml`** gets `[functions.<name>]` with `verify_jwt = false` for each webhook, set in place like the sign-in keys (a missing key goes at the end of its table, a missing table at the end of the file, everything else kept). The sender has no Supabase token, so without it the call is refused before the function runs. Without a `supabase/config.toml`, `compile` says so, because the function would refuse its sender until the line is added. A removed webhook leaves its folder and its line; the `diff` hint says to delete them.
+
+Access tests for each webhook hole: its role's table privileges as above; `anon` and `authenticated` can't execute `public.<name>`, and `service_role` can; none of the three can execute `svetra_holes.<name>`; the guard and each `require` are tried **as the service role** (never as a person, who couldn't call it); and, when it has `dedupe`, no role (`anon`, `authenticated`, `service_role` and each hole's own) has a privilege on `svetra.webhook_events`. What is not generated: the Edge Function itself needs a Deno runtime, so `scripts/webhook-check.sh` calls it over HTTP on a real local Supabase (a signed call and its repeat, every wrong call's status) and CI runs it.
+
 Access tests for each trigger hole: its role's table privileges as above; `anon`, `authenticated` and `service_role` (when it exists) can't execute the body or the trigger function; no function `<name>` exists in `public`; `pg_trigger` has exactly one enabled `after`, `for each row` trigger per declared event on the declared table, each calling the trigger function, and no other `svetra_<name>_` trigger; each trigger's definition contains the compiled `when`; the body function is `security definer`, owned by the hole's role, with an empty `search_path`; the hole's role is refused an insert into an entity it doesn't write; and, where the design lets a person insert a row into the entity, inserting one as that person fires the hole. What a body does isn't tested.
 
 ## Access tests
