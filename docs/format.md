@@ -629,5 +629,4 @@ These come later, if real use asks for them:
 - Audit retention and export, logging refused calls, and alerting
 - Expiry and pruning of retry keys
 - Provider-specific webhook signatures (such as Stripe's `t=…,v1=…`) and timestamp checks against replay
-- Retry keys (`idempotent`) on holes: proposed in [hole-middleware.md](hole-middleware.md)
 - The sign-in methods listed under [Authentication](#authentication) as not in version 0.1
