@@ -210,8 +210,13 @@ pub fn model(doc: &Document, src: &str) -> Value {
             if let Some(starts) = parts::starts(h) {
                 v["kind"] = json!(match h.kind {
                     HoleKind::Trigger(_) => "trigger",
+                    HoleKind::Webhook(_) => "webhook",
                     _ => "schedule",
                 });
+                // The name of the secret, never a value: there is none in the design.
+                if let HoleKind::Webhook(w) = &h.kind {
+                    v["secret"] = json!(w.secret);
+                }
                 v["starts"] = json!(starts);
                 v["callers"] = json!([]);
             }
