@@ -530,3 +530,28 @@ fn changing_a_holes_require_is_listed_and_safe_for_data() {
     // The same list is no change.
     assert!(plan(&b, &strict, &b, &strict).changes.is_empty());
 }
+
+#[test]
+fn changing_a_holes_retry_key_is_listed_and_safe_for_data() {
+    let hole = |extra: &str| {
+        format!(
+            "{BASE}holes:\n  close:\n    kind: function\n    writes: [Order]\n    input:\n      request: uuid\n{extra}"
+        )
+    };
+    let (plain, keyed) = (hole(""), hole("    idempotent: request\n"));
+    let (a, d) = load(&plain);
+    assert!(d.is_empty(), "{d:#?}");
+    let (b, d) = load(&keyed);
+    assert!(d.is_empty(), "{d:#?}");
+    for (from, to, fs, ts) in [(&a, &b, &plain, &keyed), (&b, &a, &keyed, &plain)] {
+        let found: Vec<_> = plan(from, fs, to, ts)
+            .changes
+            .into_iter()
+            .map(|c| (c.kind, c.path, c.data))
+            .collect();
+        assert_eq!(
+            found,
+            [("change_idempotent", "holes.close".to_string(), Data::Safe)]
+        );
+    }
+}

@@ -78,3 +78,17 @@ fn context_lists_a_holes_requirements() {
         "{out}"
     );
 }
+
+#[test]
+fn a_hole_with_a_retry_key_says_what_a_repeat_does() {
+    let (doc, diags) = load(include_str!("fixtures/retries.yaml"));
+    let out = explain(&doc, &diags);
+    assert!(out.contains("a call repeated with the same request by the same person returns the first answer and runs nothing"));
+    assert!(out.contains("with the same tag"));
+    let (doc, diags) = load(include_str!("fixtures/finledger.yaml"));
+    assert!(!explain(&doc, &diags).contains("repeated"));
+    let (doc, _) = load(include_str!("fixtures/retries.yaml"));
+    let ctx = svetra::understand::context::context(&doc);
+    assert!(ctx.contains("; idempotent request; audit\n"), "{ctx}");
+    assert!(ctx.contains("; idempotent tag\n"), "{ctx}");
+}

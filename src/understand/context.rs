@@ -196,6 +196,9 @@ pub fn context(doc: &Document) -> String {
         if !h.require.is_empty() {
             line += &format!("; require {}", h.require.join(" | "));
         }
+        if let Some(key) = &h.idempotent {
+            line += &format!("; idempotent {key}");
+        }
         if h.audit {
             line += "; audit";
         }
