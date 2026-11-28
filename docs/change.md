@@ -74,6 +74,9 @@ Changes are computed between the two typed models, never from text, so reorderin
 | `change_trigger` | a trigger hole's `on`, `events` or `when` changes, or its kind does | **breaking**: it runs after other changes with no data change |
 | `remove_hole` (scheduled) | a `schedule` hole is removed | **breaking**: it stops running. Its job is unscheduled by the generated schema while another scheduled hole remains; if it was the last, the hint gives the `cron.unschedule` to run by hand |
 | `remove_hole` (triggered) | a `trigger` hole is removed | **breaking**: it stops running. The generated schema no longer creates its triggers, but a database that has them keeps them, so the hint gives the `drop trigger` statements |
+| `add_hole` (webhook) | a `webhook` hole is added | safe |
+| `change_webhook` | a webhook's `secret`, `signature`, `dedupe` or `when` changes, or its kind does | **breaking**: the sender's calls are answered differently with no data change. Set the new secret, redeploy the function and update the sender |
+| `remove_hole` (webhook) | a `webhook` hole is removed | **breaking**: the sender's calls fail. Delete `supabase/functions/<name>` and the `[functions.<name>]` lines by hand, and remove the webhook at the sender |
 | `change_auth` | `password.min_length` 10 → 12 | safe for data; listed so it's seen |
 
 ### Access
