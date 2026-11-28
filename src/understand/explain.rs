@@ -213,7 +213,9 @@ fn signing_in(a: &Auth, roles: &[RoleDef]) -> Vec<String> {
 
 fn before_live(doc: &Document) -> Vec<String> {
     let Some(a) = &doc.auth else {
-        return schedule_live(doc);
+        let mut out = schedule_live(doc);
+        out.extend(webhook_live(doc));
+        return out;
     };
     let mut out: Vec<String> = a
         .sign_in
@@ -232,6 +234,37 @@ fn before_live(doc: &Document) -> Vec<String> {
     }
     out.push("Set your app's real web address in Supabase, for sign-in links and the page people return to after signing in.".into());
     out.extend(schedule_live(doc));
+    out.extend(webhook_live(doc));
+    out
+}
+
+/// For each webhook: the secret to set, the function to deploy, and what a caller can still do.
+fn webhook_live(doc: &Document) -> Vec<String> {
+    let mut out = Vec::new();
+    for h in &doc.holes {
+        let HoleKind::Webhook(w) = &h.kind else {
+            continue;
+        };
+        out.push(format!(
+            "{}: set the secret with `supabase secrets set {}=...` (use the key the sender gives you), then deploy it with `supabase functions deploy {}`. Give the sender the address of that function in your project.",
+            h.name, w.secret, h.name
+        ));
+        out.push(match w.scheme {
+            Scheme::HmacSha256 => format!(
+                "{}: the sender proves who it is with a signature, but a call that was signed once can be sent again by anyone who saved it. {}",
+                h.name,
+                if w.dedupe.is_some() {
+                    "The same event is ignored the second time."
+                } else {
+                    "Nothing ignores a second delivery, so make sure running it twice is harmless."
+                }
+            ),
+            Scheme::SharedSecret => format!(
+                "{}: the sender proves who it is with a shared secret, which is weaker than a signature: anyone who sees one call can make another.",
+                h.name
+            ),
+        });
+    }
     out
 }
 
@@ -333,6 +366,7 @@ fn english(e: &Expr, st: Style) -> String {
     let its = if st == Style::Hole { "the" } else { "its" };
     match e {
         Expr::Num(n) => format!("{n}"),
+        Expr::Str(s) if s.is_empty() => "empty".into(),
         Expr::Str(s) => s.clone(),
         Expr::Bool(b) => {
             if *b {
