@@ -53,6 +53,18 @@ jobs:
       - run: cargo build
       - run: scripts/supabase-check.sh
 
+  webhooks:
+    # The generated Edge Functions, called over HTTP on a real local Supabase with its REST API and
+    # Edge Runtime: signed and unsigned calls, a repeat delivery, and every wrong call's status.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: cargo build
+      - run: scripts/webhook-check.sh
+
   site:
     # The website builds (types, then Vite) with the real compiler output it imports.
     runs-on: ubuntu-latest
