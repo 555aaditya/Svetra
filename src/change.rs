@@ -40,6 +40,17 @@ pub struct Change {
     pub hint: Option<String>,
     /// For access changes: the `explain` sentences that allow it now.
     pub because: Vec<String>,
+    /// For access changes: the message cut around its action, so the human output can merge
+    /// the lines of one person that differ only in the action.
+    pub split: Option<Split>,
+}
+
+/// An access message cut around its action: `message == head + action + tail`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Split {
+    pub head: String,
+    pub action: String,
+    pub tail: String,
 }
 
 pub struct Plan {
@@ -74,6 +85,7 @@ fn change(kind: &'static str, path: String, data: Data, message: String) -> Chan
         message,
         hint: None,
         because: Vec::new(),
+        split: None,
     }
 }
 
@@ -1037,44 +1049,40 @@ fn access(
         }
         let who = label(&b, person);
         let things = plural(entity);
-        let (kind, dir, message) = match (rank(from), rank(to)) {
+        // The message is `head + action + tail`; the parts are kept so the human output can merge
+        // one person's lines that differ only in the action.
+        let (kind, dir, head, tail) = match (rank(from), rank(to)) {
             (Some(f), Some(t)) if t > f => (
                 "wider_access",
                 "wider",
-                format!(
-                    "{who} can now {action} {} {things} (was: {}).",
-                    words(to),
-                    words(from)
-                ),
+                format!("{who} can now "),
+                format!(" {} {things} (was: {}).", words(to), words(from)),
             ),
             (Some(_), Some(0)) => (
                 "narrower_access",
                 "narrower",
-                format!(
-                    "{who} can no longer {action} {things} (was: {}).",
-                    words(from)
-                ),
+                format!("{who} can no longer "),
+                format!(" {things} (was: {}).", words(from)),
             ),
             (Some(_), Some(_)) => (
                 "narrower_access",
                 "narrower",
-                format!(
-                    "{who} can now {action} only {} {things} (was: {}).",
-                    words(to),
-                    words(from)
-                ),
+                format!("{who} can now "),
+                format!(" only {} {things} (was: {}).", words(to), words(from)),
             ),
             // Either side can't be decided: report it rather than call it unchanged.
             _ => (
                 "wider_access",
                 "wider",
+                format!("{who}: "),
                 format!(
-                    "{who}: {action} {things} can't be told apart (was: {}, now: {}).",
+                    " {things} can't be told apart (was: {}, now: {}).",
                     words(from),
                     words(to)
                 ),
             ),
         };
+        let message = format!("{head}{action}{tail}");
         let because = c["because"]
             .as_array()
             .map(|v| {
@@ -1091,6 +1099,11 @@ fn access(
             message,
             hint: None,
             because,
+            split: Some(Split {
+                head,
+                action: action.to_string(),
+                tail,
+            }),
         });
     }
 }
@@ -1246,26 +1259,61 @@ pub fn json(plan: &Plan, from: &str, writes: &[String]) -> Value {
 
 /// The plan for people (docs/change.md, Output).
 pub fn human(plan: &Plan, system: &str, from: &str) -> String {
-    let mut out = format!(
-        "{} change{} to {system} (from {from})\n\n",
-        plan.changes.len(),
-        if plan.changes.len() == 1 { "" } else { "s" }
-    );
     if plan.changes.is_empty() {
         return format!("No changes to {system} (from {from}).\n");
     }
-    for c in &plan.changes {
+    let mut out = String::new();
+    let mut shown = 0;
+    let mut i = 0;
+    while i < plan.changes.len() {
+        let c = &plan.changes[i];
         let tag = c.access.unwrap_or(match c.kind {
             "rename_entity" | "rename_field" => "rename",
             _ => c.data.word(),
         });
-        out += &format!("  {tag:<12} {}\n", c.message);
+        // Adjacent access changes of the same kind that differ only in the action become one
+        // line: "can now see, create, change and delete all notes".
+        let mut end = i + 1;
+        if let Some(first) = &c.split {
+            while let Some(next) = plan.changes.get(end) {
+                let same = next.split.as_ref().is_some_and(|n| {
+                    n.head == first.head && n.tail == first.tail && next.because == c.because
+                }) && next.kind == c.kind
+                    && next.access == c.access;
+                if !same {
+                    break;
+                }
+                end += 1;
+            }
+        }
+        let message = match &c.split {
+            Some(first) if end > i + 1 => {
+                let actions: Vec<String> = plan.changes[i..end]
+                    .iter()
+                    .filter_map(|x| x.split.as_ref().map(|s| s.action.clone()))
+                    .collect();
+                format!(
+                    "{}{}{}",
+                    first.head,
+                    crate::understand::words::list(&actions, "and"),
+                    first.tail
+                )
+            }
+            _ => c.message.clone(),
+        };
+        shown += 1;
+        out += &format!("  {tag:<12} {message}\n");
         for b in &c.because {
             out += &format!("  {:<12}   because: {b}\n", "");
         }
         if let Some(h) = &c.hint {
             out += &format!("  {:<12}   hint: {h}\n", "");
         }
+        i = end;
     }
-    out
+    // The count is of the lines shown: `--json` lists every change one by one.
+    format!(
+        "{shown} change{} to {system} (from {from})\n\n{out}",
+        if shown == 1 { "" } else { "s" }
+    )
 }
