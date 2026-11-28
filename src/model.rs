@@ -202,8 +202,32 @@ pub enum HoleKind {
     Function,
     /// Run by the database's clock.
     Schedule(Schedule),
+    /// Run when another service calls the app, through a generated Edge Function.
+    Webhook(Webhook),
     /// Run when a row of an entity is inserted, updated or deleted.
     Trigger(Trigger),
+}
+
+/// A webhook hole: where its secret is kept, how a call is signed, and how a repeat is spotted.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Webhook {
+    /// The NAME of the secret, never its value (docs/automations.md, Secrets).
+    pub secret: String,
+    pub secret_pos: Pos,
+    pub scheme: Scheme,
+    /// The request header that carries the signature, lower case.
+    pub header: String,
+    /// The input that identifies an event, so a second delivery is ignored.
+    pub dedupe: Option<NameRef>,
+}
+
+/// How a webhook's call proves who sent it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Scheme {
+    /// The header is the hex HMAC-SHA256 of the raw body, keyed by the secret.
+    HmacSha256,
+    /// The header equals the secret. Weaker: anyone who sees one call can send another.
+    SharedSecret,
 }
 
 /// A triggered hole: the entity whose rows fire it and the events that do. Its `when` is the

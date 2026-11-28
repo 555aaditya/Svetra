@@ -58,6 +58,9 @@ pub const HOLE_KEYS: &[&str] = &[
     "schedule",
     "on",
     "events",
+    "secret",
+    "signature",
+    "dedupe",
 ];
 pub const FUNCTION_HOLE_KEYS: &[&str] = &[
     "kind",
@@ -72,11 +75,24 @@ pub const FUNCTION_HOLE_KEYS: &[&str] = &[
     "idempotent",
     "audit",
 ];
+pub const WEBHOOK_HOLE_KEYS: &[&str] = &[
+    "kind",
+    "secret",
+    "signature",
+    "input",
+    "dedupe",
+    "reads",
+    "writes",
+    "grants",
+    "when",
+    "require",
+    "audit",
+];
 pub const SCHEDULE_HOLE_KEYS: &[&str] = &["kind", "schedule", "reads", "writes", "grants"];
 pub const TRIGGER_HOLE_KEYS: &[&str] =
     &["kind", "on", "events", "when", "reads", "writes", "grants"];
 /// The hole kinds, in the order the hints list them.
-pub const HOLE_KINDS: &[&str] = &["function", "schedule", "trigger"];
+pub const HOLE_KINDS: &[&str] = &["function", "schedule", "trigger", "webhook"];
 pub const TYPE_NAMES: &[&str] = &[
     "text",
     "int",

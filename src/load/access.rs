@@ -135,6 +135,76 @@ impl Cx {
     }
 
     /// The `events` of a triggered hole: a non-empty list of insert, update and delete.
+    /// A webhook's secret name, signature and `dedupe` (docs/automations.md, Webhook holes).
+    fn webhook(&mut self, secret: &Node, k: &HashMap<&str, &Node>, path: &str) -> Option<Webhook> {
+        let name = self.string(secret, &format!("{path}.secret"))?;
+        // A pasted key is the likeliest mistake here, so the message never prints the value.
+        let is_name = name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+            && name
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+        if !is_name {
+            self.report(
+                Code::Svt039,
+                &format!("{path}.secret"),
+                secret,
+                "`secret` isn't the name of a secret. It must be a name like PAYMENTS_WEBHOOK_SECRET: capital letters, digits and underscores, starting with a letter. If you pasted a key here, it is now in this file: remove it and change the key at the provider.".into(),
+                "Write only the name, and set its value with `supabase secrets set NAME=...`.",
+            );
+            return None;
+        }
+        let (mut scheme, mut header) = (Scheme::HmacSha256, "x-signature".to_string());
+        if let Some(sig) = k.get("signature") {
+            let spath = format!("{path}.signature");
+            let entries = self.map(sig, &spath)?;
+            let sk = self.keys(entries, &spath, &["scheme", "header"]);
+            if let Some(s) = sk.get("scheme") {
+                match self.string(s, &format!("{spath}.scheme"))?.as_str() {
+                    "hmac_sha256" => scheme = Scheme::HmacSha256,
+                    "shared_secret" => scheme = Scheme::SharedSecret,
+                    other => {
+                        self.report(
+                            Code::Svt029,
+                            &format!("{spath}.scheme"),
+                            s,
+                            format!("`{other}` is not a signature scheme."),
+                            "Use hmac_sha256 or shared_secret.",
+                        );
+                        return None;
+                    }
+                }
+            }
+            if let Some(h) = sk.get("header") {
+                let text = self.string(h, &format!("{spath}.header"))?;
+                if text.is_empty() || !text.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+                    self.report(
+                        Code::Svt029,
+                        &format!("{spath}.header"),
+                        h,
+                        "`header` must be a header name: letters, digits and hyphens.".into(),
+                        "For example: x-signature.",
+                    );
+                    return None;
+                }
+                header = text.to_ascii_lowercase();
+            }
+        }
+        let dedupe = match k.get("dedupe") {
+            Some(d) => Some(NameRef {
+                name: self.string(d, &format!("{path}.dedupe"))?,
+                pos: pos(d),
+            }),
+            None => None,
+        };
+        Some(Webhook {
+            secret: name,
+            secret_pos: pos(secret),
+            scheme,
+            header,
+            dedupe,
+        })
+    }
+
     fn events(&mut self, node: &Node, path: &str) -> Option<Vec<Action>> {
         let names = self.name_list(node, path);
         let mut out = Vec::new();
@@ -195,6 +265,7 @@ impl Cx {
             "function" => super::FUNCTION_HOLE_KEYS,
             "schedule" => super::SCHEDULE_HOLE_KEYS,
             "trigger" => super::TRIGGER_HOLE_KEYS,
+            "webhook" => super::WEBHOOK_HOLE_KEYS,
             other => {
                 self.report(
                     Code::Svt023,
@@ -248,6 +319,12 @@ impl Cx {
                     events: self.events(events, &format!("{path}.events"))?,
                     pos: pos(events),
                 })
+            }
+            "webhook" => {
+                let secret = self.need(&k, "secret", &path, name);
+                let input = self.need(&k, "input", &path, name);
+                let (secret, _) = (secret?, input?);
+                HoleKind::Webhook(self.webhook(secret, &k, &path)?)
             }
             _ => HoleKind::Function,
         };
@@ -394,6 +471,14 @@ fn why_not(kind: &str, key: &str) -> &'static str {
         }
         ("schedule" | "trigger", "idempotent") => {
             "there is no caller to retry: a clock or a row change runs it."
+        }
+        ("webhook", "idempotent") => {
+            "a repeated delivery is ignored with `dedupe`, which names the input that identifies the event."
+        }
+        ("webhook", "as") => "the generated Edge Function is the only caller.",
+        ("webhook", "output") => "a webhook answers 200 with no body.",
+        ("function" | "schedule" | "trigger", "secret" | "signature" | "dedupe") => {
+            "only `kind: webhook` has a secret, a signature and `dedupe`."
         }
         ("schedule" | "trigger", "require") => {
             "there are no inputs to check: a clock or a row change runs it."
