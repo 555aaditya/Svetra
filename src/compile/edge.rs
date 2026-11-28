@@ -128,9 +128,10 @@ Deno.serve(async (req: Request) => {{
     body: JSON.stringify(args),
   }});
   if (res.ok) return respond(200);
-  // 42501 is the hole's own `when` refusing. Nothing else about a failure leaves this function.
+  // 42501 is the hole's own `when` refusing, and 22023 its `require`. Nothing else about a
+  // failure leaves this function.
   const code = await res.json().then((e) => e?.code).catch(() => undefined);
-  return respond(code === "42501" ? 403 : 500);
+  return respond(code === "42501" ? 403 : code === "22023" ? 400 : 500);
 }});
 "#,
         header = header,
