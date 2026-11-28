@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **`idempotent` on holes: a retry key, so a repeated call does the work once.** `idempotent: request` names a `uuid` or `text` input that is the caller's key. A repeat of a call with the same key by the same person returns the first answer and runs nothing (no second body, no second audit record); the same key with different inputs is refused (`22023`); a call with no key is refused (`22023`); the hole's `when` runs again on a repeat, so someone whose access was taken away can't read a stored answer; and a call that fails leaves no key, so the retry runs. Keys live in `svetra.hole_keys`, closed to the app and to every hole like the audit log, and are kept for good (expiry is not in this version). A hole with `idempotent` can't be called by `anon` or `anyone` (`SVT041`, new). `explain` and `context` say it, and a changed key is a safe `change_idempotent` in `diff` and `plan`. Holes without it compile to the same bytes. The generated access tests prove the key table is closed to the app and to every hole; that a repeat returns the first answer needs a body that runs, so it is checked on PostgreSQL 16 by `tests/pg/retries_assert.sql`, with two breakages. Spec: `docs/format.md`, Retry keys.
+
 ## 0.8.4 (2026-11-24)
 
 Holes that run on their own: on a schedule or when a row changes. `svetra patch` for checked edits to the design, a GitHub Action for `svetra plan`, and `svetra doctor` that reads sign-in settings and storage buckets.
