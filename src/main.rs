@@ -41,11 +41,11 @@ Usage:
                 [--schema public,...] [--json]
                                     The pre-launch checklist: service keys and other secrets
                                     in code, committed .env files, secrets in
-                                    supabase/config.toml, generated files out of date, and
-                                    with a database source everything `check` finds. Reads
-                                    only, prints no secret's value, never says ready while
-                                    a part is unchecked (auth settings and buckets are not
-                                    read yet)
+                                    supabase/config.toml, sign-in settings, generated files
+                                    out of date, and with a database source everything
+                                    `check` finds plus public storage buckets. Reads only,
+                                    prints no secret's value, never says ready while a
+                                    part is unchecked
   svetra view [FILE] [--out PATH] [--no-open] [--json]
                                     Write one page showing who can see and change what
                                     (default .svetra/view.html) and open it; --json prints
