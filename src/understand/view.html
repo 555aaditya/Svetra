@@ -202,7 +202,7 @@ if (M.holes.length) {
     for (const l of h.lines) ul.append(el("li", {}, l));
     const who = el("ul");
     for (const c of h.callers) who.append(el("li", {}, person(c.person).label + ": ", el("span", { class: c.access }, WORD[c.access])));
-    if (h.kind === "schedule" || h.kind === "trigger") {
+    if (h.kind === "schedule" || h.kind === "trigger" || h.kind === "webhook") {
       box.append(el("div", { class: "card" }, el("h3", {}, h.name), el("div", { class: "muted" }, "Starts"), ul, el("div", { class: "muted" }, h.kind === "trigger" ? "Nobody can run this directly." : "Nobody can run this from the app.")));
       continue;
     }
