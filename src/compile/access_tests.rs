@@ -2068,6 +2068,26 @@ pub fn analyse(doc: &Document) -> Analysis {
             }
         }
         require_checks(&world, &people, h, ei, &mut checks);
+        // A retry key's table is closed to every hole, so a body can't forge or erase a key.
+        if h.idempotent.is_some() {
+            checks.push(format!(
+                "select is(svetra_test.privileges({}, '\"svetra\".\"hole_keys\"'), 'none', {});",
+                lit(&role),
+                lit(&format!("{} can't touch the retry keys", h.name))
+            ));
+        }
+    }
+    // ... and to the app: nobody signed in or out can read, add or change a key.
+    if doc.holes.iter().any(|h| h.idempotent.is_some()) {
+        for (role, who) in [
+            ("anon", "people who aren't signed in"),
+            ("authenticated", "signed-in people"),
+        ] {
+            checks.push(format!(
+                "select is(svetra_test.privileges('{role}', '\"svetra\".\"hole_keys\"'), 'none', {});",
+                lit(&format!("{who} can't touch the retry keys"))
+            ));
+        }
     }
 
     // Once for the file: no job Svetra made is left over from a removed hole, and the clock is UTC.
