@@ -287,7 +287,7 @@ fn compile_sets_only_the_owned_sign_in_settings_in_config_toml() {
     let out = svetra(&["compile", file.to_str().unwrap()]);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(out.status.code(), Some(0), "{stdout}");
-    assert!(stdout.contains("updated the sign-in settings in supabase/config.toml"));
+    assert!(stdout.contains("updated the settings in supabase/config.toml"));
     let config = std::fs::read_to_string(dir.join("supabase/config.toml")).unwrap();
     for line in [
         "enable_signup = false",

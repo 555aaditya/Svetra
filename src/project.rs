@@ -103,13 +103,16 @@ pub fn compile(file: &Path, check: bool) -> Result<Compiled, Failure> {
     out.notes = notes;
     // Sign-in settings go into Supabase's own config.toml, which Svetra edits but doesn't own.
     let config_path = dir.join(CONFIG);
-    let config = match (&doc.auth, std::fs::read_to_string(&config_path)) {
-        (None, _) => None,
-        (Some(_), Ok(existing)) => {
+    let config = match (
+        crate::compile::config::wanted(&doc),
+        std::fs::read_to_string(&config_path),
+    ) {
+        (false, _) => None,
+        (true, Ok(existing)) => {
             let settings = crate::compile::config::settings(&doc, &existing);
             Some((existing, settings))
         }
-        (Some(_), Err(_)) => {
+        (true, Err(_)) => {
             out.no_config = true;
             None
         }
@@ -118,10 +121,10 @@ pub fn compile(file: &Path, check: bool) -> Result<Compiled, Failure> {
         out.stale = outputs
             .iter()
             .filter(|o| {
-                std::fs::read_to_string(dir.join(o.path)).ok().as_deref()
+                std::fs::read_to_string(dir.join(&o.path)).ok().as_deref()
                     != Some(o.contents.as_str())
             })
-            .map(|o| o.path.to_string())
+            .map(|o| o.path.clone())
             .collect();
         if let Some((existing, settings)) = &config {
             for d in crate::compile::config::differences(existing, settings) {
@@ -131,9 +134,9 @@ pub fn compile(file: &Path, check: bool) -> Result<Compiled, Failure> {
         return Ok(out);
     }
     for o in &outputs {
-        write_atomic(&dir.join(o.path), &o.contents)
+        write_atomic(&dir.join(&o.path), &o.contents)
             .map_err(|e| Failure::Write(format!("cannot write {}: {e}", o.path)))?;
-        out.written.push(o.path.to_string());
+        out.written.push(o.path.clone());
     }
     if let Some((existing, settings)) = config {
         let updated = crate::compile::config::apply(&existing, &settings);

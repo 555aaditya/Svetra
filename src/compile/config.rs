@@ -12,8 +12,34 @@ pub struct Setting {
     pub value: String,
 }
 
-/// The keys to set for `doc`, given the current file. Empty without an `auth` section.
+/// Whether `doc` has anything to put in `supabase/config.toml`: sign-in settings or a webhook.
+pub fn wanted(doc: &Document) -> bool {
+    doc.auth.is_some() || webhooks(doc).next().is_some()
+}
+
+fn webhooks(doc: &Document) -> impl Iterator<Item = &crate::model::Hole> {
+    doc.holes
+        .iter()
+        .filter(|h| matches!(h.kind, crate::model::HoleKind::Webhook(_)))
+}
+
+/// The keys to set for `doc`, given the current file: the sign-in settings, if it has an `auth`
+/// section, and for each webhook the line that lets the sender's call reach its function. The
+/// sender has no Supabase token, so without `verify_jwt = false` the call is refused before the
+/// function runs; the function's own signature check takes the token's place.
 pub fn settings(doc: &Document, existing: &str) -> Vec<Setting> {
+    let mut out = auth_settings(doc, existing);
+    for h in webhooks(doc) {
+        out.push(Setting {
+            table: format!("functions.{}", h.name),
+            key: "verify_jwt".into(),
+            value: "false".into(),
+        });
+    }
+    out
+}
+
+fn auth_settings(doc: &Document, existing: &str) -> Vec<Setting> {
     let Some(a) = &doc.auth else {
         return Vec::new();
     };
