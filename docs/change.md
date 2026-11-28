@@ -138,6 +138,8 @@ Not applied: 1 destructive change and 1 wider access change need a yes.
 Then: svetra compile && supabase db diff -f <name> && supabase db push
 ```
 
+**One line per person, not per action.** Access changes are listed in the JSON one cell at a time (a person, a thing and an action). The human text merges adjacent lines of the same person that differ only in the action, and prints their reason once: "A signed-in person can now see, create, change and delete all notes (was: some)." The count in the first line is of the lines shown. The JSON, the Markdown for the GitHub Action and the exit codes are unchanged.
+
 ### JSON
 
 ```json
