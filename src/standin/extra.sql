@@ -3,7 +3,6 @@
 -- Applied after the base stand-in, after the base. Not the real thing: extensions
 -- that don't ship with the stock PostgreSQL image (pg_net, pg_cron, vector) still fail, and the
 -- harness counts those migrations as failed.
-create role service_role nologin bypassrls;
 create role authenticator nologin;
 create role supabase_admin nologin;
 create role supabase_auth_admin nologin;
