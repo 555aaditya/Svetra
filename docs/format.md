@@ -364,8 +364,9 @@ holes:
 
 - **`idempotent` names one input,** the key. It must be typed `uuid` or `text` (`SVT041` otherwise, and `SVT041` if the name isn't an input).
 - **The key belongs to the caller.** It is remembered per hole, per signed-in person and per key, so one person's key never matches another's and nobody can learn whether a key exists. A visitor who isn't signed in has no identity to keep it under, so a hole with `idempotent` can't be called by `anon` or `anyone` (`SVT041`).
+- **A call with no key is refused,** SQLSTATE `22023`, message `<hole>: <key> is needed so a repeat can be recognised`. Letting it through would leave a client thinking it is protected when it isn't.
 - **A repeat returns the first call's answer** and runs nothing: not the body, not a second audit record.
-- **The same key with different inputs is refused,** with SQLSTATE `22023` and the message `<hole>: request was already used with different inputs`, so a buggy client can't silently get the answer to another question.
+- **The same key with different inputs is refused,** with SQLSTATE `22023` and the message `<hole>: <key> was already used with different inputs`, so a buggy client can't silently get the answer to another question.
 - **`when` runs again on a repeat.** A person whose access was taken away since the first call can't read a stored answer.
 - **A call that fails leaves no key,** so the client's retry runs normally. A repeat that arrives at the same moment as the first one may fail once with a conflict, and its retry then gets the first answer.
 - **The answer is kept as `jsonb`** and returned as the hole's declared type.
