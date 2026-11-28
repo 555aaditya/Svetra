@@ -73,7 +73,7 @@ begin
   end;
 end $$;
 
-select plan(102);
+select plan(106);
 
 -- Test data, inserted as the database owner
 select lives_ok($svetra$insert into auth.users (id, email) values ('5e7a0000-0000-4000-8000-000000000001', 'alice@svetra.test'), ('5e7a0000-0000-4000-8000-000000000002', 'bob@svetra.test'), ('5e7a0000-0000-4000-8000-000000000003', 'carol@svetra.test')$svetra$, 'test data: people');
@@ -169,6 +169,7 @@ select is(svetra_test.executes('service_role', 'public', 'payment_received'), tr
 select is(svetra_test.executes('service_role', 'svetra_holes', 'payment_received'), false, 'the service role can''t call the inside of payment_received directly');
 select is(svetra_test.call('service_role', null, $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000a', 1, 'svetra a')$svetra$), 'let through', 'the service role can call payment_received on the a rows');
 select is(svetra_test.call('service_role', null, $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000b', 2, 'svetra b')$svetra$), 'let through', 'the service role can call payment_received on the b rows');
+select is(svetra_test.privileges('svetra_hole_payment_received', '"svetra"."webhook_events"'), 'none', 'payment_received can''t touch the handled webhook events');
 select is(svetra_test.privileges('svetra_hole_form_submitted', '"public"."invoice"'), 'select', 'form_submitted can only read Invoice');
 select is(svetra_test.privileges('svetra_hole_form_submitted', '"public"."payment"'), 'none', 'form_submitted can''t touch Payment');
 select is(svetra_test.executes('anon', 'public', 'form_submitted'), false, 'anon can''t call form_submitted');
@@ -180,6 +181,9 @@ select is(svetra_test.executes('service_role', 'svetra_holes', 'form_submitted')
 select is(svetra_test.call('service_role', null, $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000a', 'svetra a')$svetra$), 'let through', 'the service role can call form_submitted on the a rows');
 select is(svetra_test.call('service_role', null, $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000b', 'svetra b')$svetra$), 'let through', 'the service role can call form_submitted on the b rows');
 select is(svetra_test.call_input('service_role', null, $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000a', '')$svetra$), 'form_submitted: note != ''''', 'the service role calling form_submitted with note '''' is refused as bad input: note != ''''');
+select is(svetra_test.privileges('anon', '"svetra"."webhook_events"'), 'none', 'people who aren''t signed in can''t touch the handled webhook events');
+select is(svetra_test.privileges('authenticated', '"svetra"."webhook_events"'), 'none', 'signed-in people can''t touch the handled webhook events');
+select is(svetra_test.privileges('service_role', '"svetra"."webhook_events"'), 'none', 'the service role can''t touch the handled webhook events');
 
 select * from finish();
 rollback;

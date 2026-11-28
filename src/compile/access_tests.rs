@@ -2090,6 +2090,14 @@ pub fn analyse(doc: &Document) -> Analysis {
                 lit(&format!("{} can't touch the retry keys", h.name))
             ));
         }
+        // The events a webhook has handled are closed to its own role too, so a body can't forge one.
+        if matches!(&h.kind, HoleKind::Webhook(w) if w.dedupe.is_some()) {
+            checks.push(format!(
+                "select is(svetra_test.privileges({}, '\"svetra\".\"webhook_events\"'), 'none', {});",
+                lit(&role),
+                lit(&format!("{} can't touch the handled webhook events", h.name))
+            ));
+        }
     }
     // ... and to the app: nobody signed in or out can read, add or change a key.
     if doc.holes.iter().any(|h| h.idempotent.is_some()) {
@@ -2100,6 +2108,24 @@ pub fn analyse(doc: &Document) -> Analysis {
             checks.push(format!(
                 "select is(svetra_test.privileges('{role}', '\"svetra\".\"hole_keys\"'), 'none', {});",
                 lit(&format!("{who} can't touch the retry keys"))
+            ));
+        }
+    }
+
+    // ... and to the app and the service role: nobody else reads or writes what has been handled.
+    if doc
+        .holes
+        .iter()
+        .any(|h| matches!(&h.kind, HoleKind::Webhook(w) if w.dedupe.is_some()))
+    {
+        for (role, who) in [
+            ("anon", "people who aren't signed in"),
+            ("authenticated", "signed-in people"),
+            ("service_role", "the service role"),
+        ] {
+            checks.push(format!(
+                "select is(svetra_test.privileges('{role}', '\"svetra\".\"webhook_events\"'), 'none', {});",
+                lit(&format!("{who} can't touch the handled webhook events"))
             ));
         }
     }
