@@ -73,7 +73,7 @@ begin
   end;
 end $$;
 
-select plan(110);
+select plan(102);
 
 -- Test data, inserted as the database owner
 select lives_ok($svetra$insert into auth.users (id, email) values ('5e7a0000-0000-4000-8000-000000000001', 'alice@svetra.test'), ('5e7a0000-0000-4000-8000-000000000002', 'bob@svetra.test'), ('5e7a0000-0000-4000-8000-000000000003', 'carol@svetra.test')$svetra$, 'test data: people');
@@ -163,31 +163,23 @@ select is(svetra_test.privileges('svetra_hole_payment_received', '"public"."invo
 select is(svetra_test.privileges('svetra_hole_payment_received', '"public"."payment"'), 'select, insert, update, delete', 'payment_received can change Payment');
 select is(svetra_test.executes('anon', 'public', 'payment_received'), false, 'anon can''t call payment_received');
 select is(svetra_test.executes('anon', 'svetra_holes', 'payment_received'), false, 'anon can''t call the inside of payment_received directly');
-select is(svetra_test.executes('authenticated', 'public', 'payment_received'), true, 'signed-in people can call payment_received');
+select is(svetra_test.executes('authenticated', 'public', 'payment_received'), false, 'signed-in people can''t call payment_received');
 select is(svetra_test.executes('authenticated', 'svetra_holes', 'payment_received'), false, 'signed-in people can''t call the inside of payment_received directly');
-select is(svetra_test.call('anon', null, $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000a', 1, 'svetra a')$svetra$), 'refused', 'anon can''t call payment_received on the a rows');
-select is(svetra_test.call('anon', null, $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000b', 2, 'svetra b')$svetra$), 'refused', 'anon can''t call payment_received on the b rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000a', 1, 'svetra a')$svetra$), 'let through', 'alice can call payment_received on the a rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000b', 2, 'svetra b')$svetra$), 'let through', 'alice can call payment_received on the b rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000a', 1, 'svetra a')$svetra$), 'let through', 'bob can call payment_received on the a rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000b', 2, 'svetra b')$svetra$), 'let through', 'bob can call payment_received on the b rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000a', 1, 'svetra a')$svetra$, 'aal2'), 'let through', 'carol can call payment_received on the a rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000b', 2, 'svetra b')$svetra$, 'aal2'), 'let through', 'carol can call payment_received on the b rows');
+select is(svetra_test.executes('service_role', 'public', 'payment_received'), true, 'the service role can call payment_received');
+select is(svetra_test.executes('service_role', 'svetra_holes', 'payment_received'), false, 'the service role can''t call the inside of payment_received directly');
+select is(svetra_test.call('service_role', null, $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000a', 1, 'svetra a')$svetra$), 'let through', 'the service role can call payment_received on the a rows');
+select is(svetra_test.call('service_role', null, $svetra$select "public"."payment_received"('5e7a0000-0000-4000-8001-00010000000b', 2, 'svetra b')$svetra$), 'let through', 'the service role can call payment_received on the b rows');
 select is(svetra_test.privileges('svetra_hole_form_submitted', '"public"."invoice"'), 'select', 'form_submitted can only read Invoice');
 select is(svetra_test.privileges('svetra_hole_form_submitted', '"public"."payment"'), 'none', 'form_submitted can''t touch Payment');
 select is(svetra_test.executes('anon', 'public', 'form_submitted'), false, 'anon can''t call form_submitted');
 select is(svetra_test.executes('anon', 'svetra_holes', 'form_submitted'), false, 'anon can''t call the inside of form_submitted directly');
-select is(svetra_test.executes('authenticated', 'public', 'form_submitted'), true, 'signed-in people can call form_submitted');
+select is(svetra_test.executes('authenticated', 'public', 'form_submitted'), false, 'signed-in people can''t call form_submitted');
 select is(svetra_test.executes('authenticated', 'svetra_holes', 'form_submitted'), false, 'signed-in people can''t call the inside of form_submitted directly');
-select is(svetra_test.call('anon', null, $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000a', 'svetra a')$svetra$), 'refused', 'anon can''t call form_submitted on the a rows');
-select is(svetra_test.call('anon', null, $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000b', 'svetra b')$svetra$), 'refused', 'anon can''t call form_submitted on the b rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000a', 'svetra a')$svetra$), 'let through', 'alice can call form_submitted on the a rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000b', 'svetra b')$svetra$), 'let through', 'alice can call form_submitted on the b rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000a', 'svetra a')$svetra$), 'let through', 'bob can call form_submitted on the a rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000002', $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000b', 'svetra b')$svetra$), 'let through', 'bob can call form_submitted on the b rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000a', 'svetra a')$svetra$, 'aal2'), 'let through', 'carol can call form_submitted on the a rows');
-select is(svetra_test.call('authenticated', '5e7a0000-0000-4000-8000-000000000003', $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000b', 'svetra b')$svetra$, 'aal2'), 'let through', 'carol can call form_submitted on the b rows');
-select is(svetra_test.call_input('authenticated', '5e7a0000-0000-4000-8000-000000000001', $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000a', '')$svetra$), 'form_submitted: note != ''''', 'alice calling form_submitted with note '''' is refused as bad input: note != ''''');
+select is(svetra_test.executes('service_role', 'public', 'form_submitted'), true, 'the service role can call form_submitted');
+select is(svetra_test.executes('service_role', 'svetra_holes', 'form_submitted'), false, 'the service role can''t call the inside of form_submitted directly');
+select is(svetra_test.call('service_role', null, $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000a', 'svetra a')$svetra$), 'let through', 'the service role can call form_submitted on the a rows');
+select is(svetra_test.call('service_role', null, $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000b', 'svetra b')$svetra$), 'let through', 'the service role can call form_submitted on the b rows');
+select is(svetra_test.call_input('service_role', null, $svetra$select "public"."form_submitted"('5e7a0000-0000-4000-8001-00010000000a', '')$svetra$), 'form_submitted: note != ''''', 'the service role calling form_submitted with note '''' is refused as bad input: note != ''''');
 
 select * from finish();
 rollback;

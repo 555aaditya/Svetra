@@ -1786,6 +1786,7 @@ pub fn analyse(doc: &Document) -> Analysis {
         }
     }
 
+    let service = service_role();
     for (hi, h) in doc.holes.iter().enumerate() {
         let ei = tables + hi;
         let role = format!("svetra_hole_{}", h.name);
@@ -1972,12 +1973,18 @@ pub fn analyse(doc: &Document) -> Analysis {
         }
         // Only the declared callers reach the hole, and only through its public function: the
         // inner one takes the caller's id as an argument, so calling it directly could forge it.
+        // A webhook is reached by the service role alone, through its Edge Function.
+        let webhook = matches!(h.kind, HoleKind::Webhook(_));
         for (role, who, may) in [
-            ("anon", "anon", matches!(h.role, Role::Anon | Role::Anyone)),
+            (
+                "anon",
+                "anon",
+                !webhook && matches!(h.role, Role::Anon | Role::Anyone),
+            ),
             (
                 "authenticated",
                 "signed-in people",
-                matches!(h.role, Role::Authenticated | Role::Anyone),
+                !webhook && matches!(h.role, Role::Authenticated | Role::Anyone),
             ),
         ] {
             checks.push(format!(
@@ -1998,24 +2005,31 @@ pub fn analyse(doc: &Document) -> Analysis {
                 ))
             ));
         }
+        if webhook {
+            checks.push(format!(
+                "select is(svetra_test.executes('service_role', 'public', {}), true, {});",
+                lit(&h.name),
+                lit(&format!("the service role can call {}", h.name))
+            ));
+            checks.push(format!(
+                "select is(svetra_test.executes('service_role', 'svetra_holes', {}), false, {});",
+                lit(&h.name),
+                lit(&format!(
+                    "the service role can't call the inside of {} directly",
+                    h.name
+                ))
+            ));
+        }
         let when = h
             .when
             .as_deref()
             .map(|w| expr::parse(w).expect("validated"));
-        for p in &people {
-            let role = if p.id.is_some() {
-                "authenticated"
-            } else {
-                "anon"
-            };
+        for p in callers(h, &people, &service) {
+            let role = role_of(h, p);
             let user = p.id.as_ref().map_or("null".into(), |id| format!("'{id}'"));
             let aal = if p.aal2 { ", 'aal2'" } else { "" };
             for (k, r) in ROWS.iter().enumerate().take(2) {
-                let applies = match h.role {
-                    Role::Anyone => true,
-                    Role::Anon => p.id.is_none(),
-                    Role::Authenticated => p.id.is_some(),
-                };
+                let applies = may_call(h, p);
                 let ok = if !applies {
                     Some(false)
                 } else if let Some(w) = &when {
@@ -2397,12 +2411,49 @@ fn tries(world: &World, ei: usize, field: &Field, cond: &Expr) -> Vec<Try> {
     out
 }
 
-/// Whether `p` may call `h` as far as `as` goes.
+/// Whether `p` may call `h` as far as `as` goes. The service role calls a webhook, and nobody
+/// else does.
 fn may_call(h: &Hole, p: &Person) -> bool {
+    if matches!(h.kind, HoleKind::Webhook(_)) {
+        return p.name == SERVICE;
+    }
     match h.role {
         Role::Anyone => true,
         Role::Anon => p.id.is_none(),
         Role::Authenticated => p.id.is_some(),
+    }
+}
+
+/// The name of the one caller of a webhook: the Edge Function, with the project's service key.
+const SERVICE: &str = "the service role";
+
+fn service_role() -> Person {
+    Person {
+        name: SERVICE.into(),
+        id: None,
+        grants: vec![],
+        aal2: false,
+        before: None,
+    }
+}
+
+/// Who calls `h` in the tests: every person, or for a webhook the service role alone.
+fn callers<'a>(h: &Hole, people: &'a [Person], service: &'a Person) -> Vec<&'a Person> {
+    if matches!(h.kind, HoleKind::Webhook(_)) {
+        vec![service]
+    } else {
+        people.iter().collect()
+    }
+}
+
+/// The database role a call by `p` runs as.
+fn role_of(h: &Hole, p: &Person) -> &'static str {
+    if matches!(h.kind, HoleKind::Webhook(_)) {
+        "service_role"
+    } else if p.id.is_some() {
+        "authenticated"
+    } else {
+        "anon"
     }
 }
 
@@ -2411,6 +2462,7 @@ fn may_call(h: &Hole, p: &Person) -> bool {
 /// own message. The values come from the condition's literals, so the proof is about the rules
 /// as written. A condition no such call can be found for is skipped, and says so.
 fn require_checks(world: &World, people: &[Person], h: &Hole, ei: usize, checks: &mut Vec<String>) {
+    let service = service_role();
     let when = h
         .when
         .as_deref()
@@ -2438,7 +2490,10 @@ fn require_checks(world: &World, people: &[Person], h: &Hole, ei: usize, checks:
                     to: SwapTo::Value(t.val.clone()),
                     and: None,
                 };
-                for p in people.iter().filter(|p| may_call(h, p)) {
+                for p in callers(h, people, &service)
+                    .into_iter()
+                    .filter(|p| may_call(h, p))
+                {
                     let unsure = Cell::new(false);
                     let env = Env {
                         world,
@@ -2467,11 +2522,7 @@ fn require_checks(world: &World, people: &[Person], h: &Hole, ei: usize, checks:
                             }
                         })
                         .collect();
-                    let role = if p.id.is_some() {
-                        "authenticated"
-                    } else {
-                        "anon"
-                    };
+                    let role = role_of(h, p);
                     let user = p.id.as_ref().map_or("null".into(), |id| format!("'{id}'"));
                     let aal = if p.aal2 { ", 'aal2'" } else { "" };
                     let sql = format!("select \"public\".{}({})", q(&h.name), args.join(", "));
